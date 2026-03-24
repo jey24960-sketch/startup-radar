@@ -1,0 +1,82 @@
+name: StartupRadar 자동 실행
+
+on:
+  schedule:
+    # 매주 월요일·목요일 오전 9시 (KST = UTC+9, GitHub Actions는 UTC)
+    - cron: "0 0 * * 1,4"   # UTC 00:00 = KST 09:00
+
+  # 수동 실행 (GitHub Actions 탭에서 Run workflow 버튼)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "DRY RUN (발송 없음)"
+        required: false
+        default: "false"
+        type: boolean
+      category:
+        description: "특정 카테고리만 (비워두면 전체)"
+        required: false
+        default: ""
+
+jobs:
+  crawl-and-notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      # seen_programs.json DB를 Actions 캐시로 영속화
+      - name: DB 캐시 복원
+        uses: actions/cache@v4
+        with:
+          path: data/seen_programs.json
+          key: seen-db-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            seen-db-${{ runner.os }}-
+
+      - name: 디렉토리 준비
+        run: mkdir -p data logs
+
+      - name: StartupRadar 실행
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          KAKAO_ACCESS_TOKEN: ${{ secrets.KAKAO_ACCESS_TOKEN }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY="--dry"
+          else
+            DRY=""
+          fi
+
+          if [ -n "${{ github.event.inputs.category }}" ]; then
+            python main.py $DRY --cat "${{ github.event.inputs.category }}"
+          else
+            python main.py $DRY
+          fi
+
+      - name: 로그 업로드 (실패 시에도)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 14
+
+      - name: 수집 결과 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ github.run_id }}
+          path: data/*.json
+          retention-days: 30

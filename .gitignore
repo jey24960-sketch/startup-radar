@@ -1,0 +1,13 @@
+﻿# API 키 - 절대 커밋 금지
+config.py
+
+# 수집 데이터
+data/
+logs/
+*.json
+
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
