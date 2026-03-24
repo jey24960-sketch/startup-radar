@@ -37,11 +37,12 @@ jobs:
           OFFSET_FILE = "telegram_offset.txt"
 
           def read_offset():
+              """저장된 offset 반환. 파일 없으면 None (캐시 미스)."""
               try:
                   with open(OFFSET_FILE) as f:
                       return int(f.read().strip())
               except Exception:
-                  return 0
+                  return None
 
           def write_offset(offset):
               with open(OFFSET_FILE, "w") as f:
@@ -82,48 +83,60 @@ jobs:
               )
               urllib.request.urlopen(req)
 
-          offset  = read_offset()
-          result  = tg_post("getUpdates", {"offset": offset, "timeout": 0})
-          updates = result.get("result", [])
+          offset = read_offset()
 
-          new_offset = offset
-          for upd in updates:
-              new_offset = max(new_offset, upd["update_id"] + 1)
+          if offset is None:
+              # 캐시 미스: 현재 쌓인 메시지 전부 스킵하고 최신 지점부터 시작
+              result = tg_post("getUpdates", {"timeout": 0})
+              updates = result.get("result", [])
+              if updates:
+                  new_offset = max(upd["update_id"] for upd in updates) + 1
+              else:
+                  new_offset = 0
+              write_offset(new_offset)
+              print(f"Fresh start: skipped {len(updates)} existing updates. Next offset: {new_offset}")
+          else:
+              result  = tg_post("getUpdates", {"offset": offset, "timeout": 0})
+              updates = result.get("result", [])
 
-              msg     = upd.get("message") or {}
-              chat_id = msg.get("chat", {}).get("id")
-              text    = (msg.get("text") or "").strip()
+              new_offset = offset
+              for upd in updates:
+                  new_offset = max(new_offset, upd["update_id"] + 1)
 
-              # 허용된 chat_id 외 무시
-              if chat_id != ALLOWED_ID:
-                  continue
+                  msg     = upd.get("message") or {}
+                  chat_id = msg.get("chat", {}).get("id")
+                  text    = (msg.get("text") or "").strip()
 
-              cmd = text.split()[0].lower() if text else ""
+                  # 허용된 chat_id 외 무시
+                  if chat_id != ALLOWED_ID:
+                      continue
 
-              if cmd == "/run":
-                  trigger(False)
-                  send(chat_id, "✅ StartupRadar 실행을 요청했습니다. (dry_run: false)")
+                  cmd = text.split()[0].lower() if text else ""
 
-              elif cmd == "/dry":
-                  trigger(True)
-                  send(chat_id, "🧪 StartupRadar 테스트 실행을 요청했습니다. (dry_run: true, 발송 없음)")
+                  if cmd == "/run":
+                      trigger(False)
+                      send(chat_id, "✅ StartupRadar 실행을 요청했습니다. (dry_run: false)")
 
-              elif cmd == "/status":
-                  send(chat_id, "✅ StartupRadar 정상 작동 중")
+                  elif cmd == "/dry":
+                      trigger(True)
+                      send(chat_id, "🧪 StartupRadar 테스트 실행을 요청했습니다. (dry_run: true, 발송 없음)")
 
-              elif cmd == "/help":
-                  send(
-                      chat_id,
-                      "📋 *StartupRadar 명령어 목록*\n\n"
-                      "/run — 즉시 실행 (텔레그램 발송 포함)\n"
-                      "/dry — 테스트 실행 (발송 없음)\n"
-                      "/status — 봇 상태 확인\n"
-                      "/help — 이 메시지 보기",
-                      "Markdown",
-                  )
+                  elif cmd == "/status":
+                      send(chat_id, "✅ StartupRadar 정상 작동 중")
 
-          write_offset(new_offset)
-          print(f"Processed {len(updates)} updates. New offset: {new_offset}")
+                  elif cmd == "/help":
+                      send(
+                          chat_id,
+                          "📋 *StartupRadar 명령어 목록*\n\n"
+                          "/run — 즉시 실행 (텔레그램 발송 포함)\n"
+                          "/dry — 테스트 실행 (발송 없음)\n"
+                          "/status — 봇 상태 확인\n"
+                          "/help — 이 메시지 보기",
+                          "Markdown",
+                      )
+
+              write_offset(new_offset)
+              print(f"Processed {len(updates)} updates. New offset: {new_offset}")
           PYEOF
           python3 poll_telegram.py
 
