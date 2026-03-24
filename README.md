@@ -85,10 +85,22 @@ python main.py --cat "서울 대학 창업지원단" --dry
    - `ANTHROPIC_API_KEY`: Anthropic API 키
    - `TELEGRAM_BOT_TOKEN`: 텔레그램 봇 토큰
    - `TELEGRAM_CHAT_ID`: 텔레그램 Chat ID
+   - `GH_PAT`: GitHub Personal Access Token (아래 참고)
 
 4. Actions 탭 → "StartupRadar 자동 실행" → Enable
 
-이후 **매주 월요일·목요일 오전 9시**에 자동 실행됩니다.
+이후 **매주 화요일·금요일 오후 3시 (KST)**에 자동 실행됩니다.
+
+### GH_PAT 발급 방법
+
+텔레그램 `/run`, `/dry` 명령어로 수동 실행하려면 `GH_PAT`가 필요합니다.
+
+1. GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens**
+2. **Generate new token** 클릭
+3. 설정:
+   - **Repository access**: 이 저장소만 선택
+   - **Permissions → Actions**: `Read and write`
+4. 토큰 복사 후 저장소 **Secrets**에 `GH_PAT` 이름으로 추가
 
 ### 수동 실행
 
@@ -129,7 +141,8 @@ startup_radar/
 │   └── startup_radar.log
 └── .github/
     └── workflows/
-        └── startup_radar.yml  # GitHub Actions 스케줄러
+        ├── startup_radar.yml    # 자동 수집·발송 (화·금 15시 KST)
+        └── telegram_polling.yml # 텔레그램 명령어 수신 (5분마다)
 ```
 
 ---
