@@ -20,6 +20,7 @@ from config import (
     CLUB_PROFILE,
     SOURCES,
     MIN_RELEVANCE_SCORE,
+    CRAWL_DELAY_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,60 +81,65 @@ def fetch_programs_from_source(source: dict) -> list[dict]:
     """단일 소스에서 Claude 웹검색으로 프로그램 수집"""
     logger.info(f"수집 시작: {source['name']}")
 
-    try:
-        response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=MAX_TOKENS,
-            system=EXTRACT_SYSTEM_PROMPT,
-            tools=[{"type": "web_search_20250305", "name": "web_search"}],
-            messages=[
-                {
-                    "role": "user",
-                    "content": build_extract_prompt(source, CLUB_PROFILE),
-                }
-            ],
-        )
+    for attempt in range(3):
+        try:
+            response = client.messages.create(
+                model=CLAUDE_MODEL,
+                max_tokens=MAX_TOKENS,
+                system=EXTRACT_SYSTEM_PROMPT,
+                tools=[{"type": "web_search_20250305", "name": "web_search"}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": build_extract_prompt(source, CLUB_PROFILE),
+                    }
+                ],
+            )
 
-        raw_text = ""
-        for block in response.content:
-            if block.type == "text":
-                raw_text += block.text
+            raw_text = ""
+            for block in response.content:
+                if block.type == "text":
+                    raw_text += block.text
 
-        if not raw_text.strip():
-            logger.warning(f"{source['name']}: AI 응답 없음")
+            if not raw_text.strip():
+                logger.warning(f"{source['name']}: AI 응답 없음")
+                return []
+
+            # JSON 파싱
+            clean = raw_text.strip()
+            if clean.startswith("```"):
+                clean = clean.split("```")[1]
+                if clean.startswith("json"):
+                    clean = clean[4:]
+                clean = clean.strip()
+
+            programs = json.loads(clean)
+
+            # 적합도 필터링
+            filtered = [p for p in programs if p.get("relevance_score", 0) >= MIN_RELEVANCE_SCORE]
+
+            # source 정보 주입
+            for p in filtered:
+                p["source_name"] = source["name"]
+                p["source_url"] = source["url"]
+                p["collected_at"] = datetime.now().isoformat()
+
+            logger.info(f"{source['name']}: {len(filtered)}건 수집 (전체 {len(programs)}건 중)")
+            return filtered
+
+        except json.JSONDecodeError as e:
+            logger.error(f"{source['name']}: JSON 파싱 실패 - {e}")
+            return []
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                logger.warning(f"{source['name']}: 429 rate limit, 15초 대기 후 재시도 ({attempt + 1}/2)")
+                time.sleep(15)
+                continue
+            logger.error(f"{source['name']}: 수집 실패 - {e}")
             return []
 
-        # JSON 파싱
-        clean = raw_text.strip()
-        if clean.startswith("```"):
-            clean = clean.split("```")[1]
-            if clean.startswith("json"):
-                clean = clean[4:]
-            clean = clean.strip()
 
-        programs = json.loads(clean)
-
-        # 적합도 필터링
-        filtered = [p for p in programs if p.get("relevance_score", 0) >= MIN_RELEVANCE_SCORE]
-
-        # source 정보 주입
-        for p in filtered:
-            p["source_name"] = source["name"]
-            p["source_url"] = source["url"]
-            p["collected_at"] = datetime.now().isoformat()
-
-        logger.info(f"{source['name']}: {len(filtered)}건 수집 (전체 {len(programs)}건 중)")
-        return filtered
-
-    except json.JSONDecodeError as e:
-        logger.error(f"{source['name']}: JSON 파싱 실패 - {e}")
-        return []
-    except Exception as e:
-        logger.error(f"{source['name']}: 수집 실패 - {e}")
-        return []
-
-
-def crawl_all_sources(delay_seconds: float = 2.0) -> list[dict]:
+def crawl_all_sources(delay_seconds: float = CRAWL_DELAY_SECONDS) -> list[dict]:
     """모든 소스 순차 수집 (Rate limit 방지 딜레이 포함)"""
     all_programs = []
     total_sources = sum(len(v) for v in SOURCES.values())

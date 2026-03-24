@@ -13,6 +13,9 @@ TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
 CLAUDE_MODEL = "claude-sonnet-4-5"
 MAX_TOKENS = 4096
 
+# ── 크롤링 설정 ───────────────────────────────────────────────
+CRAWL_DELAY_SECONDS = 5.0   # 소스 간 딜레이 (rate limit 방지)
+
 # ── 실행 주기 (cron 표현식) ──────────────────────────────────
 # 매주 월요일·목요일 오전 9시
 SCHEDULE_CRON = "0 9 * * 1,4"
