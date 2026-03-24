@@ -127,14 +127,29 @@ def _call_claude(client: anthropic.Anthropic, chunk: dict[str, str]) -> list[dic
                 if not line.startswith("```")
             ).strip()
 
-        programs = json.loads(raw_text)
+        # 1차 파싱 시도
+        try:
+            programs = json.loads(raw_text)
+        except json.JSONDecodeError:
+            # 2차: 응답이 중간에 잘린 경우 마지막 완전한 } 까지만 복구
+            last_brace = raw_text.rfind("}")
+            if last_brace != -1:
+                recovered = raw_text[:last_brace + 1] + "]"
+                # 배열 시작 [ 가 없으면 추가
+                if not recovered.lstrip().startswith("["):
+                    recovered = "[" + recovered
+                programs = json.loads(recovered)
+                logger.warning("응답 잘림 감지 — 부분 복구 후 파싱 성공")
+            else:
+                raise
+
         if not isinstance(programs, list):
             logger.warning("Claude 응답이 리스트가 아님, 빈 리스트로 처리")
             return []
         return programs
 
     except json.JSONDecodeError as e:
-        logger.warning(f"JSON 파싱 실패, 해당 청크 건너뜀: {e}")
+        logger.warning(f"청크 파싱 실패: {e}")
         return []
     except anthropic.APIError as e:
         logger.error(f"Claude API 오류: {e}")

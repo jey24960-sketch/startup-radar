@@ -51,9 +51,9 @@ CLUB_PROFILE = """
 # ──────────────────────────────────────────────
 
 CLAUDE_MODEL = "claude-sonnet-4-5"
-MAX_TOKENS = 4096
+MAX_TOKENS = 8192
 CRAWL_DELAY_SECONDS = 0.5       # 소스 간 딜레이 (API 없으므로 짧게)
-CHUNK_MAX_CHARS = 15000          # AI 분석 청크 최대 문자 수
+CHUNK_MAX_CHARS = 10000          # AI 분석 청크 최대 문자 수
 MIN_RELEVANCE_SCORE = 60         # 이 점수 미만은 필터링
 MAX_ITEMS_PER_REPORT = 7         # 텔레그램 메시지당 최대 공고 수
 DEADLINE_URGENT_DAYS = 7         # 마감 임박 기준 (일)
