@@ -1,206 +1,116 @@
 """
 core/crawler.py
-Claude API의 web_search 툴을 활용해 각 소스에서 창업 지원 정보를 수집·분석합니다.
+Phase 1: requests + BeautifulSoup4 기반 크롤러.
+Claude API 호출 없음. 각 소스에서 텍스트를 수집해 raw_data dict로 반환.
 """
 
-import json
 import time
 import logging
-from datetime import datetime
-from typing import Optional
-import anthropic
 import sys
 import os
 
+import requests
+from bs4 import BeautifulSoup
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import (
-    ANTHROPIC_API_KEY,
-    CLAUDE_MODEL,
-    MAX_TOKENS,
-    CLUB_PROFILE,
-    SOURCES,
-    MIN_RELEVANCE_SCORE,
-    CRAWL_DELAY_SECONDS,
-)
+from config import SOURCES, CRAWL_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+}
+
+_NOISE_TAGS = ["nav", "header", "footer", "script", "style", "noscript", "aside", "iframe"]
+_CONTENT_TAGS = ["h1", "h2", "h3", "h4", "p", "li", "td", "th", "a", "span", "div"]
+_MAX_TEXT_CHARS = 3000
 
 
-EXTRACT_SYSTEM_PROMPT = """당신은 대학생 창업동아리를 위한 지원 프로그램 전문 분석가입니다.
-주어진 웹페이지 내용이나 검색 결과에서 창업 지원 프로그램 정보를 추출하고,
-동아리 프로필과의 적합도를 정확히 평가해야 합니다.
-
-반드시 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
-한국어로 작성하세요."""
-
-
-def build_extract_prompt(source: dict, club_profile: str) -> str:
-    today = datetime.now().strftime("%Y년 %m월 %d일")
-    return f"""오늘 날짜: {today}
-
-다음 사이트에서 현재 모집 중이거나 곧 모집 예정인 창업 지원 프로그램을 찾아주세요.
-
-대상 사이트: {source['name']}
-URL: {source['url']}
-분류: {source['type']}
-
-동아리 프로필:
-{club_profile}
-
-위 사이트를 검색하거나 직접 접근해서, 현재 공고 중인 프로그램 목록을 추출해주세요.
-
-다음 JSON 형식으로 응답하세요 (배열 형태):
-[
-  {{
-    "title": "프로그램명",
-    "organization": "주관기관명",
-    "type": "지원사업|경진대회|액셀러레이터|보조금|대학지원",
-    "target": "지원 대상 요약 (예: 예비창업자, 7년 이내 창업팀 등)",
-    "amount": "지원금액 또는 혜택 요약 (모르면 null)",
-    "deadline": "마감일 (YYYY-MM-DD 형식, 모르면 null)",
-    "apply_url": "신청 URL",
-    "summary": "프로그램 핵심 내용 3줄 요약",
-    "relevance_score": 0~100,
-    "relevance_reason": "적합도 판단 이유 (1~2문장)",
-    "tags": ["태그1", "태그2"]
-  }}
-]
-
-적합도(relevance_score) 기준:
-- 80~100: 강력 추천 (팀 단계·조건 완벽 부합)
-- 60~79: 추천 (대부분 조건 부합)
-- 40~59: 검토 가능 (일부 조건 불일치)
-- 0~39: 부적합 (사업자 등록 필수, 이미 마감 등)
-
-현재 모집 중인 공고가 없으면 빈 배열 []을 반환하세요.
-"""
-
-
-def fetch_programs_from_source(source: dict) -> tuple[list[dict], bool]:
-    """단일 소스에서 Claude 웹검색으로 프로그램 수집.
-    반환: (programs, success) — 오류 시 ([], False)
+def _fetch_text(source_name: str, url: str) -> str:
     """
-    logger.info(f"수집 시작: {source['name']}")
+    URL에서 HTML을 가져와 노이즈를 제거하고 관련 텍스트를 추출합니다.
+    실패 시 예외를 발생시킵니다.
+    """
+    resp = requests.get(url, headers=_HEADERS, timeout=10, allow_redirects=True)
+    resp.raise_for_status()
+    resp.encoding = resp.apparent_encoding or "utf-8"
 
-    for attempt in range(3):
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    # 노이즈 태그 제거
+    for tag in soup.find_all(_NOISE_TAGS):
+        tag.decompose()
+
+    # 텍스트 추출: 공고/모집/지원/사업 관련 태그 우선
+    lines = []
+    for tag in soup.find_all(_CONTENT_TAGS):
+        text = tag.get_text(separator=" ", strip=True)
+        if text and len(text) > 5:
+            lines.append(text)
+
+    # 중복 라인 제거 (순서 유지)
+    seen_lines: set = set()
+    unique_lines = []
+    for line in lines:
+        if line not in seen_lines:
+            seen_lines.add(line)
+            unique_lines.append(line)
+
+    full_text = "\n".join(unique_lines)
+    return full_text[:_MAX_TEXT_CHARS]
+
+
+def crawl_all() -> tuple[dict, list]:
+    """
+    모든 소스를 순서대로 크롤링합니다.
+
+    Returns:
+        raw_data: {"소스명": "수집된 텍스트", ...}  (성공한 소스)
+        failed_sources: ["소스명", ...]              (실패한 소스)
+    """
+    raw_data: dict[str, str] = {}
+    failed_sources: list[str] = []
+
+    total = len(SOURCES)
+    logger.info(f"크롤링 시작: 총 {total}개 소스")
+
+    for i, (name, url) in enumerate(SOURCES.items(), 1):
+        logger.info(f"[{i}/{total}] 수집 시작: {name}")
         try:
-            response = client.messages.create(
-                model=CLAUDE_MODEL,
-                max_tokens=MAX_TOKENS,
-                system=EXTRACT_SYSTEM_PROMPT,
-                tools=[{"type": "web_search_20250305", "name": "web_search"}],
-                messages=[
-                    {
-                        "role": "user",
-                        "content": build_extract_prompt(source, CLUB_PROFILE),
-                    }
-                ],
-            )
-
-            raw_text = ""
-            for block in response.content:
-                if block.type == "text":
-                    raw_text += block.text
-
-            if not raw_text.strip():
-                logger.warning(f"{source['name']}: AI 응답 없음")
-                return [], False
-
-            # JSON 파싱
-            clean = raw_text.strip()
-            if clean.startswith("```"):
-                clean = clean.split("```")[1]
-                if clean.startswith("json"):
-                    clean = clean[4:]
-                clean = clean.strip()
-
-            programs = json.loads(clean)
-
-            # 적합도 필터링
-            filtered = [p for p in programs if p.get("relevance_score", 0) >= MIN_RELEVANCE_SCORE]
-
-            # source 정보 주입
-            for p in filtered:
-                p["source_name"] = source["name"]
-                p["source_url"] = source["url"]
-                p["collected_at"] = datetime.now().isoformat()
-
-            logger.info(f"{source['name']}: {len(filtered)}건 수집 (전체 {len(programs)}건 중)")
-            return filtered, True
-
-        except json.JSONDecodeError as e:
-            logger.error(f"{source['name']}: JSON 파싱 실패 - {e}")
-            return [], False
+            text = _fetch_text(name, url)
+            if text.strip():
+                raw_data[name] = text
+                logger.info(f"[{i}/{total}] {name}: {len(text)}자 수집 완료")
+            else:
+                logger.warning(f"[{i}/{total}] {name}: 텍스트 없음 (빈 페이지)")
+                failed_sources.append(name)
+        except requests.exceptions.Timeout:
+            logger.warning(f"[{i}/{total}] {name}: 타임아웃 (10초 초과)")
+            failed_sources.append(name)
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(f"[{i}/{total}] {name}: 연결 오류 - {e}")
+            failed_sources.append(name)
+        except requests.exceptions.HTTPError as e:
+            logger.warning(f"[{i}/{total}] {name}: HTTP 오류 - {e}")
+            failed_sources.append(name)
         except Exception as e:
-            if "429" in str(e) and attempt < 2:
-                logger.warning(f"{source['name']}: 429 rate limit, 15초 대기 후 재시도 ({attempt + 1}/2)")
-                time.sleep(15)
-                continue
-            logger.error(f"{source['name']}: 수집 실패 - {e}")
-            return [], False
+            logger.warning(f"[{i}/{total}] {name}: 수집 실패 - {e}")
+            failed_sources.append(name)
 
-    return [], False
+        # 소스 간 딜레이 (마지막 소스 제외)
+        if i < total:
+            time.sleep(CRAWL_DELAY_SECONDS)
 
+    logger.info(
+        f"크롤링 완료: 성공 {len(raw_data)}개 / 실패 {len(failed_sources)}개"
+    )
+    if failed_sources:
+        logger.info(f"실패 소스: {', '.join(failed_sources)}")
 
-def crawl_all_sources(delay_seconds: float = CRAWL_DELAY_SECONDS) -> tuple[list[dict], list[str]]:
-    """모든 소스 순차 수집 (Rate limit 방지 딜레이 포함).
-    반환: (all_programs, failed_source_names)
-    """
-    all_programs = []
-    failed_sources = []
-    total_sources = sum(len(v) for v in SOURCES.values())
-    processed = 0
-
-    for category, sources in SOURCES.items():
-        logger.info(f"\n{'='*40}")
-        logger.info(f"카테고리: {category} ({len(sources)}개 소스)")
-        logger.info(f"{'='*40}")
-
-        for source in sources:
-            programs, success = fetch_programs_from_source(source)
-            all_programs.extend(programs)
-            if not success:
-                failed_sources.append(source["name"])
-            processed += 1
-            logger.info(f"진행: {processed}/{total_sources}")
-
-            if processed < total_sources:
-                time.sleep(delay_seconds)
-
-    # 적합도 내림차순 정렬
-    all_programs.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
-
-    logger.info(f"\n수집 완료: 총 {len(all_programs)}건 | 실패 소스: {len(failed_sources)}개")
-    return all_programs, failed_sources
-
-
-def crawl_category(category_name: str, delay_seconds: float = 1.5) -> tuple[list[dict], list[str]]:
-    """특정 카테고리만 수집 (테스트용).
-    반환: (programs, failed_source_names)
-    """
-    sources = SOURCES.get(category_name, [])
-    if not sources:
-        logger.error(f"카테고리 없음: {category_name}")
-        return [], []
-
-    all_programs = []
-    failed_sources = []
-    for i, source in enumerate(sources):
-        programs, success = fetch_programs_from_source(source)
-        all_programs.extend(programs)
-        if not success:
-            failed_sources.append(source["name"])
-        if i < len(sources) - 1:
-            time.sleep(delay_seconds)
-
-    all_programs.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
-    return all_programs, failed_sources
-
-
-if __name__ == "__main__":
-    # 빠른 테스트: 정부·공공 첫 번째 소스만
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    test_source = SOURCES["정부·공공"][0]
-    result = fetch_programs_from_source(test_source)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return raw_data, failed_sources

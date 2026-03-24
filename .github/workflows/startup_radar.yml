@@ -2,7 +2,7 @@ name: StartupRadar 자동 실행
 
 on:
   schedule:
-    # 매주 화요일·금요일 오후 3시 (KST = UTC+9, GitHub Actions는 UTC)
+    # 매주 화요일·금요일 오후 3시 (KST = UTC+9)
     - cron: "0 6 * * 2,5"   # UTC 06:00 = KST 15:00
 
   # 수동 실행 (GitHub Actions 탭에서 Run workflow 버튼)
@@ -13,10 +13,6 @@ on:
         required: false
         default: "false"
         type: boolean
-      category:
-        description: "특정 카테고리만 (비워두면 전체)"
-        required: false
-        default: ""
 
 jobs:
   crawl-and-notify:
@@ -54,15 +50,9 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            DRY="--dry"
+            python main.py --dry
           else
-            DRY=""
-          fi
-
-          if [ -n "${{ github.event.inputs.category }}" ]; then
-            python main.py $DRY --cat "${{ github.event.inputs.category }}"
-          else
-            python main.py $DRY
+            python main.py
           fi
 
       - name: 로그 업로드 (실패 시에도)
