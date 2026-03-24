@@ -33,7 +33,7 @@ jobs:
           python-version: "3.12"
 
       - name: 의존성 설치
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt --break-system-packages
 
       # seen_programs.json DB를 Actions 캐시로 영속화
       - name: DB 캐시 복원
