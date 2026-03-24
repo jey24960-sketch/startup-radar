@@ -61,32 +61,23 @@ DATA_DIR = "./data"
 SEEN_DB = "./data/seen_programs.json"
 
 # ──────────────────────────────────────────────
-# 크롤링 소스 목록 (16개, 접근 가능한 소스만)
+# 크롤링 소스 목록 (9개, 접근 가능한 소스만)
 # key: 소스명(표시용), value: URL
 # ──────────────────────────────────────────────
 
 SOURCES = {
-    # 정부·공공 (4개)
+    # 정부·공공 (2개)
     "K-Startup": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do",
-    "중소벤처기업부": "https://www.mss.go.kr/site/smba/01/10101010000002019101501.jsp",
     "서울산업진흥원": "https://www.sba.seoul.kr/pages/bizSup/bizSupList.do",
-    "TIPS": "https://www.jointips.or.kr/bbs/board.php?bo_table=notice",
 
-    # 경진대회·공모전 (2개)
-    "위비티": "https://www.wevity.com/?c=find&s=1&gotopage=1",
-    "링커리어": "https://linkareer.com/list/contest",
-
-    # 대학 창업지원단 (6개)
-    "서울대 창업지원단": "https://startup.snu.ac.kr/notice",
-    "고려대 창업지원단": "https://startup.korea.ac.kr/",
+    # 대학 창업지원단 (5개)
+    "고려대 창업지원단": "https://startup.korea.ac.kr/rss",   # RSS 피드 (application/rss+xml)
     "한양대 창업지원단": "https://startup.hanyang.ac.kr/",
     "경희대 창업지원단": "https://startup.khu.ac.kr/",
     "동덕여대 창업지원단": "https://startup.dongduk.ac.kr/",
     "숙명여대 창업지원단": "https://startup.sookmyung.ac.kr/",
 
-    # 액셀러레이터·VC (4개)
+    # 액셀러레이터·VC (2개)
     "스파크랩": "https://www.sparklabs.co.kr/",
-    "디캠프": "https://dcamp.kr/",
     "프라이머": "https://www.primer.kr/",
-    "블루포인트": "https://bluepoint.ac/",
 }
