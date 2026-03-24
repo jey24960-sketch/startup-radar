@@ -31,7 +31,7 @@ logger = logging.getLogger("main")
 from core.crawler import crawl_all_sources, crawl_category, fetch_programs_from_source
 from core.deduplicator import filter_new_programs, mark_as_sent, cleanup_expired, get_stats
 from core.notifier import send_telegram_notification, send_test_message
-from config import SOURCES, DATA_DIR
+from config import SOURCES, DATA_DIR, CRAWL_DELAY_SECONDS
 
 
 def save_results(programs: list[dict], label: str = ""):
@@ -77,7 +77,7 @@ def run_full(dry_run: bool = False):
 
     # 2. 전체 수집
     logger.info("\n[Step 1] 전체 소스 수집 시작...")
-    all_programs = crawl_all_sources(delay_seconds=2.0)
+    all_programs, failed_sources = crawl_all_sources()
     save_results(all_programs, "all")
 
     # 3. 중복 제거
@@ -100,7 +100,8 @@ def run_full(dry_run: bool = False):
         return
 
     logger.info("\n[Step 3] 텔레그램 발송...")
-    ok = send_telegram_notification(new_programs)
+    total_sources = sum(len(v) for v in SOURCES.values())
+    ok = send_telegram_notification(new_programs, total_sources=total_sources, failed_sources=failed_sources)
 
     if ok:
         mark_as_sent(new_programs)
@@ -114,12 +115,12 @@ def run_full(dry_run: bool = False):
 def run_category(category: str, dry_run: bool = False):
     """특정 카테고리만 실행"""
     logger.info(f"카테고리 실행: {category}")
-    programs = crawl_category(category)
+    programs, failed_sources = crawl_category(category)
     new_programs = filter_new_programs(programs)
     print_summary(new_programs)
 
     if not dry_run and new_programs:
-        ok = send_telegram_notification(new_programs)
+        ok = send_telegram_notification(new_programs, failed_sources=failed_sources)
         if ok:
             mark_as_sent(new_programs)
 

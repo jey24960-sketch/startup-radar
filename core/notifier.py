@@ -66,13 +66,26 @@ def _type_emoji(prog_type: str) -> str:
     return mapping.get(prog_type, "📋")
 
 
-def _build_message(programs: list[dict], run_date: str) -> str:
+def _build_message(
+    programs: list[dict],
+    run_date: str,
+    total_sources: int = 0,
+    failed_sources: list[str] | None = None,
+) -> str:
     """텔레그램 Markdown 메시지 본문 생성"""
     urgent = [p for p in programs if (_days_until_deadline(p.get("deadline")) or 999) <= DEADLINE_URGENT_DAYS]
     normal = [p for p in programs if p not in urgent]
+    failed_sources = failed_sources or []
 
     lines = []
     lines.append(f"*[StartupRadar] {run_date} 창업 지원 리포트*")
+
+    # 수집 요약
+    if total_sources:
+        fail_count = len(failed_sources)
+        fail_detail = f" | 실패: {', '.join(failed_sources)}" if failed_sources else ""
+        lines.append(f"📊 {total_sources}개 소스 수집 | 신규 {len(programs)}건 | 오류 {fail_count}개{fail_detail}")
+
     lines.append(f"총 {len(programs)}건 | 임박 {len(urgent)}건\n")
 
     if urgent:
@@ -166,14 +179,18 @@ def _send_message(text: str) -> bool:
         return False
 
 
-def send_telegram_notification(programs: list[dict]) -> bool:
+def send_telegram_notification(
+    programs: list[dict],
+    total_sources: int = 0,
+    failed_sources: list[str] | None = None,
+) -> bool:
     """텔레그램으로 창업 지원 공고 알림 발송"""
     if not programs:
         logger.info("발송할 프로그램 없음")
         return True
 
     run_date = datetime.now().strftime("%m/%d")
-    message = _build_message(programs, run_date)
+    message = _build_message(programs, run_date, total_sources=total_sources, failed_sources=failed_sources)
     chunks = _split_message(message)
 
     all_ok = True

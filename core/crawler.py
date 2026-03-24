@@ -77,8 +77,10 @@ URL: {source['url']}
 """
 
 
-def fetch_programs_from_source(source: dict) -> list[dict]:
-    """단일 소스에서 Claude 웹검색으로 프로그램 수집"""
+def fetch_programs_from_source(source: dict) -> tuple[list[dict], bool]:
+    """단일 소스에서 Claude 웹검색으로 프로그램 수집.
+    반환: (programs, success) — 오류 시 ([], False)
+    """
     logger.info(f"수집 시작: {source['name']}")
 
     for attempt in range(3):
@@ -103,7 +105,7 @@ def fetch_programs_from_source(source: dict) -> list[dict]:
 
             if not raw_text.strip():
                 logger.warning(f"{source['name']}: AI 응답 없음")
-                return []
+                return [], False
 
             # JSON 파싱
             clean = raw_text.strip()
@@ -125,23 +127,28 @@ def fetch_programs_from_source(source: dict) -> list[dict]:
                 p["collected_at"] = datetime.now().isoformat()
 
             logger.info(f"{source['name']}: {len(filtered)}건 수집 (전체 {len(programs)}건 중)")
-            return filtered
+            return filtered, True
 
         except json.JSONDecodeError as e:
             logger.error(f"{source['name']}: JSON 파싱 실패 - {e}")
-            return []
+            return [], False
         except Exception as e:
             if "429" in str(e) and attempt < 2:
                 logger.warning(f"{source['name']}: 429 rate limit, 15초 대기 후 재시도 ({attempt + 1}/2)")
                 time.sleep(15)
                 continue
             logger.error(f"{source['name']}: 수집 실패 - {e}")
-            return []
+            return [], False
+
+    return [], False
 
 
-def crawl_all_sources(delay_seconds: float = CRAWL_DELAY_SECONDS) -> list[dict]:
-    """모든 소스 순차 수집 (Rate limit 방지 딜레이 포함)"""
+def crawl_all_sources(delay_seconds: float = CRAWL_DELAY_SECONDS) -> tuple[list[dict], list[str]]:
+    """모든 소스 순차 수집 (Rate limit 방지 딜레이 포함).
+    반환: (all_programs, failed_source_names)
+    """
     all_programs = []
+    failed_sources = []
     total_sources = sum(len(v) for v in SOURCES.values())
     processed = 0
 
@@ -151,8 +158,10 @@ def crawl_all_sources(delay_seconds: float = CRAWL_DELAY_SECONDS) -> list[dict]:
         logger.info(f"{'='*40}")
 
         for source in sources:
-            programs = fetch_programs_from_source(source)
+            programs, success = fetch_programs_from_source(source)
             all_programs.extend(programs)
+            if not success:
+                failed_sources.append(source["name"])
             processed += 1
             logger.info(f"진행: {processed}/{total_sources}")
 
@@ -162,26 +171,31 @@ def crawl_all_sources(delay_seconds: float = CRAWL_DELAY_SECONDS) -> list[dict]:
     # 적합도 내림차순 정렬
     all_programs.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
 
-    logger.info(f"\n수집 완료: 총 {len(all_programs)}건")
-    return all_programs
+    logger.info(f"\n수집 완료: 총 {len(all_programs)}건 | 실패 소스: {len(failed_sources)}개")
+    return all_programs, failed_sources
 
 
-def crawl_category(category_name: str, delay_seconds: float = 1.5) -> list[dict]:
-    """특정 카테고리만 수집 (테스트용)"""
+def crawl_category(category_name: str, delay_seconds: float = 1.5) -> tuple[list[dict], list[str]]:
+    """특정 카테고리만 수집 (테스트용).
+    반환: (programs, failed_source_names)
+    """
     sources = SOURCES.get(category_name, [])
     if not sources:
         logger.error(f"카테고리 없음: {category_name}")
-        return []
+        return [], []
 
     all_programs = []
+    failed_sources = []
     for i, source in enumerate(sources):
-        programs = fetch_programs_from_source(source)
+        programs, success = fetch_programs_from_source(source)
         all_programs.extend(programs)
+        if not success:
+            failed_sources.append(source["name"])
         if i < len(sources) - 1:
             time.sleep(delay_seconds)
 
     all_programs.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
-    return all_programs
+    return all_programs, failed_sources
 
 
 if __name__ == "__main__":

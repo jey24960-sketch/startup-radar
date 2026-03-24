@@ -9,6 +9,9 @@ ANTHROPIC_API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+if not ANTHROPIC_API_KEY:
+    raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다")
+
 # ── 모델 설정 ────────────────────────────────────────────────
 CLAUDE_MODEL = "claude-sonnet-4-5"
 MAX_TOKENS = 4096
@@ -18,7 +21,7 @@ CRAWL_DELAY_SECONDS = 5.0   # 소스 간 딜레이 (rate limit 방지)
 
 # ── 실행 주기 (cron 표현식) ──────────────────────────────────
 # 매주 월요일·목요일 오전 9시
-SCHEDULE_CRON = "0 9 * * 1,4"
+SCHEDULE_CRON = "0 6 * * 2,5"   # UTC 06:00 = KST 15:00 (화·금)
 
 # ── 동아리 프로필 (AI 필터링 기준) ───────────────────────────
 CLUB_PROFILE = """
