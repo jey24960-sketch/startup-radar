@@ -35,14 +35,14 @@ jobs:
 
           updated = re.sub(
               r"- 현재 단계:.*",
-              f"- 현재 단계: {STAGE}",
+              "- 현재 단계: $STAGE",
               content
           )
 
           with open("config.py", "w", encoding="utf-8") as f:
               f.write(updated)
 
-          print(f"단계 변경 완료: {STAGE}")
+          print("단계 변경 완료: $STAGE")
           EOF
 
       - name: git 커밋 및 푸시
