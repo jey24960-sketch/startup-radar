@@ -37,7 +37,9 @@ def _save_seen(seen: dict):
 
 
 def _program_hash(program: dict) -> str:
-    """프로그램 고유 식별자 생성"""
+    """프로그램 고유 식별자 생성.
+    source_url은 현재 스키마에서 존재하지 않으므로 항상 빈 문자열.
+    사실상 title|organization 기준으로 해시됨. 기존 DB와의 호환성을 위해 키 형식 유지."""
     key = f"{program.get('title', '')}|{program.get('organization', '')}|{program.get('source_url', '')}"
     return hashlib.md5(key.encode()).hexdigest()[:12]
 

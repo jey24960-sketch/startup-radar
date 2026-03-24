@@ -22,6 +22,15 @@ _MAX_MSG_LEN = 4096
 _WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
 
 
+def _md_escape(text: str) -> str:
+    """Telegram Markdown v1에서 특수 의미를 갖는 문자를 이스케이프합니다."""
+    if not text:
+        return text
+    for ch in ("*", "_", "`"):
+        text = text.replace(ch, f"\\{ch}")
+    return text
+
+
 # ──────────────────────────────────────────────
 # 날짜 / 마감 헬퍼
 # ──────────────────────────────────────────────
@@ -73,12 +82,12 @@ def _header_line() -> str:
 
 
 def _format_program(p: dict) -> str:
-    title = p.get("title", "(제목 없음)")
-    org = p.get("organization", "")
+    title = _md_escape(p.get("title", "(제목 없음)"))
+    org = _md_escape(p.get("organization", ""))
     deadline_str = _format_deadline(p.get("deadline"))
     score = p.get("relevance_score", 0)
-    amount = p.get("amount") or "혜택 확인 필요"
-    summary = p.get("summary", "")
+    amount = _md_escape(p.get("amount") or "혜택 확인 필요")
+    summary = _md_escape(p.get("summary", ""))
     url = p.get("apply_url") or ""
 
     lines = [f"*{title}*"]
@@ -95,8 +104,6 @@ def _build_message_with_programs(
     failed_sources: list[str],
     total_sources: int,
 ) -> str:
-    today = date.today()
-    wd = _WEEKDAY_KO[today.weekday()]
     failed_count = len(failed_sources)
 
     header = _header_line()
@@ -124,10 +131,11 @@ def _build_message_with_programs(
 
     # 일반 추천 섹션 (최대 MAX_ITEMS_PER_REPORT)
     normal = [p for p in programs if p not in urgent]
-    parts.append("✅ *이번 추천 공고*")
-    for p in normal[:MAX_ITEMS_PER_REPORT]:
-        parts.append(_format_program(p))
-        parts.append("")
+    if normal:
+        parts.append("✅ *이번 추천 공고*")
+        for p in normal[:MAX_ITEMS_PER_REPORT]:
+            parts.append(_format_program(p))
+            parts.append("")
 
     parts.append(sep)
     parts.append(f"다음 리포트: {_next_report_date()} 오후 3시")
@@ -136,8 +144,6 @@ def _build_message_with_programs(
 
 
 def _build_message_empty(failed_sources: list[str], total_sources: int) -> str:
-    today = date.today()
-    wd = _WEEKDAY_KO[today.weekday()]
     failed_count = len(failed_sources)
 
     parts = [_header_line(), "━━━━━━━━━━━━━━━"]

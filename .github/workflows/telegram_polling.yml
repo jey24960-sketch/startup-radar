@@ -132,37 +132,45 @@ jobs:
 
                   cmd = text.split()[0].lower() if text else ""
 
-                  if cmd == "/run":
-                      trigger_radar(False)
-                      send(chat_id, "✅ StartupRadar 실행을 요청했습니다. (dry_run: false)")
+                  try:
+                      if cmd == "/run":
+                          trigger_radar(False)
+                          send(chat_id, "✅ StartupRadar 실행을 요청했습니다. (dry_run: false)")
 
-                  elif cmd == "/dry":
-                      trigger_radar(True)
-                      send(chat_id, "🧪 StartupRadar 테스트 실행을 요청했습니다. (dry_run: true, 발송 없음)")
+                      elif cmd == "/dry":
+                          trigger_radar(True)
+                          send(chat_id, "🧪 StartupRadar 테스트 실행을 요청했습니다. (dry_run: true, 발송 없음)")
 
-                  elif cmd == "/stage":
-                      parts = text.split(maxsplit=1)
-                      stage = parts[1].strip() if len(parts) > 1 else ""
-                      if stage in VALID_STAGES:
-                          trigger_stage(stage)
-                          send(chat_id, f"⏳ 단계 변경 중... '{stage}'(으)로 변경 요청했습니다.")
-                      else:
-                          send(chat_id, "사용법: /stage [팀빌딩|아이디어|MVP|초기매출]")
+                      elif cmd == "/stage":
+                          parts = text.split(maxsplit=1)
+                          stage = parts[1].strip() if len(parts) > 1 else ""
+                          if stage in VALID_STAGES:
+                              trigger_stage(stage)
+                              send(chat_id, f"⏳ 단계 변경 중... '{stage}'(으)로 변경 요청했습니다.")
+                          else:
+                              send(chat_id, "사용법: /stage [팀빌딩|아이디어|MVP|초기매출]")
 
-                  elif cmd == "/status":
-                      send(chat_id, "✅ StartupRadar 정상 작동 중")
+                      elif cmd == "/status":
+                          send(chat_id, "✅ StartupRadar 정상 작동 중")
 
-                  elif cmd == "/help":
-                      send(
-                          chat_id,
-                          "📋 *StartupRadar 명령어 목록*\n\n"
-                          "/run — 지금 즉시 수집 + 발송\n"
-                          "/dry — 수집만 (발송 없음)\n"
-                          "/stage [단계] — 동아리 단계 변경\n"
-                          "/status — 상태 확인\n"
-                          "/help — 명령어 안내",
-                          "Markdown",
-                      )
+                      elif cmd == "/help":
+                          send(
+                              chat_id,
+                              "📋 *StartupRadar 명령어 목록*\n\n"
+                              "/run — 지금 즉시 수집 + 발송\n"
+                              "/dry — 수집만 (발송 없음)\n"
+                              "/stage [단계] — 동아리 단계 변경\n"
+                              "/status — 상태 확인\n"
+                              "/help — 명령어 안내",
+                              "Markdown",
+                          )
+
+                  except Exception as e:
+                      print(f"명령 처리 오류 ({cmd}): {e}")
+                      try:
+                          send(chat_id, "⚠️ 명령 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+                      except Exception:
+                          pass
 
               write_offset(new_offset)
               print(f"Processed {len(updates)} updates. New offset: {new_offset}")

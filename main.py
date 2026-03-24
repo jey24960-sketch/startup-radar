@@ -91,13 +91,14 @@ def run_full(dry_run: bool = False):
 
     if not raw_data:
         logger.error("모든 소스 수집 실패 - 텔레그램에 오류 알림 발송")
-        send_telegram_notification(
-            programs=[],
-            failed_sources=failed_sources,
-            total_sources=total_sources,
-            token=SECRETS["TELEGRAM_BOT_TOKEN"],
-            chat_id=SECRETS["TELEGRAM_CHAT_ID"],
-        )
+        if not dry_run:
+            send_telegram_notification(
+                programs=[],
+                failed_sources=failed_sources,
+                total_sources=total_sources,
+                token=SECRETS["TELEGRAM_BOT_TOKEN"],
+                chat_id=SECRETS["TELEGRAM_CHAT_ID"],
+            )
         return
 
     # 4. Phase 2: AI 분석
@@ -114,13 +115,14 @@ def run_full(dry_run: bool = False):
     if not new_programs:
         logger.info("신규 공고 없음")
         print("\n신규 공고가 없습니다. 다음 수집 때 확인하세요.")
-        send_telegram_notification(
-            programs=[],
-            failed_sources=failed_sources,
-            total_sources=total_sources,
-            token=SECRETS["TELEGRAM_BOT_TOKEN"],
-            chat_id=SECRETS["TELEGRAM_CHAT_ID"],
-        )
+        if not dry_run:
+            send_telegram_notification(
+                programs=[],
+                failed_sources=failed_sources,
+                total_sources=total_sources,
+                token=SECRETS["TELEGRAM_BOT_TOKEN"],
+                chat_id=SECRETS["TELEGRAM_CHAT_ID"],
+            )
         return
 
     # 6. 결과 출력
