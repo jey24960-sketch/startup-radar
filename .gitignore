@@ -1,5 +1,5 @@
 ﻿# API 키 - 절대 커밋 금지
-config.py
+# config.py는 환경변수 방식으로 전환하여 커밋 허용
 
 # 수집 데이터
 data/
