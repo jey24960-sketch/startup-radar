@@ -61,33 +61,26 @@ DATA_DIR = "./data"
 SEEN_DB = "./data/seen_programs.json"
 
 # ──────────────────────────────────────────────
-# 크롤링 소스 목록 (24개)
+# 크롤링 소스 목록 (16개, 접근 가능한 소스만)
 # key: 소스명(표시용), value: URL
 # ──────────────────────────────────────────────
 
 SOURCES = {
-    # 정부·공공 (6개)
+    # 정부·공공 (4개)
     "K-Startup": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do",
     "중소벤처기업부": "https://www.mss.go.kr/site/smba/01/10101010000002019101501.jsp",
     "서울산업진흥원": "https://www.sba.seoul.kr/pages/bizSup/bizSupList.do",
-    "청년창업사관학교": "https://www.startup.go.kr/young",
-    "서울시 청년창업": "https://youth.seoul.go.kr/site/main/content/startup",
     "TIPS": "https://www.jointips.or.kr/bbs/board.php?bo_table=notice",
 
-    # 경진대회·공모전 (3개)
+    # 경진대회·공모전 (2개)
     "위비티": "https://www.wevity.com/?c=find&s=1&gotopage=1",
-    "씨엔티테크": "https://cnttech.co.kr/",
     "링커리어": "https://linkareer.com/list/contest",
 
-    # 대학 창업지원단 (11개)
+    # 대학 창업지원단 (6개)
     "서울대 창업지원단": "https://startup.snu.ac.kr/notice",
-    "연세대 창업지원단": "https://startup.yonsei.ac.kr/",
     "고려대 창업지원단": "https://startup.korea.ac.kr/",
     "한양대 창업지원단": "https://startup.hanyang.ac.kr/",
-    "성균관대 창업지원단": "https://startup.skku.edu/startup/notice.do",
-    "서강대 창업지원단": "https://startup.sogang.ac.kr/",
     "경희대 창업지원단": "https://startup.khu.ac.kr/",
-    "건국대 창업지원단": "https://startup.konkuk.ac.kr/",
     "동덕여대 창업지원단": "https://startup.dongduk.ac.kr/",
     "숙명여대 창업지원단": "https://startup.sookmyung.ac.kr/",
 
