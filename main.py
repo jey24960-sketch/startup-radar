@@ -30,7 +30,7 @@ logger = logging.getLogger("main")
 
 from core.crawler import crawl_all_sources, crawl_category, fetch_programs_from_source
 from core.deduplicator import filter_new_programs, mark_as_sent, cleanup_expired, get_stats
-from core.notifier import send_kakao_notification, send_test_message
+from core.notifier import send_telegram_notification, send_test_message
 from config import SOURCES, DATA_DIR
 
 
@@ -99,16 +99,16 @@ def run_full(dry_run: bool = False):
         print("\n✅ DRY RUN 완료. 위 결과가 실제로 발송될 내용입니다.")
         return
 
-    logger.info("\n[Step 3] 카카오톡 발송...")
-    ok = send_kakao_notification(new_programs)
+    logger.info("\n[Step 3] 텔레그램 발송...")
+    ok = send_telegram_notification(new_programs)
 
     if ok:
         mark_as_sent(new_programs)
         logger.info("✅ 전체 완료")
-        print(f"\n✅ {len(new_programs)}건 카카오톡 발송 완료!")
+        print(f"\n✅ {len(new_programs)}건 텔레그램 발송 완료!")
     else:
-        logger.error("❌ 카카오 발송 실패 - 발송 완료 처리 건너뜀")
-        print("\n❌ 카카오 발송 실패. logs/startup_radar.log를 확인하세요.")
+        logger.error("❌ 텔레그램 발송 실패 - 발송 완료 처리 건너뜀")
+        print("\n❌ 텔레그램 발송 실패. logs/startup_radar.log를 확인하세요.")
 
 
 def run_category(category: str, dry_run: bool = False):
@@ -119,7 +119,7 @@ def run_category(category: str, dry_run: bool = False):
     print_summary(new_programs)
 
     if not dry_run and new_programs:
-        ok = send_kakao_notification(new_programs)
+        ok = send_telegram_notification(new_programs)
         if ok:
             mark_as_sent(new_programs)
 
@@ -132,9 +132,9 @@ def main():
     args = parser.parse_args()
 
     if args.test:
-        print("카카오 연동 테스트 메시지 발송 중...")
+        print("텔레그램 연동 테스트 메시지 발송 중...")
         ok = send_test_message()
-        print("✅ 카카오톡 확인하세요!" if ok else "❌ 실패. config.py의 KAKAO_ACCESS_TOKEN 확인")
+        print("[OK] 텔레그램 확인하세요!" if ok else "[FAIL] config.py의 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 확인")
         return
 
     if args.cat:

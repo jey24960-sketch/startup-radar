@@ -1,5 +1,5 @@
 """
-notifier.py
+core/notifier.py
 텔레그램 Bot API로 창업 지원 정보를 알림 발송합니다.
 requests만 사용하여 Bot API 직접 호출.
 """
