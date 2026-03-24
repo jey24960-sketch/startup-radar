@@ -72,11 +72,11 @@ jobs:
               }
               req = urllib.request.Request(
                   url,
-                  data=json.dumps(payload).encode(),
+                  data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                   headers={
                       "Authorization": f"Bearer {GH_PAT}",
                       "Accept": "application/vnd.github+json",
-                      "Content-Type": "application/json",
+                      "Content-Type": "application/json; charset=utf-8",
                       "X-GitHub-Api-Version": "2022-11-28",
                       "User-Agent": "StartupRadar-TelegramPoller",
                   },
@@ -91,11 +91,11 @@ jobs:
               }
               req = urllib.request.Request(
                   url,
-                  data=json.dumps(payload).encode(),
+                  data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                   headers={
                       "Authorization": f"Bearer {GH_PAT}",
                       "Accept": "application/vnd.github+json",
-                      "Content-Type": "application/json",
+                      "Content-Type": "application/json; charset=utf-8",
                       "X-GitHub-Api-Version": "2022-11-28",
                       "User-Agent": "StartupRadar-TelegramPoller",
                   },

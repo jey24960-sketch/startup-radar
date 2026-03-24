@@ -4,14 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: "변경할 단계"
+        description: "변경할 단계 (팀빌딩|아이디어|MVP|초기매출)"
         required: true
-        type: choice
-        options:
-          - "팀빌딩"
-          - "아이디어"
-          - "MVP"
-          - "초기매출"
+        type: string
 
 permissions:
   contents: write
