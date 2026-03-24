@@ -1,0 +1,79 @@
+name: 동아리 단계 변경
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "변경할 단계"
+        required: true
+        type: choice
+        options:
+          - "팀빌딩"
+          - "아이디어"
+          - "MVP"
+          - "초기매출"
+
+jobs:
+  update-stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: config.py 단계 변경
+        run: |
+          STAGE="${{ github.event.inputs.stage }}"
+          python3 - <<EOF
+          import re
+
+          with open("config.py", "r", encoding="utf-8") as f:
+              content = f.read()
+
+          updated = re.sub(
+              r"- 현재 단계:.*",
+              f"- 현재 단계: {STAGE}",
+              content
+          )
+
+          with open("config.py", "w", encoding="utf-8") as f:
+              f.write(updated)
+
+          print(f"단계 변경 완료: {STAGE}")
+          EOF
+
+      - name: git 커밋 및 푸시
+        run: |
+          git config user.name "StartupRadar Bot"
+          git config user.email "bot@startup-radar"
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/jey24960-sketch/startup-radar.git
+          git add config.py
+          git diff --cached --quiet || git commit -m "config: 동아리 단계 → ${{ github.event.inputs.stage }}"
+          git push
+
+      - name: 텔레그램 완료 알림
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 - <<EOF
+          import os, json, urllib.request
+
+          token   = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+          stage   = "${{ github.event.inputs.stage }}"
+
+          msg = f"✅ 동아리 단계가 '{stage}'(으)로 변경됐습니다.\n다음 수집부터 적용됩니다."
+          payload = {"chat_id": chat_id, "text": msg}
+
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              data=json.dumps(payload).encode(),
+              headers={"Content-Type": "application/json"},
+          )
+          urllib.request.urlopen(req)
+          print("텔레그램 알림 발송 완료")
+          EOF
