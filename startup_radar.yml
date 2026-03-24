@@ -2,8 +2,8 @@ name: StartupRadar 자동 실행
 
 on:
   schedule:
-    # 매주 월요일·목요일 오전 9시 (KST = UTC+9, GitHub Actions는 UTC)
-    - cron: "0 0 * * 1,4"   # UTC 00:00 = KST 09:00
+    # 매주 화요일·금요일 오후 3시 (KST = UTC+9, GitHub Actions는 UTC)
+    - cron: "0 6 * * 2,5"   # UTC 06:00 = KST 15:00
 
   # 수동 실행 (GitHub Actions 탭에서 Run workflow 버튼)
   workflow_dispatch:
