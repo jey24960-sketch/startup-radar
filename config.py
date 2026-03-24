@@ -61,7 +61,7 @@ DATA_DIR = "./data"
 SEEN_DB = "./data/seen_programs.json"
 
 # ──────────────────────────────────────────────
-# 크롤링 소스 목록 (9개, 접근 가능한 소스만)
+# 크롤링 소스 목록 (15개, 접근 가능한 소스만)
 # key: 소스명(표시용), value: URL
 # ──────────────────────────────────────────────
 
@@ -77,7 +77,20 @@ SOURCES = {
     "동덕여대 창업지원단": "https://startup.dongduk.ac.kr/",
     "숙명여대 창업지원단": "https://startup.sookmyung.ac.kr/",
 
-    # 액셀러레이터·VC (2개)
+    # 액셀러레이터·VC (4개)
     "스파크랩": "https://www.sparklabs.co.kr/",
     "프라이머": "https://www.primer.kr/",
+    "매쉬업엔젤스": "https://www.mashupangels.com/portfolio",
+    "퓨처플레이": "https://futureplay.co/",
+
+    # 재단·임팩트 (3개)
+    "아산나눔재단": "https://www.asan-nanum.org/program/",
+    "아산 두어스": "https://doers.asan-nanum.org/",
+    "카카오임팩트": "https://kakaoimpact.org/",
+
+    # 커뮤니티·행사 (1개)
+    "스타트업얼라이언스": "https://startupall.kr/",
+
+    # 창업 허브 (1개)
+    "D.Camp": "https://dcamp.kr/",
 }
