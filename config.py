@@ -88,13 +88,12 @@ SOURCES = {
     "서강대 창업지원단": "https://startup.sogang.ac.kr/",
     "경희대 창업지원단": "https://startup.khu.ac.kr/",
     "건국대 창업지원단": "https://startup.konkuk.ac.kr/",
-    "덕성여대 창업지원단": "https://startup.duksung.ac.kr/",
     "동덕여대 창업지원단": "https://startup.dongduk.ac.kr/",
     "숙명여대 창업지원단": "https://startup.sookmyung.ac.kr/",
 
     # 액셀러레이터·VC (4개)
     "스파크랩": "https://www.sparklabs.co.kr/",
-    "디캠프": "https://dcamp.kr/programs",
+    "디캠프": "https://dcamp.kr/",
     "프라이머": "https://www.primer.kr/",
     "블루포인트": "https://bluepoint.ac/",
 }
