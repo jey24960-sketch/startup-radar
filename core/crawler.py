@@ -35,7 +35,11 @@ _RETRY_WAIT = 3
 
 
 def _parse_html(html: str) -> str:
-    soup = BeautifulSoup(html, "lxml")
+    try:
+        soup = BeautifulSoup(html, "lxml")
+    except Exception as e:
+        logger.warning(f"HTML 파싱 오류: {e}")
+        return ""
     for tag in soup.find_all(_NOISE_TAGS):
         tag.decompose()
 

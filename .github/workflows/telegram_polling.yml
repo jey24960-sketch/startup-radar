@@ -55,8 +55,18 @@ jobs:
                   data=json.dumps(data).encode(),
                   headers={"Content-Type": "application/json"},
               )
-              with urllib.request.urlopen(req) as r:
-                  return json.loads(r.read())
+              try:
+                  with urllib.request.urlopen(req, timeout=10) as r:
+                      return json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  print(f"Telegram API HTTP 오류 ({method}): {e.code} {e.reason}")
+                  return {"ok": False, "error": str(e)}
+              except urllib.error.URLError as e:
+                  print(f"Telegram API 연결 오류 ({method}): {e.reason}")
+                  return {"ok": False, "error": str(e)}
+              except Exception as e:
+                  print(f"Telegram API 예외 ({method}): {e}")
+                  return {"ok": False, "error": str(e)}
 
           def send(chat_id, text, parse_mode=None):
               d = {"chat_id": chat_id, "text": text}

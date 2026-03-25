@@ -26,7 +26,7 @@ def _md_escape(text: str) -> str:
     """Telegram Markdown v1에서 특수 의미를 갖는 문자를 이스케이프합니다."""
     if not text:
         return text
-    for ch in ("*", "_", "`"):
+    for ch in ("*", "_", "`", "["):
         text = text.replace(ch, f"\\{ch}")
     return text
 
@@ -161,7 +161,7 @@ def _build_message_empty(failed_sources: list[str], total_sources: int) -> str:
 # ──────────────────────────────────────────────
 
 def _split_message(text: str) -> list[str]:
-    """4096자 초과 시 줄 단위로 분할합니다."""
+    """4096자 초과 시 줄 단위로 분할합니다. 단일 줄이 4096자를 초과하면 강제 분할합니다."""
     if len(text) <= _MAX_MSG_LEN:
         return [text]
 
@@ -170,6 +170,15 @@ def _split_message(text: str) -> list[str]:
     current = ""
 
     for line in lines:
+        # 단일 줄 자체가 4096자 초과인 경우 강제 분할
+        if len(line) > _MAX_MSG_LEN:
+            if current:
+                chunks.append(current.strip())
+                current = ""
+            for i in range(0, len(line), _MAX_MSG_LEN):
+                chunks.append(line[i:i + _MAX_MSG_LEN])
+            continue
+
         candidate = (current + "\n" + line) if current else line
         if len(candidate) > _MAX_MSG_LEN:
             if current:

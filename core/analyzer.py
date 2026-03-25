@@ -118,6 +118,9 @@ def _call_claude(client: anthropic.Anthropic, chunk: dict[str, str]) -> list[dic
             system=system,
             messages=[{"role": "user", "content": user_msg}],
         )
+        if not response.content:
+            logger.error("Claude 응답 content가 비어있음")
+            return []
         raw_text = response.content[0].text.strip()
 
         # JSON 블록 추출 (```json ... ``` 감싸인 경우 처리)
@@ -128,24 +131,36 @@ def _call_claude(client: anthropic.Anthropic, chunk: dict[str, str]) -> list[dic
                 if not line.startswith("```")
             ).strip()
 
-        # 1차: 첫 번째 완전한 JSON 배열 추출
-        match = re.search(r'\[.*?\]', raw_text, re.DOTALL)
-        if not match:
-            logger.warning(f"청크 파싱 실패: JSON 배열을 찾을 수 없음")
+        # 1차: 중첩 배열을 고려한 브라켓 카운팅으로 완전한 JSON 배열 추출
+        start = raw_text.find("[")
+        if start == -1:
+            logger.warning("청크 파싱 실패: JSON 배열을 찾을 수 없음")
             return []
+        bracket_count = 0
+        end = start
+        for i, ch in enumerate(raw_text[start:], start):
+            if ch == "[":
+                bracket_count += 1
+            elif ch == "]":
+                bracket_count -= 1
+            if bracket_count == 0:
+                end = i
+                break
+        else:
+            # 배열이 잘린 경우 복구 시도
+            end = None
+
         try:
-            programs = json.loads(match.group())
-        except json.JSONDecodeError:
-            # 2차: 응답이 중간에 잘린 경우 마지막 완전한 } 까지만 복구
-            last_brace = raw_text.rfind("}")
-            if last_brace != -1:
-                recovered = raw_text[:last_brace + 1] + "]"
-                if not recovered.lstrip().startswith("["):
-                    recovered = "[" + recovered
+            if end is not None:
+                programs = json.loads(raw_text[start:end + 1])
+            else:
+                # 2차: 응답이 중간에 잘린 경우 마지막 완전한 } 까지만 복구
+                last_brace = raw_text.rfind("}")
+                if last_brace == -1:
+                    raise json.JSONDecodeError("복구 불가", raw_text, 0)
+                recovered = raw_text[start:last_brace + 1] + "]"
                 programs = json.loads(recovered)
                 logger.warning("응답 잘림 감지 — 부분 복구 후 파싱 성공")
-            else:
-                raise
 
         if not isinstance(programs, list):
             logger.warning("Claude 응답이 리스트가 아님, 빈 리스트로 처리")
