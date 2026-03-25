@@ -6,6 +6,7 @@ Phase 2: raw_data를 받아 Claude API로 창업 지원 프로그램을 추출·
 
 import json
 import logging
+import re
 import sys
 import os
 from datetime import date
@@ -127,15 +128,18 @@ def _call_claude(client: anthropic.Anthropic, chunk: dict[str, str]) -> list[dic
                 if not line.startswith("```")
             ).strip()
 
-        # 1차 파싱 시도
+        # 1차: 첫 번째 완전한 JSON 배열 추출
+        match = re.search(r'\[.*?\]', raw_text, re.DOTALL)
+        if not match:
+            logger.warning(f"청크 파싱 실패: JSON 배열을 찾을 수 없음")
+            return []
         try:
-            programs = json.loads(raw_text)
+            programs = json.loads(match.group())
         except json.JSONDecodeError:
             # 2차: 응답이 중간에 잘린 경우 마지막 완전한 } 까지만 복구
             last_brace = raw_text.rfind("}")
             if last_brace != -1:
                 recovered = raw_text[:last_brace + 1] + "]"
-                # 배열 시작 [ 가 없으면 추가
                 if not recovered.lstrip().startswith("["):
                     recovered = "[" + recovered
                 programs = json.loads(recovered)

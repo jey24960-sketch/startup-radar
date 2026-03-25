@@ -8,6 +8,7 @@ import time
 import logging
 import sys
 import os
+import xml.etree.ElementTree as ET
 
 import requests
 from bs4 import BeautifulSoup
@@ -49,6 +50,23 @@ def _parse_html(html: str) -> str:
     return "\n".join(lines)[:_MAX_TEXT_CHARS]
 
 
+def _parse_rss(xml_text: str) -> str:
+    """RSS/Atom XML에서 <title>, <description>, <link> 텍스트를 추출합니다."""
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return ""
+
+    ns_strip = lambda tag: tag.split("}")[-1] if "}" in tag else tag
+    lines = []
+    for elem in root.iter():
+        if ns_strip(elem.tag) in ("title", "description", "link", "summary"):
+            text = (elem.text or "").strip()
+            if text and len(text) > 5:
+                lines.append(text)
+    return "\n".join(lines)[:_MAX_TEXT_CHARS]
+
+
 def _fetch_text(session: requests.Session, source_name: str, url: str) -> str:
     """
     Session으로 URL을 가져와 텍스트를 추출합니다.
@@ -67,6 +85,8 @@ def _fetch_text(session: requests.Session, source_name: str, url: str) -> str:
                 )
             resp.raise_for_status()
             resp.encoding = resp.apparent_encoding or "utf-8"
+            if "rss" in url.lower():
+                return _parse_rss(resp.text)
             return _parse_html(resp.text)
 
         except requests.exceptions.ConnectionError as e:

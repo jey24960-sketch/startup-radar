@@ -83,14 +83,7 @@ SOURCES = {
     "매쉬업엔젤스": "https://www.mashupangels.com/portfolio",
     "퓨처플레이": "https://futureplay.co/",
 
-    # 재단·임팩트 (3개)
+    # 재단·임팩트 (2개)
     "아산나눔재단": "https://www.asan-nanum.org/program/",
-    "아산 두어스": "https://doers.asan-nanum.org/",
     "카카오임팩트": "https://kakaoimpact.org/",
-
-    # 커뮤니티·행사 (1개)
-    "스타트업얼라이언스": "https://startupall.kr/",
-
-    # 창업 허브 (1개)
-    "D.Camp": "https://dcamp.kr/",
 }
