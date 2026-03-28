@@ -150,17 +150,16 @@ def _call_claude(client: anthropic.Anthropic, chunk: dict[str, str]) -> list[dic
             # 배열이 잘린 경우 복구 시도
             end = None
 
-        try:
-            if end is not None:
-                programs = json.loads(raw_text[start:end + 1])
-            else:
-                # 2차: 응답이 중간에 잘린 경우 마지막 완전한 } 까지만 복구
-                last_brace = raw_text.rfind("}")
-                if last_brace == -1:
-                    raise json.JSONDecodeError("복구 불가", raw_text, 0)
-                recovered = raw_text[start:last_brace + 1] + "]"
-                programs = json.loads(recovered)
-                logger.warning("응답 잘림 감지 — 부분 복구 후 파싱 성공")
+        if end is not None:
+            programs = json.loads(raw_text[start:end + 1])
+        else:
+            # 2차: 응답이 중간에 잘린 경우 마지막 완전한 } 까지만 복구
+            last_brace = raw_text.rfind("}")
+            if last_brace == -1:
+                raise json.JSONDecodeError("복구 불가", raw_text, 0)
+            recovered = raw_text[start:last_brace + 1] + "]"
+            programs = json.loads(recovered)
+            logger.warning("응답 잘림 감지 — 부분 복구 후 파싱 성공")
 
         if not isinstance(programs, list):
             logger.warning("Claude 응답이 리스트가 아님, 빈 리스트로 처리")
