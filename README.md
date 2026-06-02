@@ -211,6 +211,8 @@ MIN_RELEVANCE_SCORE = 50        # AI 적합도 점수 50점 미만은 필터링
 - `/id`가 답장하면 나온 `from.id`를 `TELEGRAM_ADMIN_CHAT_ID`에 넣었는지 확인
 - `/id`도 답장이 없으면 Telegram webhook이 최신 Cloudflare Worker URL을 가리키는지 확인
 - Cloudflare Worker URL을 브라우저에서 열었을 때 `StartupRadar Telegram webhook is live` 문구가 보이면 최신 Worker 코드가 배포된 것입니다.
+- Cloudflare Worker Logs에서 `/id` 직후 `Telegram update received`가 없으면 Telegram 요청이 Worker까지 오지 않는 상태입니다. `getWebhookInfo`의 `url`, `allowed_updates`, `last_error_message`를 확인하세요.
+- `Telegram update received`는 있는데 `Telegram sendMessage failed`가 보이면 Worker Secret의 `TELEGRAM_BOT_TOKEN` 값이 비었거나 잘못된 상태입니다.
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID` 값 재확인
 
 **수집 결과가 없을 때**

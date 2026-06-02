@@ -59,68 +59,92 @@ export default {
       return new Response("Bad Request", { status: 400 });
     }
 
-    const message = update?.message;
-    if (!message) return new Response("OK");
+    try {
+      const message = getTelegramMessage(update);
+      const updateType = getUpdateType(update);
+      if (!message) {
+        console.log("Telegram update ignored: no message-like payload", {
+          updateId: update?.update_id,
+          updateType,
+        });
+        return new Response("OK");
+      }
 
-    const chatId = message.chat?.id;
-    const fromId = message.from?.id;
-    const text = (message.text || "").trim();
-    const command = normalizeCommand(text);
+      const chatId = message.chat?.id;
+      const fromId = message.from?.id;
+      const senderChatId = message.sender_chat?.id;
+      const text = (message.text || message.caption || "").trim();
+      const command = normalizeCommand(text);
 
-    if (isIdCommand(command)) {
-      await sendTelegram(env, chatId, buildIdHelpText(fromId, chatId));
-      return new Response("OK");
-    }
+      console.log("Telegram update received", {
+        updateId: update?.update_id,
+        updateType,
+        command,
+        chatId,
+        fromId,
+        senderChatId,
+      });
 
-    // 허용된 관리자 개인 ID 외 무시. 그룹 명령은 chat.id가 그룹 ID라서 from.id를 기준으로 봅니다.
-    const adminChatIds = parseAdminChatIds(env);
-    if (!isAdmin(fromId, adminChatIds)) {
-      return new Response("OK");
-    }
+      if (isIdCommand(command)) {
+        await sendTelegram(env, chatId, buildIdHelpText(fromId, chatId, senderChatId));
+        return new Response("OK");
+      }
 
-    switch (command) {
-      case "/run":
-        await triggerWorkflow(env, false);
-        await sendTelegram(env, chatId, "✅ StartupRadar 실행을 요청했습니다. (dry_run: false)");
-        break;
+      // 허용된 관리자 개인 ID 외 무시. 그룹 명령은 chat.id가 그룹 ID라서 from.id를 기준으로 봅니다.
+      const adminChatIds = parseAdminChatIds(env);
+      if (!isAdmin(fromId, adminChatIds)) {
+        return new Response("OK");
+      }
 
-      case "/dry":
-        await triggerWorkflow(env, true);
-        await sendTelegram(env, chatId, "🧪 StartupRadar 테스트 실행을 요청했습니다. (dry_run: true, 발송 없음)");
-        break;
+      switch (command) {
+        case "/run":
+          await triggerWorkflow(env, false);
+          await sendTelegram(env, chatId, "✅ StartupRadar 실행을 요청했습니다. (dry_run: false)");
+          break;
 
-      case "/stop":
-        await triggerAutoRunControl(env, false);
-        await sendTelegram(env, chatId, "🛑 정기 전송을 중지합니다. 화/금 자동 실행은 꺼지고, 수동 /run은 계속 사용할 수 있습니다.");
-        break;
+        case "/dry":
+          await triggerWorkflow(env, true);
+          await sendTelegram(env, chatId, "🧪 StartupRadar 테스트 실행을 요청했습니다. (dry_run: true, 발송 없음)");
+          break;
 
-      case "/share":
-        await sendTelegram(env, chatId, SHARE_HELP_TEXT);
-        break;
+        case "/stop":
+          await triggerAutoRunControl(env, false);
+          await sendTelegram(env, chatId, "🛑 정기 전송을 중지합니다. 화/금 자동 실행은 꺼지고, 수동 /run은 계속 사용할 수 있습니다.");
+          break;
 
-      case "/status":
-        await sendTelegram(env, chatId, "🟢 StartupRadar 정상 작동 중");
-        break;
+        case "/share":
+          await sendTelegram(env, chatId, SHARE_HELP_TEXT);
+          break;
 
-      case "/help":
-        await setTelegramCommands(env).catch(() => {});
-        await sendTelegram(
-          env,
-          chatId,
-          "📋 *StartupRadar 명령어 목록*\n\n" +
-          "/run — 즉시 실행 (텔레그램 발송 포함)\n" +
-          "/dry — 테스트 실행 (발송 없음)\n" +
-          "/stop — 정기 전송 중지 (수동 /run은 유지)\n" +
-          "/share — 여러 사람이 결과를 받는 설정 안내\n" +
-          "/id — 내 Telegram ID 확인\n" +
-          "/status — 봇 상태 확인\n" +
-          "/help — 이 메시지 보기",
-          "Markdown"
-        );
-        break;
+        case "/status":
+          await sendTelegram(env, chatId, "🟢 StartupRadar 정상 작동 중");
+          break;
 
-      default:
-        await sendTelegram(env, chatId, "❓ 알 수 없는 명령어입니다. /help 를 입력하세요.");
+        case "/help":
+          await setTelegramCommands(env).catch(() => {});
+          await sendTelegram(
+            env,
+            chatId,
+            "📋 *StartupRadar 명령어 목록*\n\n" +
+            "/run — 즉시 실행 (텔레그램 발송 포함)\n" +
+            "/dry — 테스트 실행 (발송 없음)\n" +
+            "/stop — 정기 전송 중지 (수동 /run은 유지)\n" +
+            "/share — 여러 사람이 결과를 받는 설정 안내\n" +
+            "/id — 내 Telegram ID 확인\n" +
+            "/status — 봇 상태 확인\n" +
+            "/help — 이 메시지 보기",
+            "Markdown"
+          );
+          break;
+
+        default:
+          await sendTelegram(env, chatId, "❓ 알 수 없는 명령어입니다. /help 를 입력하세요.");
+      }
+    } catch (error) {
+      console.error("Telegram webhook failed", {
+        message: error?.message || String(error),
+      });
+      return new Response("Webhook Error", { status: 500 });
     }
 
     return new Response("OK");
@@ -180,6 +204,10 @@ async function triggerAutoRunControl(env, enabled) {
 }
 
 async function sendTelegram(env, chatId, text, parseMode = null) {
+  if (chatId === undefined || chatId === null) {
+    throw new Error("Cannot send Telegram message: missing chatId");
+  }
+
   const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
 
   const payload = { chat_id: chatId, text };
@@ -193,6 +221,10 @@ async function sendTelegram(env, chatId, text, parseMode = null) {
 
   if (!res.ok) {
     const body = await res.text();
+    console.error("Telegram sendMessage failed", {
+      status: res.status,
+      body,
+    });
     throw new Error(`Telegram API error ${res.status}: ${body}`);
   }
 }
@@ -222,12 +254,37 @@ function isAdmin(fromId, adminChatIds) {
   return adminChatIds.includes(String(fromId));
 }
 
-function buildIdHelpText(fromId, chatId) {
+function getTelegramMessage(update) {
+  return (
+    update?.message ||
+    update?.edited_message ||
+    update?.channel_post ||
+    update?.edited_channel_post
+  );
+}
+
+function getUpdateType(update) {
+  if (!update || typeof update !== "object") return "unknown";
+  return [
+    "message",
+    "edited_message",
+    "channel_post",
+    "edited_channel_post",
+    "callback_query",
+    "inline_query",
+  ].find((key) => Boolean(update[key])) || "unknown";
+}
+
+function buildIdHelpText(fromId, chatId, senderChatId = null) {
+  const fromText = fromId ?? "없음";
+  const senderChatText = senderChatId ?? "없음";
   return (
     "🪪 Telegram ID 확인\n\n" +
-    `from.id: ${fromId ?? "없음"}\n` +
+    `from.id: ${fromText}\n` +
     `chat.id: ${chatId ?? "없음"}\n\n` +
+    `sender_chat.id: ${senderChatText}\n\n` +
     "Cloudflare Worker Secret의 TELEGRAM_ADMIN_CHAT_ID에는 from.id 값을 넣으세요.\n" +
+    "from.id가 없음으로 나오면 채널 글로 들어온 것이므로, 봇과의 개인 채팅에서 /id를 보내세요.\n" +
     "TELEGRAM_CHAT_ID는 결과를 받을 채널/그룹/개인 대상으로 둡니다."
   );
 }
