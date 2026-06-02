@@ -9,11 +9,11 @@ import requests
 from datetime import datetime, date
 from typing import Optional
 import sys, os
+from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
-    TELEGRAM_BOT_TOKEN,
-    TELEGRAM_CHAT_ID,
+    load_secrets,
     DEADLINE_URGENT_DAYS,
     MAX_ITEMS_PER_REPORT,
 )
@@ -21,6 +21,30 @@ from config import (
 logger = logging.getLogger(__name__)
 
 TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/sendMessage"
+SECRETS = load_secrets()
+TELEGRAM_BOT_TOKEN = SECRETS["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT_ID = SECRETS["TELEGRAM_CHAT_ID"]
+
+
+def _redact_token(text: object) -> str:
+    safe = str(text)
+    if TELEGRAM_BOT_TOKEN:
+        safe = safe.replace(TELEGRAM_BOT_TOKEN, "<telegram-token>")
+    return safe
+
+
+def _safe_url(raw_url: str) -> str:
+    if not raw_url:
+        return ""
+    candidate = str(raw_url).strip()
+    if len(candidate) > 2048 or any(ch.isspace() for ch in candidate):
+        return ""
+    if any(ch in candidate for ch in ("(", ")", "[", "]", "`")):
+        return ""
+    parsed = urlparse(candidate)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return ""
+    return candidate
 
 
 def _days_until_deadline(deadline_str: Optional[str]) -> Optional[int]:
@@ -83,7 +107,7 @@ def _build_message(programs: list[dict], run_date: str) -> str:
             org = p.get("organization", "")
             deadline = _format_deadline(p.get("deadline"))
             amount = _format_amount(p.get("amount"))
-            url = p.get("apply_url") or p.get("source_url", "")
+            url = _safe_url(p.get("apply_url") or p.get("source_url", ""))
 
             if url:
                 lines.append(f"{emoji} *[{title}]({url})*")
@@ -104,7 +128,7 @@ def _build_message(programs: list[dict], run_date: str) -> str:
             amount = _format_amount(p.get("amount"))
             score = p.get("relevance_score", 0)
             summary = p.get("summary", "")[:60]
-            url = p.get("apply_url") or p.get("source_url", "")
+            url = _safe_url(p.get("apply_url") or p.get("source_url", ""))
 
             if url:
                 lines.append(f"{emoji} *[{title}]({url})*  (적합도 {score}점)")
@@ -156,13 +180,21 @@ def _send_message(text: str) -> bool:
     }
     try:
         resp = requests.post(url, json=payload, timeout=10)
-        if resp.status_code == 200 and resp.json().get("ok"):
-            return True
-        else:
-            logger.error(f"텔레그램 발송 실패: {resp.status_code} {resp.text}")
+        try:
+            data = resp.json()
+        except ValueError:
+            logger.error("텔레그램 발송 실패: %s non-JSON response", resp.status_code)
             return False
+
+        if resp.status_code == 200 and data.get("ok"):
+            return True
+        logger.error("텔레그램 발송 실패: %s %s", resp.status_code, _redact_token(data.get("description", data)))
+        return False
+    except requests.RequestException as e:
+        logger.error("텔레그램 발송 요청 예외: %s", _redact_token(e))
+        return False
     except Exception as e:
-        logger.error(f"텔레그램 발송 예외: {e}")
+        logger.error("텔레그램 발송 예외: %s", type(e).__name__)
         return False
 
 

@@ -29,27 +29,27 @@ pip install -r requirements.txt
 
 1. https://console.anthropic.com 접속
 2. API Keys → Create Key
-3. `config.py`의 `ANTHROPIC_API_KEY`에 붙여넣기
+3. 로컬에서는 환경변수 `ANTHROPIC_API_KEY`로 설정하고, GitHub Actions에서는 저장소 Secret으로 등록합니다.
 
 ### Step 3. 텔레그램 봇 설정
 
 **봇 토큰 발급:**
 1. 텔레그램에서 `@BotFather` 검색 → `/newbot`
 2. 봇 이름·username 설정 후 토큰 발급
-3. `config.py`의 `TELEGRAM_BOT_TOKEN`에 붙여넣기
+3. 로컬에서는 환경변수 `TELEGRAM_BOT_TOKEN`으로 설정하고, GitHub Actions에서는 저장소 Secret으로 등록합니다.
 
 **Chat ID 확인:**
 1. 텔레그램에서 `@userinfobot` 검색 → `/start`
-2. 출력된 `Id` 값을 `config.py`의 `TELEGRAM_CHAT_ID`에 붙여넣기
+2. 출력된 `Id` 값을 로컬 환경변수 `TELEGRAM_CHAT_ID` 또는 GitHub Actions 저장소 Secret으로 등록합니다.
 3. 봇과 대화를 먼저 시작해야 메시지를 받을 수 있습니다 (`/start`)
 
 ### Step 4. 연동 테스트
 
 ```bash
-python main.py --test
+ANTHROPIC_API_KEY="..." TELEGRAM_BOT_TOKEN="..." TELEGRAM_CHAT_ID="..." python main.py --dry
 ```
 
-텔레그램에 테스트 메시지가 오면 성공!
+수집 결과가 출력되면 기본 실행 환경이 준비된 것입니다.
 
 ### Step 5. 첫 실행
 
@@ -68,9 +68,6 @@ python main.py
 ```bash
 python main.py                        # 전체 실행 (수집 + 발송)
 python main.py --dry                  # 수집만 (발송 없음)
-python main.py --test                 # 텔레그램 연동 테스트
-python main.py --cat "정부·공공"      # 특정 카테고리만
-python main.py --cat "서울 대학 창업지원단" --dry
 ```
 
 ---
@@ -198,12 +195,12 @@ MIN_RELEVANCE_SCORE = 50        # AI 적합도 점수 50점 미만은 필터링
 ## 문제 해결
 
 **텔레그램 발송 실패 시**
-- `python main.py --test`로 토큰·Chat ID 유효 여부 확인
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 환경변수 또는 GitHub Secrets 설정 확인
 - 봇과 대화를 시작했는지 확인 (텔레그램에서 봇 검색 후 `/start`)
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 값 재확인
 
 **수집 결과가 없을 때**
-- `python main.py --dry --cat "정부·공공"` 으로 부분 테스트
+- `python main.py --dry` 로 수집 결과 확인
 - `logs/startup_radar.log` 확인
 
 **API 비용 절감**

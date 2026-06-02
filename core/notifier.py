@@ -10,9 +10,10 @@ from datetime import datetime, date, timedelta
 from typing import Optional
 import sys
 import os
+from urllib.parse import urljoin, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import DEADLINE_URGENT_DAYS, MAX_ITEMS_PER_REPORT
+from config import DEADLINE_URGENT_DAYS, MAX_ITEMS_PER_REPORT, SOURCES
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,74 @@ def _md_escape(text: str) -> str:
     for ch in ("*", "_", "`", "["):
         text = text.replace(ch, f"\\{ch}")
     return text
+
+
+def _redact_token(text: object, token: str) -> str:
+    """로그에 Telegram Bot Token이 섞이지 않도록 마스킹합니다."""
+    safe = str(text)
+    if token:
+        safe = safe.replace(token, "<telegram-token>")
+    return safe
+
+
+def _host_matches(host: str, allowed_host: str) -> bool:
+    host = host.lower().removeprefix("www.")
+    allowed_host = allowed_host.lower().removeprefix("www.")
+    return host == allowed_host or host.endswith(f".{allowed_host}")
+
+
+def _source_url(source_name: str) -> str:
+    if not source_name:
+        return ""
+    return SOURCES.get(source_name, "")
+
+
+def _allowed_hosts(source_name: str) -> set[str]:
+    source_url = _source_url(source_name)
+    if source_url:
+        parsed = urlparse(source_url)
+        return {parsed.hostname.lower()} if parsed.hostname else set()
+
+    hosts = set()
+    for url in SOURCES.values():
+        parsed = urlparse(url)
+        if parsed.hostname:
+            hosts.add(parsed.hostname.lower())
+    return hosts
+
+
+def _safe_apply_url(raw_url: str, source_name: str = "") -> str:
+    """Claude가 만든 URL이 수집 소스 도메인에 속하는 http/https 링크인지 검증합니다."""
+    if not raw_url:
+        return ""
+
+    candidate = str(raw_url).strip()
+    if len(candidate) > 2048 or any(ch.isspace() for ch in candidate):
+        return ""
+
+    source_url = _source_url(source_name)
+    parsed = urlparse(candidate)
+    if not parsed.scheme and source_url:
+        candidate = urljoin(source_url, candidate)
+        parsed = urlparse(candidate)
+
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return ""
+
+    allowed_hosts = _allowed_hosts(source_name)
+    if not allowed_hosts:
+        return ""
+
+    hostname = parsed.hostname.lower()
+    if not any(_host_matches(hostname, allowed) for allowed in allowed_hosts):
+        logger.warning("허용되지 않은 신청 URL 도메인 제거: %s", hostname)
+        return ""
+
+    if any(ch in candidate for ch in ("(", ")", "[", "]", "`")):
+        logger.warning("Markdown 안전성 검사를 통과하지 못한 신청 URL 제거: %s", hostname)
+        return ""
+
+    return candidate
 
 
 # ──────────────────────────────────────────────
@@ -88,7 +157,7 @@ def _format_program(p: dict) -> str:
     score = p.get("relevance_score", 0)
     amount = _md_escape(p.get("amount") or "혜택 확인 필요")
     summary = _md_escape(p.get("summary", ""))
-    url = p.get("apply_url") or ""
+    url = _safe_apply_url(p.get("apply_url") or "", p.get("source", ""))
 
     lines = [f"*{title}*"]
     lines.append(f"{org} · {deadline_str} · 적합도 {score}점")
@@ -203,13 +272,23 @@ def _send_one(text: str, token: str, chat_id: str) -> bool:
     }
     try:
         resp = requests.post(url, json=payload, timeout=10)
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError:
+            logger.error("텔레그램 오류: %s non-JSON response", resp.status_code)
+            return False
+
         if resp.status_code == 200 and data.get("ok"):
             return True
-        logger.error(f"텔레그램 오류: {resp.status_code} {data}")
+
+        description = _redact_token(data.get("description", data), token)
+        logger.error("텔레그램 오류: %s %s", resp.status_code, description)
+        return False
+    except requests.RequestException as e:
+        logger.error("텔레그램 요청 예외: %s", _redact_token(e, token))
         return False
     except Exception as e:
-        logger.error(f"텔레그램 예외: {e}")
+        logger.error("텔레그램 예외: %s", type(e).__name__)
         return False
 
 

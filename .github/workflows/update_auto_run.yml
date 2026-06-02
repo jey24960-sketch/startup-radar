@@ -39,9 +39,8 @@ jobs:
           PY
 
       - name: Commit and push state
-        env:
-          AUTO_RUN_ENABLED: ${{ github.event.inputs.enabled }}
         run: |
+          AUTO_RUN_ENABLED="$(cat .startup_radar_auto_run)"
           git config user.name "StartupRadar Bot"
           git config user.email "bot@startup-radar"
           git add .startup_radar_auto_run

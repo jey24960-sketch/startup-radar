@@ -6,6 +6,9 @@ on:
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   poll:
     runs-on: ubuntu-latest
@@ -24,6 +27,7 @@ jobs:
       - name: Telegram getUpdates → workflow_dispatch
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GH_PAT: ${{ secrets.GH_PAT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
@@ -31,11 +35,19 @@ jobs:
           import os, json, urllib.request, urllib.error
 
           BOT_TOKEN  = os.environ["TELEGRAM_BOT_TOKEN"]
+          ALLOWED_ID = int(os.environ["TELEGRAM_CHAT_ID"])
           GH_PAT     = os.environ["GH_PAT"]
           REPO       = os.environ["GITHUB_REPOSITORY"]   # "owner/repo"
-          ALLOWED_ID = 7916829738
           OFFSET_FILE = "telegram_offset.txt"
           VALID_STAGES = ["팀빌딩", "아이디어", "MVP", "초기매출"]
+          BOT_COMMANDS = [
+              {"command": "run", "description": "지금 즉시 수집하고 텔레그램으로 발송"},
+              {"command": "dry", "description": "발송 없이 수집만 테스트"},
+              {"command": "stop", "description": "화/금 자동 실행 중지"},
+              {"command": "stage", "description": "동아리 단계 변경"},
+              {"command": "status", "description": "봇 상태 확인"},
+              {"command": "help", "description": "명령어 안내"},
+          ]
 
           def read_offset():
               try:
@@ -73,6 +85,11 @@ jobs:
               if parse_mode:
                   d["parse_mode"] = parse_mode
               tg_post("sendMessage", d)
+
+          def sync_bot_commands():
+              result = tg_post("setMyCommands", {"commands": BOT_COMMANDS})
+              if not result.get("ok"):
+                  print("Telegram command menu sync skipped or failed")
 
           def trigger_radar(dry_run):
               url = f"https://api.github.com/repos/{REPO}/actions/workflows/startup_radar.yml/dispatches"
@@ -131,6 +148,7 @@ jobs:
               )
               urllib.request.urlopen(req)
 
+          sync_bot_commands()
           offset = read_offset()
 
           if offset is None:
@@ -192,7 +210,7 @@ jobs:
                               "📋 *StartupRadar 명령어 목록*\n\n"
                               "/run — 지금 즉시 수집 + 발송\n"
                               "/dry — 수집만 (발송 없음)\n"
-                              "/stop — 화/금 자동 실행 중지\n"
+                              "/stop — 화/금 자동 실행 중지 (수동 /run은 유지)\n"
                               "/stage [단계] — 동아리 단계 변경\n"
                               "/status — 상태 확인\n"
                               "/help — 명령어 안내",

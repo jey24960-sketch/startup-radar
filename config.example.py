@@ -3,9 +3,9 @@ StartupRadar 설정 파일
 여기서 API 키, 검색 대상, 알림 주기를 모두 관리합니다.
 """
 
-# ── API 키 설정 ─────────────────────────────────────────────
-ANTHROPIC_API_KEY = "YOUR_ANTHROPIC_API_KEY"   # https://console.anthropic.com
-KAKAO_ACCESS_TOKEN = "YOUR_KAKAO_ACCESS_TOKEN"  # 아래 kakao_auth.py 실행해서 발급
+# ── 비밀값 설정 ─────────────────────────────────────────────
+# API 키와 봇 토큰은 이 파일에 적지 말고 환경변수 또는 GitHub Secrets로 설정하세요.
+# 필수 환경변수: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 # ── 모델 설정 ────────────────────────────────────────────────
 CLAUDE_MODEL = "claude-sonnet-4-5"

@@ -16,7 +16,13 @@
  *   TELEGRAM_CHAT_ID    - 허용된 chat_id (본인만 허용)
  */
 
-const ALLOWED_CHAT_ID = 7916829738;
+const BOT_COMMANDS = [
+  { command: "run", description: "지금 즉시 수집하고 텔레그램으로 발송" },
+  { command: "dry", description: "발송 없이 수집만 테스트" },
+  { command: "stop", description: "화/금 자동 실행 중지" },
+  { command: "status", description: "봇 상태 확인" },
+  { command: "help", description: "명령어 안내" },
+];
 
 export default {
   async fetch(request, env) {
@@ -38,7 +44,7 @@ export default {
     const text = (message.text || "").trim();
 
     // 허용된 chat_id 외 무시
-    if (chatId !== ALLOWED_CHAT_ID) {
+    if (String(chatId) !== String(env.TELEGRAM_CHAT_ID)) {
       return new Response("OK");
     }
 
@@ -65,13 +71,14 @@ export default {
         break;
 
       case "/help":
+        await setTelegramCommands(env).catch(() => {});
         await sendTelegram(
           env,
           chatId,
           "📋 *StartupRadar 명령어 목록*\n\n" +
           "/run — 즉시 실행 (텔레그램 발송 포함)\n" +
           "/dry — 테스트 실행 (발송 없음)\n" +
-          "/stop — 화/금 자동 실행 중지\n" +
+          "/stop — 화/금 자동 실행 중지 (수동 /run은 유지)\n" +
           "/status — 봇 상태 확인\n" +
           "/help — 이 메시지 보기",
           "Markdown"
@@ -148,5 +155,15 @@ async function sendTelegram(env, chatId, text, parseMode = null) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+async function setTelegramCommands(env) {
+  const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setMyCommands`;
+
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ commands: BOT_COMMANDS }),
   });
 }

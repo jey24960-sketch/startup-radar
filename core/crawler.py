@@ -8,10 +8,11 @@ import time
 import logging
 import sys
 import os
-import xml.etree.ElementTree as ET
 
 import requests
 from bs4 import BeautifulSoup
+from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import SOURCES, CRAWL_DELAY_SECONDS
@@ -58,7 +59,7 @@ def _parse_rss(xml_text: str) -> str:
     """RSS/Atom XML에서 <title>, <description>, <link> 텍스트를 추출합니다."""
     try:
         root = ET.fromstring(xml_text)
-    except ET.ParseError:
+    except (ET.ParseError, DefusedXmlException):
         return ""
 
     ns_strip = lambda tag: tag.split("}")[-1] if "}" in tag else tag

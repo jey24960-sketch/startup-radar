@@ -41,7 +41,7 @@ def _program_hash(program: dict) -> str:
     title + organization + apply_url 기준으로 해시.
     같은 기관이 동일 제목으로 URL이 다른 공고를 재게시할 경우 별도 공고로 처리."""
     key = f"{program.get('title', '')}|{program.get('organization', '')}|{program.get('apply_url', '')}"
-    return hashlib.md5(key.encode()).hexdigest()[:12]
+    return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:12]
 
 
 def filter_new_programs(programs: list[dict]) -> list[dict]:

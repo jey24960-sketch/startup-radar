@@ -39,7 +39,7 @@ def _save_seen(seen: dict):
 def _program_hash(program: dict) -> str:
     """프로그램 고유 식별자 생성"""
     key = f"{program.get('title', '')}|{program.get('organization', '')}|{program.get('source_url', '')}"
-    return hashlib.md5(key.encode()).hexdigest()[:12]
+    return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:12]
 
 
 def filter_new_programs(programs: list[dict]) -> list[dict]:

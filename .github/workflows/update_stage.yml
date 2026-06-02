@@ -23,32 +23,44 @@ jobs:
           token: ${{ github.token }}
 
       - name: config.py 단계 변경
+        env:
+          STAGE_INPUT: ${{ github.event.inputs.stage }}
         run: |
-          STAGE="${{ github.event.inputs.stage }}"
-          python3 - <<EOF
+          python3 - <<'EOF'
+          import os
           import re
+          from pathlib import Path
+
+          valid_stages = {"팀빌딩", "아이디어", "MVP", "초기매출"}
+          stage = os.environ["STAGE_INPUT"].strip()
+          if stage not in valid_stages:
+              raise SystemExit(f"Invalid stage: {stage!r}")
 
           with open("config.py", "r", encoding="utf-8") as f:
               content = f.read()
 
-          updated = re.sub(
+          updated, count = re.subn(
               r"- 현재 단계:.*",
-              "- 현재 단계: $STAGE",
+              f"- 현재 단계: {stage}",
               content
           )
+          if count != 1:
+              raise SystemExit("Could not find exactly one current stage line in config.py")
 
           with open("config.py", "w", encoding="utf-8") as f:
               f.write(updated)
 
-          print("단계 변경 완료: $STAGE")
+          Path(".stage_value").write_text(stage, encoding="utf-8")
+          print(f"단계 변경 완료: {stage}")
           EOF
 
       - name: git 커밋 및 푸시
         run: |
+          STAGE="$(cat .stage_value)"
           git config user.name "StartupRadar Bot"
           git config user.email "bot@startup-radar"
           git add config.py
-          git diff --cached --quiet || git commit -m "config: 동아리 단계 → ${{ github.event.inputs.stage }}"
+          git diff --cached --quiet || git commit -m "config: 동아리 단계 → ${STAGE}"
           git push
 
       - name: 텔레그램 완료 알림
@@ -56,12 +68,16 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python3 - <<EOF
-          import os, json, urllib.request
+          python3 - <<'EOF'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
 
           token   = os.environ["TELEGRAM_BOT_TOKEN"]
           chat_id = os.environ["TELEGRAM_CHAT_ID"]
-          stage   = "${{ github.event.inputs.stage }}"
+          stage   = Path(".stage_value").read_text(encoding="utf-8")
 
           msg = f"✅ 동아리 단계가 '{stage}'(으)로 변경됐습니다.\n다음 수집부터 적용됩니다."
           payload = {"chat_id": chat_id, "text": msg}
@@ -71,6 +87,11 @@ jobs:
               data=json.dumps(payload).encode(),
               headers={"Content-Type": "application/json"},
           )
-          urllib.request.urlopen(req)
+          try:
+              urllib.request.urlopen(req, timeout=10)
+          except urllib.error.HTTPError as e:
+              raise SystemExit(f"Telegram API HTTP error: {e.code} {e.reason}")
+          except urllib.error.URLError:
+              raise SystemExit("Telegram API connection error")
           print("텔레그램 알림 발송 완료")
           EOF

@@ -13,10 +13,9 @@ on:
         required: false
         default: "false"
         type: boolean
-      category:
-        description: "특정 카테고리만 (비워두면 전체)"
-        required: false
-        default: ""
+
+permissions:
+  contents: read
 
 jobs:
   crawl-and-notify:
@@ -53,17 +52,12 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            DRY="--dry"
+          if [ "$DRY_RUN" = "true" ]; then
+            python main.py --dry
           else
-            DRY=""
-          fi
-
-          if [ -n "${{ github.event.inputs.category }}" ]; then
-            python main.py $DRY --cat "${{ github.event.inputs.category }}"
-          else
-            python main.py $DRY
+            python main.py
           fi
 
       - name: 로그 업로드 (실패 시에도)
