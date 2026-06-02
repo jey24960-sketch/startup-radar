@@ -53,15 +53,16 @@ export default {
     if (!message) return new Response("OK");
 
     const chatId = message.chat?.id;
+    const fromId = message.from?.id;
     const text = (message.text || "").trim();
-    const adminChatId = env.TELEGRAM_ADMIN_CHAT_ID || env.TELEGRAM_CHAT_ID;
+    const adminChatIds = parseAdminChatIds(env);
 
-    // 허용된 관리자 chat_id 외 무시
-    if (!adminChatId || String(chatId) !== String(adminChatId)) {
+    // 허용된 관리자 개인 ID 외 무시. 그룹 명령은 chat.id가 그룹 ID라서 from.id를 기준으로 봅니다.
+    if (!isAdmin(fromId, adminChatIds)) {
       return new Response("OK");
     }
 
-    const command = text.split(" ")[0].toLowerCase();
+    const command = normalizeCommand(text);
 
     switch (command) {
       case "/run":
@@ -184,4 +185,23 @@ async function setTelegramCommands(env) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ commands: BOT_COMMANDS }),
   });
+}
+
+function parseAdminChatIds(env) {
+  const raw = env.TELEGRAM_ADMIN_CHAT_ID || env.TELEGRAM_CHAT_ID || "";
+  return String(raw)
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function isAdmin(fromId, adminChatIds) {
+  if (fromId === undefined || fromId === null || adminChatIds.length === 0) {
+    return false;
+  }
+  return adminChatIds.includes(String(fromId));
+}
+
+function normalizeCommand(text) {
+  return (text.split(/\s+/)[0] || "").toLowerCase().split("@")[0];
 }

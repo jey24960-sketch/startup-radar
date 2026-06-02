@@ -37,7 +37,11 @@ jobs:
 
           BOT_TOKEN  = os.environ["TELEGRAM_BOT_TOKEN"]
           ADMIN_CHAT_ID = (os.environ.get("TELEGRAM_ADMIN_CHAT_ID") or os.environ["TELEGRAM_CHAT_ID"]).strip()
-          ALLOWED_ID = int(ADMIN_CHAT_ID) if ADMIN_CHAT_ID.lstrip("-").isdigit() else None
+          ALLOWED_IDS = {
+              int(value.strip())
+              for value in ADMIN_CHAT_ID.split(",")
+              if value.strip().lstrip("-").isdigit()
+          }
           GH_PAT     = os.environ["GH_PAT"]
           REPO       = os.environ["GITHUB_REPOSITORY"]   # "owner/repo"
           OFFSET_FILE = "telegram_offset.txt"
@@ -183,13 +187,14 @@ jobs:
 
                   msg     = upd.get("message") or {}
                   chat_id = msg.get("chat", {}).get("id")
+                  from_id = msg.get("from", {}).get("id")
                   text    = (msg.get("text") or "").strip()
 
-                  # 허용된 관리자 chat_id 외 무시
-                  if ALLOWED_ID is None or chat_id != ALLOWED_ID:
+                  # 허용된 관리자 개인 ID 외 무시. 그룹 명령은 chat_id가 그룹 ID라서 from_id를 기준으로 봅니다.
+                  if from_id not in ALLOWED_IDS:
                       continue
 
-                  cmd = text.split()[0].lower() if text else ""
+                  cmd = text.split()[0].lower().split("@")[0] if text else ""
 
                   try:
                       if cmd == "/run":
