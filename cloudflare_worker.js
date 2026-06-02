@@ -5,6 +5,7 @@
  *   /run    → GitHub Actions workflow_dispatch 트리거 (dry_run: false)
  *   /dry    → GitHub Actions workflow_dispatch 트리거 (dry_run: true)
  *   /stop   → 정기 전송 중지
+ *   /share  → 여러 사람이 결과를 받는 설정 안내
  *   /status → 상태 확인
  *   /help   → 명령어 안내
  *
@@ -21,9 +22,19 @@ const BOT_COMMANDS = [
   { command: "run", description: "지금 즉시 수집하고 텔레그램으로 발송" },
   { command: "dry", description: "발송 없이 수집만 테스트" },
   { command: "stop", description: "정기 전송 중지" },
+  { command: "share", description: "여러 사람이 결과를 받는 설정 안내" },
   { command: "status", description: "봇 상태 확인" },
   { command: "help", description: "명령어 안내" },
 ];
+
+const SHARE_HELP_TEXT =
+  "📣 여러 사람이 결과를 받게 하려면\n\n" +
+  "1. 텔레그램 채널 또는 그룹을 만듭니다.\n" +
+  "2. 이 봇을 채널 관리자 또는 그룹 멤버로 추가합니다.\n" +
+  "3. 채널이면 봇에 메시지 게시 권한을 줍니다.\n" +
+  "4. Cloudflare Worker Secret의 TELEGRAM_CHAT_ID를 그 채널/그룹 ID 또는 공개 채널 username으로 바꿉니다.\n" +
+  "5. TELEGRAM_ADMIN_CHAT_ID에는 관리자 개인 chat id를 넣습니다.\n\n" +
+  "이렇게 하면 결과는 여러 사람이 보는 곳으로 전송되고, /run, /dry, /stop 같은 명령은 관리자만 사용할 수 있습니다.";
 
 export default {
   async fetch(request, env) {
@@ -68,6 +79,10 @@ export default {
         await sendTelegram(env, chatId, "🛑 정기 전송을 중지합니다. 화/금 자동 실행은 꺼지고, 수동 /run은 계속 사용할 수 있습니다.");
         break;
 
+      case "/share":
+        await sendTelegram(env, chatId, SHARE_HELP_TEXT);
+        break;
+
       case "/status":
         await sendTelegram(env, chatId, "🟢 StartupRadar 정상 작동 중");
         break;
@@ -81,6 +96,7 @@ export default {
           "/run — 즉시 실행 (텔레그램 발송 포함)\n" +
           "/dry — 테스트 실행 (발송 없음)\n" +
           "/stop — 정기 전송 중지 (수동 /run은 유지)\n" +
+          "/share — 여러 사람이 결과를 받는 설정 안내\n" +
           "/status — 봇 상태 확인\n" +
           "/help — 이 메시지 보기",
           "Markdown"
