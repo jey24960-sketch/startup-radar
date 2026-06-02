@@ -261,6 +261,7 @@ jobs:
                               "/share — 여러 사람이 결과를 받는 설정 안내\n"
                               "/id — 내 Telegram ID 확인\n"
                               "/stage [단계] — 동아리 단계 변경\n"
+                              f"     └ 단계: {' | '.join(VALID_STAGES)}\n"
                               "/status — 상태 확인\n"
                               "/help — 명령어 안내",
                               "Markdown",
