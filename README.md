@@ -39,10 +39,15 @@ pip install -r requirements.txt
 3. 로컬에서는 환경변수 `TELEGRAM_BOT_TOKEN`으로 설정하고, GitHub Actions에서는 저장소 Secret으로 등록합니다.
 
 **Chat ID 확인:**
-1. 텔레그램에서 내 봇에게 `/id`를 보냅니다.
-2. 답장에 나온 `from.id` 값을 로컬 환경변수 `TELEGRAM_ADMIN_CHAT_ID`, GitHub Actions 저장소 Secret, 또는 Cloudflare Worker Secret으로 등록합니다.
-3. `/id`에도 답장이 없으면 Cloudflare Worker가 최신 코드로 배포됐는지, Telegram webhook이 해당 Worker URL을 가리키는지 먼저 확인합니다.
+1. 텔레그램에서 내 봇에게 `/id`를 보냅니다. (폴링이 5분 주기이므로 답장까지 최대 5분 걸릴 수 있습니다)
+2. 답장에 나온 `from.id` 값을 로컬 환경변수 `TELEGRAM_ADMIN_CHAT_ID` 또는 GitHub Actions 저장소 Secret으로 등록합니다.
+3. `/id`에도 답장이 없으면 GitHub Actions 탭에서 "Telegram 명령어 수신 (Polling)" 워크플로가 활성화돼 정상 실행되는지 확인합니다.
 4. 봇과 대화를 먼저 시작해야 메시지를 받을 수 있습니다 (`/start`)
+
+> ⚠️ 이 프로젝트는 명령 수신에 **폴링(getUpdates) 한 가지 방식만** 사용합니다.
+> 텔레그램은 webhook과 폴링을 동시에 쓸 수 없으므로, 봇에 별도로 `setWebhook`을 등록하지 마세요.
+> webhook을 한 번이라도 등록하면 폴링이 409 오류로 막혀 봇이 어떤 명령에도 답하지 않게 됩니다.
+> (폴링 워크플로가 시작할 때마다 `deleteWebhook`을 호출해 자동으로 해제합니다.)
 
 **결과를 여러 사람이 받게 하기:**
 1. 결과를 받을 텔레그램 채널 또는 그룹을 만듭니다.
@@ -209,11 +214,14 @@ MIN_RELEVANCE_SCORE = 50        # AI 적합도 점수 50점 미만은 필터링
 - 채널로 보내는 경우 봇이 채널 관리자이고 메시지 게시 권한이 있는지 확인
 - 봇과 대화를 시작했는지 확인 (텔레그램에서 봇 검색 후 `/start`)
 - `/id`가 답장하면 나온 `from.id`를 `TELEGRAM_ADMIN_CHAT_ID`에 넣었는지 확인
-- `/id`도 답장이 없으면 Telegram webhook이 최신 Cloudflare Worker URL을 가리키는지 확인
-- Cloudflare Worker URL을 브라우저에서 열었을 때 `StartupRadar Telegram webhook is live` 문구가 보이면 최신 Worker 코드가 배포된 것입니다.
-- Cloudflare Worker Logs에서 `/id` 직후 `Telegram update received`가 없으면 Telegram 요청이 Worker까지 오지 않는 상태입니다. `getWebhookInfo`의 `url`, `allowed_updates`, `last_error_message`를 확인하세요.
-- `Telegram update received`는 있는데 `Telegram sendMessage failed`가 보이면 Worker Secret의 `TELEGRAM_BOT_TOKEN` 값이 비었거나 잘못된 상태입니다.
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID` 값 재확인
+
+**봇이 어떤 명령에도 답하지 않을 때 (가장 흔한 원인)**
+- 봇에 webhook이 등록돼 있으면 폴링(getUpdates)이 409 Conflict로 막혀 모든 명령이 무시됩니다.
+- 이 프로젝트는 폴링만 사용하며, 폴링 워크플로가 실행될 때마다 `deleteWebhook`으로 webhook을 자동 해제합니다.
+  따라서 "Telegram 명령어 수신 (Polling)" 워크플로를 한 번 수동 실행(Run workflow)하면 다음 폴링부터 정상 응답합니다.
+- 직접 확인하려면 브라우저에서 `https://api.telegram.org/bot<봇토큰>/getWebhookInfo` 를 열어 `url`이 빈 문자열인지 봅니다. 비어 있으면 폴링 모드입니다.
+- GitHub Actions 탭에서 폴링 워크플로가 비활성화돼 있지 않은지, 실행 로그에 오류가 없는지 확인
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID`, `GH_PAT` 값 재확인
 
 **수집 결과가 없을 때**
 - `python main.py --dry` 로 수집 결과 확인
