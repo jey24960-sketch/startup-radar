@@ -210,6 +210,7 @@ MIN_RELEVANCE_SCORE = 50        # AI 적합도 점수 50점 미만은 필터링
 - 봇과 대화를 시작했는지 확인 (텔레그램에서 봇 검색 후 `/start`)
 - `/id`가 답장하면 나온 `from.id`를 `TELEGRAM_ADMIN_CHAT_ID`에 넣었는지 확인
 - `/id`도 답장이 없으면 Telegram webhook이 최신 Cloudflare Worker URL을 가리키는지 확인
+- Cloudflare Worker URL을 브라우저에서 열었을 때 `StartupRadar Telegram webhook is live` 문구가 보이면 최신 Worker 코드가 배포된 것입니다.
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID` 값 재확인
 
 **수집 결과가 없을 때**

@@ -29,6 +29,8 @@ const BOT_COMMANDS = [
   { command: "help", description: "명령어 안내" },
 ];
 
+const HEALTH_TEXT = "StartupRadar Telegram webhook is live. Send /id to the bot to check your Telegram from.id.";
+
 const SHARE_HELP_TEXT =
   "📣 여러 사람이 결과를 받게 하려면\n\n" +
   "1. 텔레그램 채널 또는 그룹을 만듭니다.\n" +
@@ -40,6 +42,12 @@ const SHARE_HELP_TEXT =
 
 export default {
   async fetch(request, env) {
+    if (request.method === "GET") {
+      return new Response(HEALTH_TEXT, {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
+
     if (request.method !== "POST") {
       return new Response("Method Not Allowed", { status: 405 });
     }
@@ -59,7 +67,7 @@ export default {
     const text = (message.text || "").trim();
     const command = normalizeCommand(text);
 
-    if (command === "/id" || command === "/whoami") {
+    if (isIdCommand(command)) {
       await sendTelegram(env, chatId, buildIdHelpText(fromId, chatId));
       return new Response("OK");
     }
@@ -177,11 +185,16 @@ async function sendTelegram(env, chatId, text, parseMode = null) {
   const payload = { chat_id: chatId, text };
   if (parseMode) payload.parse_mode = parseMode;
 
-  await fetch(url, {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Telegram API error ${res.status}: ${body}`);
+  }
 }
 
 async function setTelegramCommands(env) {
@@ -217,6 +230,10 @@ function buildIdHelpText(fromId, chatId) {
     "Cloudflare Worker Secret의 TELEGRAM_ADMIN_CHAT_ID에는 from.id 값을 넣으세요.\n" +
     "TELEGRAM_CHAT_ID는 결과를 받을 채널/그룹/개인 대상으로 둡니다."
   );
+}
+
+function isIdCommand(command) {
+  return command === "/id" || command === "/whoami" || command === "id" || command === "whoami";
 }
 
 function normalizeCommand(text) {

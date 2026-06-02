@@ -203,7 +203,7 @@ jobs:
                   text    = (msg.get("text") or "").strip()
                   cmd = text.split()[0].lower().split("@")[0] if text else ""
 
-                  if cmd in {"/id", "/whoami"}:
+                  if cmd in {"/id", "/whoami", "id", "whoami"}:
                       send(chat_id, build_id_help_text(from_id, chat_id))
                       continue
 
