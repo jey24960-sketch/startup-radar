@@ -1,9 +1,10 @@
 name: Telegram 명령어 수신 (Polling)
 
 on:
-  schedule:
-    # 5분마다 실행
-    - cron: "*/5 * * * *"
+  # ⚠️ 폴링 방식은 비활성화되었습니다.
+  # 명령 수신은 Cloudflare Worker(webhook)가 담당합니다.
+  # webhook과 폴링(getUpdates)은 동시에 쓸 수 없어 schedule 자동 실행을 제거했습니다.
+  # webhook을 사용하는 동안에는 이 워크플로를 수동으로도 실행하지 마세요.
   workflow_dispatch:
 
 permissions:
@@ -108,17 +109,6 @@ jobs:
               if not result.get("ok"):
                   print("Telegram command menu sync skipped or failed")
 
-          def ensure_polling_mode():
-              # 텔레그램은 webhook과 getUpdates(폴링)를 동시에 쓸 수 없습니다.
-              # webhook이 등록돼 있으면 getUpdates가 409 Conflict로 거부되어
-              # 봇이 어떤 명령에도 답하지 않습니다. 폴링을 단일 수신 경로로 쓰므로
-              # 매 실행 시작 시 남아있는 webhook을 해제합니다. (대기 중 업데이트는 보존)
-              result = tg_post("deleteWebhook", {"drop_pending_updates": False})
-              if result.get("ok"):
-                  print("Webhook cleared (or none set). getUpdates polling is now active.")
-              else:
-                  print(f"deleteWebhook failed: {result}")
-
           def build_id_help_text(from_id, chat_id):
               safe_from_id = from_id if from_id is not None else "없음"
               safe_chat_id = chat_id if chat_id is not None else "없음"
@@ -187,7 +177,6 @@ jobs:
               )
               urllib.request.urlopen(req)
 
-          ensure_polling_mode()
           sync_bot_commands()
           offset = read_offset()
 

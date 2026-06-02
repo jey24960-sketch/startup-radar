@@ -39,15 +39,25 @@ pip install -r requirements.txt
 3. 로컬에서는 환경변수 `TELEGRAM_BOT_TOKEN`으로 설정하고, GitHub Actions에서는 저장소 Secret으로 등록합니다.
 
 **Chat ID 확인:**
-1. 텔레그램에서 내 봇에게 `/id`를 보냅니다. (폴링이 5분 주기이므로 답장까지 최대 5분 걸릴 수 있습니다)
-2. 답장에 나온 `from.id` 값을 로컬 환경변수 `TELEGRAM_ADMIN_CHAT_ID` 또는 GitHub Actions 저장소 Secret으로 등록합니다.
-3. `/id`에도 답장이 없으면 GitHub Actions 탭에서 "Telegram 명령어 수신 (Polling)" 워크플로가 활성화돼 정상 실행되는지 확인합니다.
+1. 텔레그램에서 내 봇에게 `/id`를 보냅니다. (Cloudflare webhook은 즉시 응답합니다)
+2. 답장에 나온 `from.id` 값을 Cloudflare Worker Secret `TELEGRAM_ADMIN_CHAT_ID`로 등록합니다.
+3. `/id`에도 답장이 없으면 Cloudflare Worker가 최신 코드로 배포됐는지, webhook이 해당 Worker URL을 가리키는지 확인합니다.
 4. 봇과 대화를 먼저 시작해야 메시지를 받을 수 있습니다 (`/start`)
 
-> ⚠️ 이 프로젝트는 명령 수신에 **폴링(getUpdates) 한 가지 방식만** 사용합니다.
-> 텔레그램은 webhook과 폴링을 동시에 쓸 수 없으므로, 봇에 별도로 `setWebhook`을 등록하지 마세요.
-> webhook을 한 번이라도 등록하면 폴링이 409 오류로 막혀 봇이 어떤 명령에도 답하지 않게 됩니다.
-> (폴링 워크플로가 시작할 때마다 `deleteWebhook`을 호출해 자동으로 해제합니다.)
+> ⚠️ 이 프로젝트는 명령 수신에 **Cloudflare Worker(webhook) 한 가지 방식만** 사용합니다.
+> 텔레그램은 webhook과 폴링(getUpdates)을 동시에 쓸 수 없으므로, `telegram_polling.yml`의 자동 실행(schedule)은 비활성화돼 있습니다.
+> 폴링 워크플로를 다시 켜거나 수동 실행하면 webhook과 충돌해 봇이 어떤 명령에도 답하지 않게 되니 실행하지 마세요.
+
+#### Cloudflare Worker 배포 / webhook 등록
+
+1. Cloudflare 대시보드 → Workers & Pages → 해당 Worker 편집기에 `cloudflare_worker.js` 내용을 붙여넣고 **Deploy**.
+2. Worker Settings → Variables and Secrets에 등록:
+   - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID`(관리자 from.id),
+     `GITHUB_TOKEN`(workflow 권한 PAT), `GITHUB_OWNER`, `GITHUB_REPO`
+3. 봇을 이 Worker로 연결 (브라우저 주소창에서 한 번 실행):
+   `https://api.telegram.org/bot<봇토큰>/setWebhook?url=<Worker URL>`
+4. 확인: `https://api.telegram.org/bot<봇토큰>/getWebhookInfo` 의 `url`이 Worker URL이면 정상.
+5. Worker URL을 브라우저로 열어 `StartupRadar Telegram webhook is live` 문구가 보이면 최신 코드가 배포된 것입니다.
 
 **결과를 여러 사람이 받게 하기:**
 1. 결과를 받을 텔레그램 채널 또는 그룹을 만듭니다.
@@ -216,12 +226,14 @@ MIN_RELEVANCE_SCORE = 50        # AI 적합도 점수 50점 미만은 필터링
 - `/id`가 답장하면 나온 `from.id`를 `TELEGRAM_ADMIN_CHAT_ID`에 넣었는지 확인
 
 **봇이 어떤 명령에도 답하지 않을 때 (가장 흔한 원인)**
-- 봇에 webhook이 등록돼 있으면 폴링(getUpdates)이 409 Conflict로 막혀 모든 명령이 무시됩니다.
-- 이 프로젝트는 폴링만 사용하며, 폴링 워크플로가 실행될 때마다 `deleteWebhook`으로 webhook을 자동 해제합니다.
-  따라서 "Telegram 명령어 수신 (Polling)" 워크플로를 한 번 수동 실행(Run workflow)하면 다음 폴링부터 정상 응답합니다.
-- 직접 확인하려면 브라우저에서 `https://api.telegram.org/bot<봇토큰>/getWebhookInfo` 를 열어 `url`이 빈 문자열인지 봅니다. 비어 있으면 폴링 모드입니다.
-- GitHub Actions 탭에서 폴링 워크플로가 비활성화돼 있지 않은지, 실행 로그에 오류가 없는지 확인
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID`, `GH_PAT` 값 재확인
+- 이 프로젝트는 Cloudflare Worker(webhook)로만 명령을 받습니다. 폴링 워크플로를 켜면 충돌하니 절대 실행하지 마세요.
+- `https://api.telegram.org/bot<봇토큰>/getWebhookInfo` 를 열어 `url`이 Worker URL인지 확인합니다.
+  비어 있으면 `setWebhook?url=<Worker URL>`로 다시 등록합니다.
+- `last_error_message`가 보이면 Worker가 오류를 내는 중입니다. Cloudflare Worker Logs를 확인하세요.
+- Worker Logs에 `Telegram update received`가 없으면 요청이 Worker까지 오지 않는 상태입니다 (webhook URL/배포 확인).
+- `Telegram update received`는 있는데 `Telegram sendMessage failed`면 Worker Secret의 `TELEGRAM_BOT_TOKEN`이 비었거나 잘못된 상태입니다.
+- `/id`만 답하고 다른 명령은 무응답이면 `TELEGRAM_ADMIN_CHAT_ID`에 본인 `from.id`가 안 들어간 것입니다.
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID`, `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` 값 재확인
 
 **수집 결과가 없을 때**
 - `python main.py --dry` 로 수집 결과 확인
