@@ -6,6 +6,7 @@
  *   /dry    → GitHub Actions workflow_dispatch 트리거 (dry_run: true)
  *   /stop   → 정기 전송 중지
  *   /share  → 여러 사람이 결과를 받는 설정 안내
+ *   /id     → 내 Telegram ID 확인
  *   /status → 상태 확인
  *   /help   → 명령어 안내
  *
@@ -15,7 +16,7 @@
  *   GITHUB_REPO         - 저장소 이름
  *   TELEGRAM_BOT_TOKEN  - 텔레그램 봇 토큰
  *   TELEGRAM_CHAT_ID    - 결과를 받을 개인/그룹/채널 chat_id 또는 @channel_username
- *   TELEGRAM_ADMIN_CHAT_ID - 명령어를 허용할 관리자 개인 chat_id (없으면 TELEGRAM_CHAT_ID 사용)
+ *   TELEGRAM_ADMIN_CHAT_ID - 명령어를 허용할 관리자 개인 from.id (없으면 TELEGRAM_CHAT_ID 사용)
  */
 
 const BOT_COMMANDS = [
@@ -23,6 +24,7 @@ const BOT_COMMANDS = [
   { command: "dry", description: "발송 없이 수집만 테스트" },
   { command: "stop", description: "정기 전송 중지" },
   { command: "share", description: "여러 사람이 결과를 받는 설정 안내" },
+  { command: "id", description: "내 Telegram ID 확인" },
   { command: "status", description: "봇 상태 확인" },
   { command: "help", description: "명령어 안내" },
 ];
@@ -33,7 +35,7 @@ const SHARE_HELP_TEXT =
   "2. 이 봇을 채널 관리자 또는 그룹 멤버로 추가합니다.\n" +
   "3. 채널이면 봇에 메시지 게시 권한을 줍니다.\n" +
   "4. Cloudflare Worker Secret의 TELEGRAM_CHAT_ID를 그 채널/그룹 ID 또는 공개 채널 username으로 바꿉니다.\n" +
-  "5. TELEGRAM_ADMIN_CHAT_ID에는 관리자 개인 chat id를 넣습니다.\n\n" +
+  "5. TELEGRAM_ADMIN_CHAT_ID에는 관리자 개인 from.id를 넣습니다.\n\n" +
   "이렇게 하면 결과는 여러 사람이 보는 곳으로 전송되고, /run, /dry, /stop 같은 명령은 관리자만 사용할 수 있습니다.";
 
 export default {
@@ -55,14 +57,18 @@ export default {
     const chatId = message.chat?.id;
     const fromId = message.from?.id;
     const text = (message.text || "").trim();
-    const adminChatIds = parseAdminChatIds(env);
+    const command = normalizeCommand(text);
 
-    // 허용된 관리자 개인 ID 외 무시. 그룹 명령은 chat.id가 그룹 ID라서 from.id를 기준으로 봅니다.
-    if (!isAdmin(fromId, adminChatIds)) {
+    if (command === "/id" || command === "/whoami") {
+      await sendTelegram(env, chatId, buildIdHelpText(fromId, chatId));
       return new Response("OK");
     }
 
-    const command = normalizeCommand(text);
+    // 허용된 관리자 개인 ID 외 무시. 그룹 명령은 chat.id가 그룹 ID라서 from.id를 기준으로 봅니다.
+    const adminChatIds = parseAdminChatIds(env);
+    if (!isAdmin(fromId, adminChatIds)) {
+      return new Response("OK");
+    }
 
     switch (command) {
       case "/run":
@@ -98,6 +104,7 @@ export default {
           "/dry — 테스트 실행 (발송 없음)\n" +
           "/stop — 정기 전송 중지 (수동 /run은 유지)\n" +
           "/share — 여러 사람이 결과를 받는 설정 안내\n" +
+          "/id — 내 Telegram ID 확인\n" +
           "/status — 봇 상태 확인\n" +
           "/help — 이 메시지 보기",
           "Markdown"
@@ -200,6 +207,16 @@ function isAdmin(fromId, adminChatIds) {
     return false;
   }
   return adminChatIds.includes(String(fromId));
+}
+
+function buildIdHelpText(fromId, chatId) {
+  return (
+    "🪪 Telegram ID 확인\n\n" +
+    `from.id: ${fromId ?? "없음"}\n` +
+    `chat.id: ${chatId ?? "없음"}\n\n` +
+    "Cloudflare Worker Secret의 TELEGRAM_ADMIN_CHAT_ID에는 from.id 값을 넣으세요.\n" +
+    "TELEGRAM_CHAT_ID는 결과를 받을 채널/그룹/개인 대상으로 둡니다."
+  );
 }
 
 function normalizeCommand(text) {

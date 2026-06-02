@@ -39,15 +39,16 @@ pip install -r requirements.txt
 3. 로컬에서는 환경변수 `TELEGRAM_BOT_TOKEN`으로 설정하고, GitHub Actions에서는 저장소 Secret으로 등록합니다.
 
 **Chat ID 확인:**
-1. 텔레그램에서 `@userinfobot` 검색 → `/start`
-2. 출력된 `Id` 값을 로컬 환경변수 `TELEGRAM_ADMIN_CHAT_ID` 또는 GitHub Actions 저장소 Secret으로 등록합니다.
-3. 봇과 대화를 먼저 시작해야 메시지를 받을 수 있습니다 (`/start`)
+1. 텔레그램에서 내 봇에게 `/id`를 보냅니다.
+2. 답장에 나온 `from.id` 값을 로컬 환경변수 `TELEGRAM_ADMIN_CHAT_ID`, GitHub Actions 저장소 Secret, 또는 Cloudflare Worker Secret으로 등록합니다.
+3. `/id`에도 답장이 없으면 Cloudflare Worker가 최신 코드로 배포됐는지, Telegram webhook이 해당 Worker URL을 가리키는지 먼저 확인합니다.
+4. 봇과 대화를 먼저 시작해야 메시지를 받을 수 있습니다 (`/start`)
 
 **결과를 여러 사람이 받게 하기:**
 1. 결과를 받을 텔레그램 채널 또는 그룹을 만듭니다.
 2. 봇을 채널 관리자 또는 그룹 멤버로 추가하고 메시지 발송 권한을 줍니다.
 3. 그 채널/그룹의 ID 또는 공개 채널 username을 `TELEGRAM_CHAT_ID`로 등록합니다.
-4. 개인 관리자 ID는 `TELEGRAM_ADMIN_CHAT_ID`로 따로 등록합니다.
+4. 개인 관리자 `from.id`는 `TELEGRAM_ADMIN_CHAT_ID`로 따로 등록합니다.
 
 ### Step 4. 연동 테스트
 
@@ -88,7 +89,7 @@ python main.py --dry                  # 수집만 (발송 없음)
    - `ANTHROPIC_API_KEY`: Anthropic API 키
    - `TELEGRAM_BOT_TOKEN`: 텔레그램 봇 토큰
    - `TELEGRAM_CHAT_ID`: 결과를 받을 개인/그룹/채널 ID 또는 공개 채널 username
-   - `TELEGRAM_ADMIN_CHAT_ID`: `/run`, `/dry`, `/stop` 명령을 허용할 관리자 개인 Chat ID
+   - `TELEGRAM_ADMIN_CHAT_ID`: `/run`, `/dry`, `/stop` 명령을 허용할 관리자 개인 `from.id`
    - `GH_PAT`: GitHub Personal Access Token (아래 참고)
 
 4. Actions 탭 → "StartupRadar 자동 실행" → Enable
@@ -96,6 +97,7 @@ python main.py --dry                  # 수집만 (발송 없음)
 이후 **매주 화요일·금요일 오후 3시 (KST)**에 자동 실행됩니다.
 텔레그램에서 `/stop`을 보내면 화·금 자동 실행만 중지됩니다. 수동 `/run` 실행은 계속 사용할 수 있습니다.
 텔레그램에서 `/share`를 보내면 결과를 채널/그룹으로 보내는 설정 방법을 확인할 수 있습니다.
+텔레그램에서 `/id`를 보내면 관리자 Secret에 넣어야 할 `from.id`를 확인할 수 있습니다.
 
 ### GH_PAT 발급 방법
 
@@ -206,6 +208,8 @@ MIN_RELEVANCE_SCORE = 50        # AI 적합도 점수 50점 미만은 필터링
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 환경변수 또는 GitHub Secrets 설정 확인
 - 채널로 보내는 경우 봇이 채널 관리자이고 메시지 게시 권한이 있는지 확인
 - 봇과 대화를 시작했는지 확인 (텔레그램에서 봇 검색 후 `/start`)
+- `/id`가 답장하면 나온 `from.id`를 `TELEGRAM_ADMIN_CHAT_ID`에 넣었는지 확인
+- `/id`도 답장이 없으면 Telegram webhook이 최신 Cloudflare Worker URL을 가리키는지 확인
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID` 값 재확인
 
 **수집 결과가 없을 때**

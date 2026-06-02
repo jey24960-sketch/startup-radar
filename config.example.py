@@ -8,7 +8,7 @@ StartupRadar 설정 파일
 # 필수 환경변수: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 # 권장 환경변수: TELEGRAM_ADMIN_CHAT_ID
 # - TELEGRAM_CHAT_ID: 결과를 받을 개인/그룹/채널
-# - TELEGRAM_ADMIN_CHAT_ID: /run, /dry, /stop 명령을 허용할 관리자 개인 chat_id
+# - TELEGRAM_ADMIN_CHAT_ID: /run, /dry, /stop 명령을 허용할 관리자 개인 from.id
 
 # ── 모델 설정 ────────────────────────────────────────────────
 CLAUDE_MODEL = "claude-sonnet-4-5"
