@@ -14,6 +14,9 @@ on:
         default: "false"
         type: boolean
 
+permissions:
+  contents: read
+
 jobs:
   crawl-and-notify:
     runs-on: ubuntu-latest
@@ -23,16 +26,43 @@ jobs:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
 
+      - name: Auto-run status check
+        id: auto_run
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch: auto-run stop flag is ignored."
+            exit 0
+          fi
+
+          state_file=".startup_radar_auto_run"
+          enabled="true"
+          if [ -f "$state_file" ]; then
+            enabled="$(tr -d '[:space:]' < "$state_file" | tr '[:upper:]' '[:lower:]')"
+          fi
+
+          if [ "$enabled" = "false" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Scheduled StartupRadar run is disabled by $state_file."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Scheduled StartupRadar run is enabled."
+          fi
+
       - name: Python 3.12 설정
+        if: ${{ steps.auto_run.outputs.enabled == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: 의존성 설치
+        if: ${{ steps.auto_run.outputs.enabled == 'true' }}
         run: pip install -r requirements.txt --break-system-packages
 
       # seen_programs.json DB를 Actions 캐시로 영속화
       - name: DB 캐시 복원
+        if: ${{ steps.auto_run.outputs.enabled == 'true' }}
         uses: actions/cache@v4
         with:
           path: data/seen_programs.json
@@ -41,9 +71,11 @@ jobs:
             seen-db-${{ runner.os }}-
 
       - name: 디렉토리 준비
+        if: ${{ steps.auto_run.outputs.enabled == 'true' }}
         run: mkdir -p data logs
 
       - name: StartupRadar 실행
+        if: ${{ steps.auto_run.outputs.enabled == 'true' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -56,7 +88,7 @@ jobs:
           fi
 
       - name: 로그 업로드 (실패 시에도)
-        if: always()
+        if: ${{ always() && steps.auto_run.outputs.enabled == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: logs-${{ github.run_id }}
@@ -64,7 +96,7 @@ jobs:
           retention-days: 14
 
       - name: 수집 결과 업로드
-        if: always()
+        if: ${{ always() && steps.auto_run.outputs.enabled == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: reports-${{ github.run_id }}

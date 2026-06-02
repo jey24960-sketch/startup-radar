@@ -112,6 +112,25 @@ jobs:
               )
               urllib.request.urlopen(req)
 
+          def trigger_auto_run(enabled):
+              url = f"https://api.github.com/repos/{REPO}/actions/workflows/update_auto_run.yml/dispatches"
+              payload = {
+                  "ref": "main",
+                  "inputs": {"enabled": str(enabled).lower()},
+              }
+              req = urllib.request.Request(
+                  url,
+                  data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                  headers={
+                      "Authorization": f"Bearer {GH_PAT}",
+                      "Accept": "application/vnd.github+json",
+                      "Content-Type": "application/json; charset=utf-8",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "StartupRadar-TelegramPoller",
+                  },
+              )
+              urllib.request.urlopen(req)
+
           offset = read_offset()
 
           if offset is None:
@@ -151,6 +170,10 @@ jobs:
                           trigger_radar(True)
                           send(chat_id, "🧪 StartupRadar 테스트 실행을 요청했습니다. (dry_run: true, 발송 없음)")
 
+                      elif cmd == "/stop":
+                          trigger_auto_run(False)
+                          send(chat_id, "🛑 화/금 자동 실행 중지를 요청했습니다. 수동 /run은 계속 사용할 수 있습니다.")
+
                       elif cmd == "/stage":
                           parts = text.split(maxsplit=1)
                           stage = parts[1].strip() if len(parts) > 1 else ""
@@ -169,6 +192,7 @@ jobs:
                               "📋 *StartupRadar 명령어 목록*\n\n"
                               "/run — 지금 즉시 수집 + 발송\n"
                               "/dry — 수집만 (발송 없음)\n"
+                              "/stop — 화/금 자동 실행 중지\n"
                               "/stage [단계] — 동아리 단계 변경\n"
                               "/status — 상태 확인\n"
                               "/help — 명령어 안내",

@@ -1,0 +1,59 @@
+name: StartupRadar auto-run control
+
+on:
+  workflow_dispatch:
+    inputs:
+      enabled:
+        description: "true enables scheduled auto-run; false stops it"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  update-auto-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+
+      - name: Update auto-run state
+        env:
+          AUTO_RUN_ENABLED: ${{ github.event.inputs.enabled }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          raw = os.environ["AUTO_RUN_ENABLED"].strip().lower()
+          if raw not in {"true", "false"}:
+              raise SystemExit(f"Invalid enabled value: {raw!r}")
+
+          Path(".startup_radar_auto_run").write_text(raw + "\n", encoding="utf-8")
+          print(f"Scheduled auto-run enabled: {raw}")
+          PY
+
+      - name: Commit and push state
+        env:
+          AUTO_RUN_ENABLED: ${{ github.event.inputs.enabled }}
+        run: |
+          git config user.name "StartupRadar Bot"
+          git config user.email "bot@startup-radar"
+          git add .startup_radar_auto_run
+
+          if git diff --cached --quiet; then
+            echo "No auto-run state change to commit."
+            exit 0
+          fi
+
+          if [ "$AUTO_RUN_ENABLED" = "true" ]; then
+            git commit -m "config: enable scheduled auto run"
+          else
+            git commit -m "config: stop scheduled auto run"
+          fi
+          git push

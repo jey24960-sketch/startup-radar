@@ -90,10 +90,11 @@ python main.py --cat "서울 대학 창업지원단" --dry
 4. Actions 탭 → "StartupRadar 자동 실행" → Enable
 
 이후 **매주 화요일·금요일 오후 3시 (KST)**에 자동 실행됩니다.
+텔레그램에서 `/stop`을 보내면 화·금 자동 실행만 중지됩니다. 수동 `/run` 실행은 계속 사용할 수 있습니다.
 
 ### GH_PAT 발급 방법
 
-텔레그램 `/run`, `/dry` 명령어로 수동 실행하려면 `GH_PAT`가 필요합니다.
+텔레그램 `/run`, `/dry`, `/stop` 명령어로 GitHub Actions를 제어하려면 `GH_PAT`가 필요합니다.
 
 1. GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens**
 2. **Generate new token** 클릭
@@ -105,6 +106,11 @@ python main.py --cat "서울 대학 창업지원단" --dry
 ### 수동 실행
 
 Actions 탭 → "StartupRadar 자동 실행" → "Run workflow" 버튼
+
+### 자동 실행 중지
+
+텔레그램 봇에게 `/stop`을 보내면 `.startup_radar_auto_run` 값이 `false`로 커밋되고, 이후 화·금 scheduled run은 결과 발송 없이 건너뜁니다.
+다시 켜려면 Actions 탭의 "StartupRadar auto-run control" workflow를 수동 실행하고 `enabled` 값을 `true`로 입력하세요.
 
 ### 주기 변경
 
