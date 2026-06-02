@@ -28,6 +28,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
           GH_PAT: ${{ secrets.GH_PAT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
@@ -35,7 +36,8 @@ jobs:
           import os, json, urllib.request, urllib.error
 
           BOT_TOKEN  = os.environ["TELEGRAM_BOT_TOKEN"]
-          ALLOWED_ID = int(os.environ["TELEGRAM_CHAT_ID"])
+          ADMIN_CHAT_ID = (os.environ.get("TELEGRAM_ADMIN_CHAT_ID") or os.environ["TELEGRAM_CHAT_ID"]).strip()
+          ALLOWED_ID = int(ADMIN_CHAT_ID) if ADMIN_CHAT_ID.lstrip("-").isdigit() else None
           GH_PAT     = os.environ["GH_PAT"]
           REPO       = os.environ["GITHUB_REPOSITORY"]   # "owner/repo"
           OFFSET_FILE = "telegram_offset.txt"
@@ -173,8 +175,8 @@ jobs:
                   chat_id = msg.get("chat", {}).get("id")
                   text    = (msg.get("text") or "").strip()
 
-                  # 허용된 chat_id 외 무시
-                  if chat_id != ALLOWED_ID:
+                  # 허용된 관리자 chat_id 외 무시
+                  if ALLOWED_ID is None or chat_id != ALLOWED_ID:
                       continue
 
                   cmd = text.split()[0].lower() if text else ""

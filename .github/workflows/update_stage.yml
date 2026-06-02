@@ -67,6 +67,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         run: |
           python3 - <<'EOF'
           import json
@@ -76,7 +77,7 @@ jobs:
           from pathlib import Path
 
           token   = os.environ["TELEGRAM_BOT_TOKEN"]
-          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+          chat_id = os.environ.get("TELEGRAM_ADMIN_CHAT_ID") or os.environ["TELEGRAM_CHAT_ID"]
           stage   = Path(".stage_value").read_text(encoding="utf-8")
 
           msg = f"✅ 동아리 단계가 '{stage}'(으)로 변경됐습니다.\n다음 수집부터 적용됩니다."

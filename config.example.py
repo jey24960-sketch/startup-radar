@@ -6,6 +6,9 @@ StartupRadar 설정 파일
 # ── 비밀값 설정 ─────────────────────────────────────────────
 # API 키와 봇 토큰은 이 파일에 적지 말고 환경변수 또는 GitHub Secrets로 설정하세요.
 # 필수 환경변수: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+# 권장 환경변수: TELEGRAM_ADMIN_CHAT_ID
+# - TELEGRAM_CHAT_ID: 결과를 받을 개인/그룹/채널
+# - TELEGRAM_ADMIN_CHAT_ID: /run, /dry, /stop 명령을 허용할 관리자 개인 chat_id
 
 # ── 모델 설정 ────────────────────────────────────────────────
 CLAUDE_MODEL = "claude-sonnet-4-5"

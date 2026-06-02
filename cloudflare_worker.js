@@ -13,7 +13,8 @@
  *   GITHUB_OWNER        - GitHub 사용자명 또는 조직명
  *   GITHUB_REPO         - 저장소 이름
  *   TELEGRAM_BOT_TOKEN  - 텔레그램 봇 토큰
- *   TELEGRAM_CHAT_ID    - 허용된 chat_id (본인만 허용)
+ *   TELEGRAM_CHAT_ID    - 결과를 받을 개인/그룹/채널 chat_id 또는 @channel_username
+ *   TELEGRAM_ADMIN_CHAT_ID - 명령어를 허용할 관리자 개인 chat_id (없으면 TELEGRAM_CHAT_ID 사용)
  */
 
 const BOT_COMMANDS = [
@@ -42,9 +43,10 @@ export default {
 
     const chatId = message.chat?.id;
     const text = (message.text || "").trim();
+    const adminChatId = env.TELEGRAM_ADMIN_CHAT_ID || env.TELEGRAM_CHAT_ID;
 
-    // 허용된 chat_id 외 무시
-    if (String(chatId) !== String(env.TELEGRAM_CHAT_ID)) {
+    // 허용된 관리자 chat_id 외 무시
+    if (!adminChatId || String(chatId) !== String(adminChatId)) {
       return new Response("OK");
     }
 

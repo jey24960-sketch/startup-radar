@@ -40,13 +40,19 @@ pip install -r requirements.txt
 
 **Chat ID 확인:**
 1. 텔레그램에서 `@userinfobot` 검색 → `/start`
-2. 출력된 `Id` 값을 로컬 환경변수 `TELEGRAM_CHAT_ID` 또는 GitHub Actions 저장소 Secret으로 등록합니다.
+2. 출력된 `Id` 값을 로컬 환경변수 `TELEGRAM_ADMIN_CHAT_ID` 또는 GitHub Actions 저장소 Secret으로 등록합니다.
 3. 봇과 대화를 먼저 시작해야 메시지를 받을 수 있습니다 (`/start`)
+
+**결과를 여러 사람이 받게 하기:**
+1. 결과를 받을 텔레그램 채널 또는 그룹을 만듭니다.
+2. 봇을 채널 관리자 또는 그룹 멤버로 추가하고 메시지 발송 권한을 줍니다.
+3. 그 채널/그룹의 ID 또는 공개 채널 username을 `TELEGRAM_CHAT_ID`로 등록합니다.
+4. 개인 관리자 ID는 `TELEGRAM_ADMIN_CHAT_ID`로 따로 등록합니다.
 
 ### Step 4. 연동 테스트
 
 ```bash
-ANTHROPIC_API_KEY="..." TELEGRAM_BOT_TOKEN="..." TELEGRAM_CHAT_ID="..." python main.py --dry
+ANTHROPIC_API_KEY="..." TELEGRAM_BOT_TOKEN="..." TELEGRAM_CHAT_ID="..." TELEGRAM_ADMIN_CHAT_ID="..." python main.py --dry
 ```
 
 수집 결과가 출력되면 기본 실행 환경이 준비된 것입니다.
@@ -81,7 +87,8 @@ python main.py --dry                  # 수집만 (발송 없음)
 3. 다음 시크릿 추가:
    - `ANTHROPIC_API_KEY`: Anthropic API 키
    - `TELEGRAM_BOT_TOKEN`: 텔레그램 봇 토큰
-   - `TELEGRAM_CHAT_ID`: 텔레그램 Chat ID
+   - `TELEGRAM_CHAT_ID`: 결과를 받을 개인/그룹/채널 ID 또는 공개 채널 username
+   - `TELEGRAM_ADMIN_CHAT_ID`: `/run`, `/dry`, `/stop` 명령을 허용할 관리자 개인 Chat ID
    - `GH_PAT`: GitHub Personal Access Token (아래 참고)
 
 4. Actions 탭 → "StartupRadar 자동 실행" → Enable
@@ -196,8 +203,9 @@ MIN_RELEVANCE_SCORE = 50        # AI 적합도 점수 50점 미만은 필터링
 
 **텔레그램 발송 실패 시**
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 환경변수 또는 GitHub Secrets 설정 확인
+- 채널로 보내는 경우 봇이 채널 관리자이고 메시지 게시 권한이 있는지 확인
 - 봇과 대화를 시작했는지 확인 (텔레그램에서 봇 검색 후 `/start`)
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 값 재확인
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID` 값 재확인
 
 **수집 결과가 없을 때**
 - `python main.py --dry` 로 수집 결과 확인
