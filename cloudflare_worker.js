@@ -4,7 +4,7 @@
  * 지원 명령어:
  *   /run    → GitHub Actions workflow_dispatch 트리거 (dry_run: false)
  *   /dry    → GitHub Actions workflow_dispatch 트리거 (dry_run: true)
- *   /stop   → 화/금 자동 실행 중지
+ *   /stop   → 정기 전송 중지
  *   /status → 상태 확인
  *   /help   → 명령어 안내
  *
@@ -19,7 +19,7 @@
 const BOT_COMMANDS = [
   { command: "run", description: "지금 즉시 수집하고 텔레그램으로 발송" },
   { command: "dry", description: "발송 없이 수집만 테스트" },
-  { command: "stop", description: "화/금 자동 실행 중지" },
+  { command: "stop", description: "정기 전송 중지" },
   { command: "status", description: "봇 상태 확인" },
   { command: "help", description: "명령어 안내" },
 ];
@@ -63,7 +63,7 @@ export default {
 
       case "/stop":
         await triggerAutoRunControl(env, false);
-        await sendTelegram(env, chatId, "🛑 화/금 자동 실행 중지를 요청했습니다. 수동 /run은 계속 사용할 수 있습니다.");
+        await sendTelegram(env, chatId, "🛑 정기 전송을 중지합니다. 화/금 자동 실행은 꺼지고, 수동 /run은 계속 사용할 수 있습니다.");
         break;
 
       case "/status":
@@ -78,7 +78,7 @@ export default {
           "📋 *StartupRadar 명령어 목록*\n\n" +
           "/run — 즉시 실행 (텔레그램 발송 포함)\n" +
           "/dry — 테스트 실행 (발송 없음)\n" +
-          "/stop — 화/금 자동 실행 중지 (수동 /run은 유지)\n" +
+          "/stop — 정기 전송 중지 (수동 /run은 유지)\n" +
           "/status — 봇 상태 확인\n" +
           "/help — 이 메시지 보기",
           "Markdown"
