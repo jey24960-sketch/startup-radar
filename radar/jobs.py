@@ -39,6 +39,8 @@ def cancel_job(db,job_id,note,user_id):
     with db.transaction() as c:
         if not c.execute('select pg_try_advisory_xact_lock(782394202) acquired').fetchone()['acquired']:
             raise ValueError('A V2 job is currently running; cancellation cannot race execution')
+        if c.execute('select 1 from startup_radar.worker_executions where finished_at is null').fetchone():
+            raise ValueError('A V2 job is currently running or requires verified execution recovery')
         job=c.execute('select * from startup_radar.job_requests where id=%s for update',(job_id,)).fetchone()
         if not job:raise LookupError('Job request not found')
         if job['state']=='CANCELLED':return {'job_id':str(job_id),'state':'CANCELLED','changed':False}

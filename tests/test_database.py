@@ -18,6 +18,7 @@ def db():
         assert marker and marker['value']=='ephemeral-test-only', 'Refusing to reset a non-test database'
         c.execute('truncate auth.users,startup_radar.teams,startup_radar.sources,startup_radar.programs,startup_radar.ingestion_runs,startup_radar.notification_runs cascade')
         c.execute('truncate startup_radar.telegram_updates,startup_radar.schedule_claims')
+        c.execute('truncate startup_radar.worker_executions')
         c.execute("update startup_radar.runtime_settings set value=value || '{\"enabled\":true,\"ingestion_enabled\":true}'::jsonb where key='scheduling'")
     return database
 

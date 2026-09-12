@@ -30,11 +30,59 @@ Profiles serialize the set-valued `assumed_fields` in sorted order. Otherwise Py
 
 `/api/admin/health` includes recent job requests and schedule claims. `REQUESTED` means dispatch was requested, `RUNNING` means the workflow claimed its persisted ID, and `UNCERTAIN` means the dispatch outcome was not confirmed. A successful GitHub HTTP response does not prove job completion. A slow HTTP failure cannot overwrite a job's already-recorded progress or completion.
 
-Inspect the actual GitHub Actions run before deciding whether to retry. If a request must be retired, an authenticated administrator can send `POST /api/admin/jobs/{job_id}/cancel` with `{"note":"Reason and investigation result"}`. The endpoint uses the same transaction advisory lock as `run_job`, rejects cancellation while any V2 job holds that lock, and accepts only REQUESTED/RUNNING/UNCERTAIN records. Completed jobs remain intact. It writes a CANCEL_JOB audit entry preserving the prior state/result, then marks the request CANCELLED. A delayed workflow carrying the cancelled ID exits without executing; repeated cancellation is idempotent.
+Inspect the actual GitHub Actions run before deciding whether to retry. If a request must be retired, an authenticated administrator can send `POST /api/admin/jobs/{job_id}/cancel` with `{"note":"Reason and investigation result"}`. The endpoint serializes with the short ownership transaction and rejects cancellation while any durable execution is active, including a disconnected/crashed owner awaiting recovery. It accepts only REQUESTED/RUNNING/UNCERTAIN records. Completed jobs remain intact. It writes a CANCEL_JOB audit entry preserving the prior state/result, then marks the request CANCELLED. A delayed workflow carrying the cancelled ID exits without executing; repeated cancellation is idempotent.
 
 This cancels the local request, not GitHub's workflow container. It does not undo completed ingestion or delete/cancel notification batches already created. Inspect those batches separately before retrying. Direct/manual jobs without a persisted request ID are protected by the job lock but are not cancelled through this endpoint.
 
 A crashed TICK can leave a RUNNING schedule claim. Claims do not automatically replay, because delivery may have partly completed. Inspect the actual run and notification ledger, then issue a deliberate new manual job as appropriate. Do not delete schedule claims simply to force replay. Current health APIs expose them; automated dead-job paging and an explicit schedule-claim reconciliation UI remain future operating work.
+
+## Durable execution ownership and process recovery
+
+Every `run_job` invocation commits a `worker_executions` owner row before entering
+its executor. A partial unique index permits only one unfinished execution. The
+claim connection closes immediately; losing a later connection does not release
+ownership. Normal completion records the result and finalizes the associated job
+request in one transaction. A caught executor exception is recorded as FAILED
+once the executor has returned. Process termination or unconfirmed finalization
+leaves a record requiring inspection; no timeout, heartbeat age or missing DB
+connection grants automatic takeover. See PostgreSQL's
+[partial unique index semantics](https://www.postgresql.org/docs/17/indexes-partial.html).
+
+This table is private, RLS enabled and unavailable to browser roles. Only the
+privileged worker can read/write it. It contains the local host/PID and optional
+GitHub run ID/attempt, not credentials or arbitrary environment values. The
+following commands are operator CLI tools, not new GFC browser RPCs:
+
+```sh
+python -m radar.cli execution-status
+python -m radar.cli recover-execution --execution-id VERIFIED_EXECUTION_UUID --note "Recorded process/run has terminated; partial effects inspected" --confirm-stopped
+```
+
+Before recovery, inspect the recorded host/process or exact GitHub run and attempt
+and establish that it has terminated and cannot resume. Merely closing a database
+connection, observing no progress or waiting a long time is insufficient. Inspect
+ingestion results, schedule claims and notification receipts as separate effects.
+The confirmation flag is an operator attestation, not automatic process checking.
+Recover only that exact execution ID; never recover an active owner just to make
+a new job start. Recovery preserves the row as ABANDONED with the note, marks an
+associated RUNNING request UNCERTAIN and does not dispatch a retry or reset cadence
+claims. Repeating recovery of an old owner cannot release a newer owner.
+
+A lost COMMIT acknowledgement during acquisition never starts the executor. A
+lost finalization acknowledgement returns UNCERTAIN even if the completion
+actually committed; inspect the ledger to distinguish these cases before retry.
+An old worker binary does not understand durable ownership. Stop all old workers
+before applying this migration and using the new worker; do not run old/new worker
+versions together or roll back to the old scheduler while any worker is active.
+The retained advisory lock only serializes short claim/cancel/recovery operations
+and detects an old worker already holding the legacy lock during acquisition.
+
+Use the `run_job` entry point for coordinated operations. Internal ingestion,
+refresh, tick and notification helpers do not independently acquire this global
+owner; direct privileged helper calls are not a substitute for it. This prevents
+coordinated batch overlap, not an atomic transaction spanning all sources and
+Telegram. Existing per-item/batch idempotency and uncertain-delivery recovery
+remain necessary.
 
 ## Telegram failures and uncertain receipts
 

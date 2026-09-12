@@ -1,10 +1,10 @@
 # StartupRadar 2.0 architecture and limits
 
-Status: shared-GFC staging database applied under startup_radar in project etvffzxqdgblvkfdikwl. Identity comes from existing auth.users; Radar teams/membership/profiles are independent of public GFC objects. V1 remains the production baseline; web and Telegram V2 have not been deployed. See SHARED-GFC-REPORT.md and WEB-INTEGRATION.md for current verification and integration decisions.
+Status: the shared GFC database uses private startup_radar in project etvffzxqdgblvkfdikwl. Existing GFC Auth and protected member/admin roles authorize Radar access; Radar teams/profiles remain separate from public GFC teams. The GFC preview and approved Telegram connection/digest delivery have been verified. Production cutover and V2 schedules remain disabled; V1 is retained. A hosted Python HTTP API is not required. See GFC-OPERATING-GOAL.md, PYTHON-API-DECISION.md and OPERATIONS.md for current scope and recovery.
 
 ```text
-Hourly GitHub Actions wake-up / dashboard / Telegram admin command
-    -> persistent job request + Seoul cadence claims + job lock
+Configured GitHub Actions batch / explicit operator invocation (schedules gated)
+    -> persistent job request + Seoul cadence claims + durable execution owner
     -> source registry
          K-Startup / BizInfo APIs
          RSS / Atom / HTML notices
@@ -16,13 +16,13 @@ Hourly GitHub Actions wake-up / dashboard / Telegram admin command
     -> PostgreSQL canonical programs + immutable versions + evidence
     -> deterministic eligibility against a versioned team profile
     -> separate configurable recommendation ranking
-         -> authenticated FastAPI dashboard: FACT / ELIGIBILITY / RECOMMENDATION
+         -> stored member results -> authorized Supabase RPC -> GFC /notice
          -> weekly / exceptional high-fit / deadline notification planner
               -> persisted single-message batches
               -> revalidate current team/program/subscription/date
               -> Telegram receipt, definite rejection, or uncertainty
 
-Supabase Auth -> validated user -> team membership / administrator authorization
+Existing GFC Supabase Auth -> protected GFC role -> Radar team authorization
 PostgreSQL RLS -> team-scoped private data; administrator-only operations
 Source runs, document failures, jobs, batches, and trace history -> admin dashboard
 ```
@@ -40,10 +40,10 @@ Source runs, document failures, jobs, batches, and trace history -> admin dashbo
 | `radar/eligibility.py`, `dates.py` | Deterministic conditions, Seoul business dates and deadlines |
 | `radar/recommendations.py` | Ranking components and persistent evaluation/recommendation trace |
 | `radar/notifications.py` | Idempotent planning, message batches, delivery states and audited recovery |
-| `radar/scheduler.py`, `cli.py`, `jobs.py` | Cadence, claims, explicit workflow dispatch and command-line execution |
-| `radar/auth.py`, `services.py`, `web.py` | Verified sessions, authorization and member/admin API |
+| `radar/scheduler.py`, `cli.py`, `jobs.py`, `executions.py` | Cadence, durable execution ownership, verified recovery, workflow dispatch and command-line execution |
+| `radar/auth.py`, `services.py`, `web.py` | Retained optional Python API and administrator/development capabilities |
 | `radar/telegram.py` | Real `/status`, persistent `/stage`, workflow `/run`, runtime `/stop` |
-| `web/src/app.js` | Lightweight dashboard; built with esbuild into `web/static/app.js` |
+| `web/src/app.js` | Retained optional dashboard; member product is the separate GFC repository's /notice integration |
 
 ## Eligibility semantics
 

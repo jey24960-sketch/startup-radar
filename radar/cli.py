@@ -20,8 +20,19 @@ def main(argv=None):
     run.add_argument('--source');run.add_argument('--job-id');run.add_argument('--deliver',action='store_true',help='Actually send Telegram; default is disabled')
     comparison=commands.add_parser('compare');comparison.add_argument('--v1',required=True);comparison.add_argument('--team-id',type=UUID,required=True)
     comparison.add_argument('--output',required=True)
+    commands.add_parser('execution-status',help='Inspect the durable active batch owner')
+    recovery=commands.add_parser('recover-execution',help='Release a verified stopped owner; never dispatches a retry')
+    recovery.add_argument('--execution-id',type=UUID,required=True)
+    recovery.add_argument('--note',required=True)
+    recovery.add_argument('--confirm-stopped',action='store_true',help='Affirm the recorded process/Actions run is terminal, not just disconnected')
     args=parser.parse_args(argv);db=Database()
-    if args.command=='seed-sources':
+    if args.command=='execution-status':
+        from radar.executions import active_execution
+        result={'status':'SUCCESS','active_execution':active_execution(db)}
+    elif args.command=='recover-execution':
+        from radar.executions import recover_execution
+        result=recover_execution(db,args.execution_id,args.note,args.confirm_stopped)
+    elif args.command=='seed-sources':
         rows=json.loads(Path(args.file).read_text(encoding='utf-8'))
         for row in rows:
             source=db.upsert_source(row['slug'],row['name'],row['adapter'],row['config'])

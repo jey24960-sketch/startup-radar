@@ -1,5 +1,4 @@
 """Seoul cadence with persistent claims. Failed or uncertain jobs require inspection."""
-from uuid import UUID
 from psycopg.types.json import Jsonb
 from core.clock import now,SEOUL
 from radar.ingestion import ingest
@@ -75,19 +74,15 @@ def tick(db,at=None,transport=None,executor=execute):
 
 
 def run_job(db,kind,source_slug=None,job_id=None,transport=None,executor=execute):
-    # Hold one transaction-level lock across work; process exit releases it. The outbox
-    # additionally uses per-batch locks/claims, so a crash never blindly resends.
-    with db.transaction() as lock:
-        if not lock.execute('select pg_try_advisory_xact_lock(782394202) acquired').fetchone()['acquired']:
-            return {'status':'FAILED','error':'Another V2 job is running; request remains pending'}
-        if job_id:
-            job_id=UUID(str(job_id))
-            with db.transaction() as c:
-                job=c.execute("update startup_radar.job_requests set state='RUNNING' where id=%s and state in ('REQUESTED','UNCERTAIN') and kind=%s and source_slug is not distinct from %s returning id",
-                              (job_id,kind,source_slug)).fetchone()
-            if not job:return {'status':'SUCCESS','state':'DUPLICATE_OR_MISMATCHED_JOB','executed':False}
-        try:result=tick(db,transport=transport,executor=executor) if kind=='TICK' else executor(db,kind,source_slug=source_slug,transport=transport)
-        except Exception as error:result={'status':'FAILED','error':type(error).__name__}
-        if job_id:
-            with db.transaction() as c:c.execute('update startup_radar.job_requests set state=%s,result=%s,finished_at=now() where id=%s',(result['status'],Jsonb(result),job_id))
-        return result
+    from radar.executions import claim_execution,finish_execution
+    claim=claim_execution(db,kind,source_slug,job_id)
+    if 'execution_id' not in claim:return claim
+    execution_id=claim['execution_id']
+    # BaseException/abrupt process termination deliberately leaves the claim.
+    try:result=tick(db,transport=transport,executor=executor) if kind=='TICK' else executor(db,kind,source_slug=source_slug,transport=transport)
+    except Exception as error:result={'status':'FAILED','error':type(error).__name__}
+    try:finish_execution(db,execution_id,result)
+    except Exception as error:
+        return {'status':'UNCERTAIN','execution_id':execution_id,'error':type(error).__name__,
+                'message':'Execution finalization uncertain; inspect durable owner and partial effects before retry'}
+    return {**result,'execution_id':execution_id}
