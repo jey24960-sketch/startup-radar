@@ -72,6 +72,27 @@ def test_stage_zero_browsing_and_evidence(context):
     assert detail['eligibility']['matched_requirements'][0]['evidence'][0]['text']=='예비창업자만 신청 가능'
 
 
+def test_program_detail_history_keeps_version_facts_and_document_failures(context):
+    c=context; original=c['program']; updated=original.model_copy(deep=True)
+    updated.application_end_at+=timedelta(days=7)
+    saved=c['db'].save_program(updated,c['source'],'first',updated.official_url,{},'Updated fixture',documents=[{
+        'original_url':'https://example.org/notice.hwp','filename':'공고문.hwp','content_hash':'fixture-broken-hwp',
+        'fetch_status':'SUCCESS','extraction_status':'FAILED','error_kind':'DOCUMENT_PARSE'}])
+    path='/api/programs/'+str(saved['program_id'])+'?preset=0'
+    current=c['client'].get(path).json()
+    previous=c['client'].get(path+'&version_id='+str(c['saved']['version_id'])).json()
+    assert [v['version'] for v in current['versions']]==[2,1]
+    assert current['documents'][0]['extraction_status']=='FAILED'
+    assert previous['documents']==[]
+    assert current['facts']['application_end_at']!=previous['facts']['application_end_at']
+    assert previous['facts']['application_end_at']==original.model_dump(mode='json')['application_end_at']
+    assert 'application_end_at' in current['changes'][0]['changed_fields']
+    assert previous['eligibility']['matched_requirements'][0]['key']=='business_status'
+    other=updated.model_copy(deep=True);other.official_url+='/other'
+    foreign=c['db'].save_program(other,c['source'],'other',other.official_url,{},'Different program')
+    assert c['client'].get(path+'&version_id='+str(foreign['version_id'])).status_code==404
+
+
 def test_cross_team_profile_read_write_and_history_denied(context):
     client=context['client'];other=str(context['other_team']['id'])
     assert client.get('/api/teams/'+other+'/profile').status_code==403
