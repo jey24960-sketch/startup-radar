@@ -187,6 +187,34 @@ def test_notification_idempotency_and_partial_delivery(db):
     assert deliver_pending(db,Transport(),'REMINDER')['delivered']==0
 
 
+def test_scoped_notification_never_plans_or_claims_other_subscriptions(db):
+    owner=uuid4()
+    with db.transaction() as c:c.execute('insert into auth.users values(%s)',(owner,))
+    team=db.create_team('Scoped notification fixture',owner,TeamProfile())
+    p=program();p.program_types=['EDUCATION'];p.evidence_complete=True;p.application_end_at=now()+timedelta(days=14)
+    db.save_program(p,source(db),'scope',p.official_url,{},'fixture')
+    with db.transaction() as c:
+        ids=[c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id) values(%s,%s) returning id',
+                       (team['id'],chat)).fetchone()['id'] for chat in ('approved-fixture','other-fixture')]
+    refresh_recommendations(db)
+    assert plan_notifications(db,'DIGEST',subscription_id=ids[0])==1
+    with db.transaction() as c:
+        assert c.execute('select distinct subscription_id from startup_radar.notification_items').fetchall()==[{'subscription_id':ids[0]}]
+    assert plan_notifications(db,'DIGEST',subscription_id=ids[1])==1
+    class Transport:
+        calls=0
+        def send(self,chat,text):
+            assert chat=='approved-fixture';self.calls+=1
+            return {'state':'DELIVERED','receipt':{'message_id':17}}
+    transport=Transport()
+    assert deliver_pending(db,transport,'DIGEST',subscription_id=ids[0])['delivered']==1
+    assert plan_notifications(db,'DIGEST',subscription_id=ids[0])==0
+    assert deliver_pending(db,transport,'DIGEST',subscription_id=ids[0])['delivered']==0
+    assert transport.calls==1
+    with db.transaction() as c:
+        assert c.execute('select state from startup_radar.notification_batches where subscription_id=%s',(ids[1],)).fetchone()['state']=='PENDING'
+
+
 def test_document_evidence_links_to_same_program_version(db):
     p=program();s=source(db)
     p.requirements=[Requirement(key='founder_age',operator='LTE',value=39,certain=True,

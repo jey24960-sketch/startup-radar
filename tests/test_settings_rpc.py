@@ -44,6 +44,24 @@ def test_direct_preferences_are_rechecked_before_plan_and_delivery(context):
  result=deliver_pending(c['db'],NeverSend(),'DIGEST');assert result['cancelled']==1 and result['delivered']==0
  assert plan_notifications(c['db'],'HIGH_FIT')==0
 
+
+@pytest.mark.parametrize('flag',['enabled','digest_enabled'])
+def test_team_preference_cannot_reenable_a_disabled_channel(context,flag):
+ c=context
+ with c['db'].transaction() as con:
+  sub=con.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id) values(%s,%s) returning id',(c['team']['id'],'FIXTURE')).fetchone()['id']
+  con.execute('insert into startup_radar.team_notification_preferences(team_id) values(%s)',(c['team']['id'],))
+ refresh_recommendations(c['db'])
+ with c['db'].transaction() as con:con.execute('update startup_radar.telegram_subscriptions set '+flag+'=false where id=%s',(sub,))
+ assert plan_notifications(c['db'],'DIGEST',subscription_id=sub)==0
+ with c['db'].transaction() as con:con.execute('update startup_radar.telegram_subscriptions set '+flag+'=true where id=%s',(sub,))
+ assert plan_notifications(c['db'],'DIGEST',subscription_id=sub)==1
+ with c['db'].transaction() as con:con.execute('update startup_radar.telegram_subscriptions set '+flag+'=false where id=%s',(sub,))
+ class NeverSend:
+  def send(self,*args):raise AssertionError('Disabled channel reached transport')
+ result=deliver_pending(c['db'],NeverSend(),'DIGEST',subscription_id=sub)
+ assert result['cancelled']==1 and result['delivered']==0
+
 def test_health_requires_gfc_admin_and_redacts_raw_operational_data(context):
  c=context
  with c['db'].transaction() as con:

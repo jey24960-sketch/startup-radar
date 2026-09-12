@@ -1,5 +1,6 @@
 """Persistent outbox with explicit delivery uncertainty and per-version keys."""
 import html
+import os
 from hashlib import sha256
 from datetime import timedelta
 from urllib.parse import urlsplit
@@ -41,7 +42,11 @@ def message(program,team_name,outcome,score,explanation,kind,at=None):
     for rule in outcome.matched_requirements[:4]:
         lines.append(f'확인 조건: {rule.key} {rule.operator} {rule.value}')
     text='\n'.join(html.escape(line[:700]) for line in lines)
-    for label,url in [('GFC에서 추천 보기','https://www.gfc-startup.com/notice'),('원문 보기',program.official_url),('신청',program.application_url)]:
+    member_url=os.environ.get('RADAR_MEMBER_NOTICE_URL','https://www.gfc-startup.com/notice')
+    parsed=urlsplit(member_url)
+    if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError('Member notice link must be an HTTPS URL without credentials')
+    for label,url in [('GFC에서 추천 보기',member_url),('원문 보기',program.official_url),('신청',program.application_url)]:
         if url and urlsplit(url).scheme=='https':text+=f'\n<a href="{html.escape(url,quote=True)}">{label}</a>'
     if len(text)>4000:raise ValueError('Notification exceeds safe size; cannot silently truncate conditions')
     return text
@@ -58,7 +63,7 @@ def policy_for(c):
     return policy
 
 
-def plan_notifications(db,kind,at=None):
+def plan_notifications(db,kind,at=None,*,subscription_id=None):
     at=at or now()
     if at.tzinfo is None:raise ValueError('Timezone-aware notification timestamp required')
     at=at.astimezone(SEOUL)
@@ -67,12 +72,13 @@ def plan_notifications(db,kind,at=None):
     with db.transaction() as c:
         policy=policy_for(c)
         # Lock subscriptions in a stable order: parallel planners cannot exceed caps.
-        subscriptions=c.execute('select s.*,coalesce(pref.enabled,s.enabled) enabled,coalesce(pref.digest_enabled,s.digest_enabled) digest_enabled,'
-            'coalesce(pref.alerts_enabled,s.alerts_enabled) alerts_enabled,coalesce(pref.reminders_enabled,s.reminders_enabled) reminders_enabled,'
+        subscriptions=c.execute('select s.*,(s.enabled and coalesce(pref.enabled,true)) enabled,(s.digest_enabled and coalesce(pref.digest_enabled,true)) digest_enabled,'
+            '(s.alerts_enabled and coalesce(pref.alerts_enabled,true)) alerts_enabled,(s.reminders_enabled and coalesce(pref.reminders_enabled,true)) reminders_enabled,'
             't.name,p.profile,p.version profile_version from startup_radar.telegram_subscriptions s '
             'join startup_radar.teams t on t.id=s.team_id join startup_radar.team_profiles p on p.team_id=s.team_id '
             'left join startup_radar.team_notification_preferences pref on pref.team_id=s.team_id '
-            'where coalesce(pref.enabled,s.enabled)=true order by s.id for update of s').fetchall()
+            'where (s.enabled and coalesce(pref.enabled,true))=true and (%s::uuid is null or s.id=%s) order by s.id for update of s',
+            (subscription_id,subscription_id)).fetchall()
         for sub in subscriptions:
             if not sub[FLAGS[kind]]:continue
             week=at.strftime('%G-W%V')
@@ -139,7 +145,7 @@ def plan_notifications(db,kind,at=None):
     return added
 
 
-def deliver_pending(db,transport,kind,limit=None,at=None):
+def deliver_pending(db,transport,kind,limit=None,at=None,*,subscription_id=None):
     at=at or now()
     if at.tzinfo is None:raise ValueError('Timezone-aware notification timestamp required')
     at=at.astimezone(SEOUL)
@@ -151,11 +157,12 @@ def deliver_pending(db,transport,kind,limit=None,at=None):
     states=[];delivered_items=cancelled=0
     for _ in range(limit):
         with db.transaction() as c:
-            batch=c.execute("select b.*,s.chat_id,coalesce(pref.enabled,s.enabled) enabled,coalesce(pref.digest_enabled,s.digest_enabled) digest_enabled,"
-                "coalesce(pref.alerts_enabled,s.alerts_enabled) alerts_enabled,coalesce(pref.reminders_enabled,s.reminders_enabled) reminders_enabled,s.reminder_days,s.high_fit_threshold,"
+            batch=c.execute("select b.*,s.chat_id,(s.enabled and coalesce(pref.enabled,true)) enabled,(s.digest_enabled and coalesce(pref.digest_enabled,true)) digest_enabled,"
+                "(s.alerts_enabled and coalesce(pref.alerts_enabled,true)) alerts_enabled,(s.reminders_enabled and coalesce(pref.reminders_enabled,true)) reminders_enabled,s.reminder_days,s.high_fit_threshold,"
                 "p.profile,p.version profile_version from startup_radar.notification_batches b join startup_radar.telegram_subscriptions s on s.id=b.subscription_id "
                 "join startup_radar.team_profiles p on p.team_id=s.team_id left join startup_radar.team_notification_preferences pref on pref.team_id=s.team_id "
-                "where b.kind=%s and b.state='PENDING' order by b.created_at for update of b skip locked limit 1",(kind,)).fetchone()
+                "where b.kind=%s and b.state='PENDING' and (%s::uuid is null or s.id=%s) order by b.created_at for update of b skip locked limit 1",
+                (kind,subscription_id,subscription_id)).fetchone()
             if not batch:break
             items=c.execute('select i.*,v.normalized,p.current_version_id,r.score from startup_radar.notification_items i '
                 'join startup_radar.program_versions v on v.id=i.program_version_id join startup_radar.programs p on p.id=v.program_id '

@@ -13,13 +13,22 @@ on:
         type: boolean
         default: false
         required: false
+      ledger_check:
+        description: "기존 승인 수신자·검증 팀의 주간 알림 1건: 먼저 prepare 결과 검토 후 deliver"
+        type: choice
+        options: [none, prepare, deliver]
+        default: none
+      validation_team_id:
+        description: "알림을 모두 꺼 둔 기존 운영 검증용 Radar 팀 UUID"
+        type: string
+        required: false
 
 permissions:
   contents: read
 
 jobs:
   delivery-check:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.delivery_check && github.run_attempt == '1' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.delivery_check && (!inputs.ledger_check || inputs.ledger_check == 'none') && github.run_attempt == '1' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
@@ -42,8 +51,39 @@ jobs:
           name: telegram-delivery-check-${{ github.run_id }}
           path: work/telegram-delivery-check.json
           retention-days: 14
+  ledger-check:
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.delivery_check && (inputs.ledger_check == 'prepare' || inputs.ledger_check == 'deliver') && github.run_attempt == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    concurrency:
+      group: startup-radar-ledger-check
+      cancel-in-progress: false
+    env:
+      DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      LEDGER_CHECK_MODE: ${{ inputs.ledger_check }}
+      LEDGER_CHECK_TEAM_ID: ${{ inputs.validation_team_id }}
+      RADAR_MEMBER_NOTICE_URL: https://gfc-startup-q4slh14wf-jey24960-9908s-projects.vercel.app/notice
+      PGCONNECT_TIMEOUT: '15'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-v2.lock.txt
+      - run: python -m tools.telegram_ledger_check
+      - name: Restore validation notification flags after interruption
+        if: always()
+        run: python -m tools.telegram_ledger_check --cleanup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: telegram-ledger-check-${{ github.run_id }}
+          path: work/telegram-ledger-check.json
+          retention-days: 14
   poll:
-    if: ${{ !inputs.delivery_check }}
+    if: ${{ !inputs.delivery_check && (!inputs.ledger_check || inputs.ledger_check == 'none') }}
     runs-on: ubuntu-latest
     timeout-minutes: 4
 
