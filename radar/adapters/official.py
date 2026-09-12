@@ -83,8 +83,15 @@ class BizInfoApiAdapter(HtmlAdapter):
     def fetch_detail(self,candidate):
         detail=super().fetch_detail(candidate)
         for url_key,name_key in [('flpthNm','fileNm'),('printFlpthNm','printFileNm')]:
-            url=candidate.raw_metadata.get(url_key)
-            if url:detail.document_urls.append((urljoin(detail.url,url),candidate.raw_metadata.get(name_key) or 'attachment'))
+            urls=candidate.raw_metadata.get(url_key)
+            if not urls:continue
+            # The live API joins parallel attachment URL/name lists with '@'.
+            # Keep empty positions so a missing filename cannot shift attribution.
+            names=(candidate.raw_metadata.get(name_key) or '').split('@')
+            for index,url in enumerate(urls.split('@')):
+                if not url.strip():continue
+                name=names[index].strip() if index<len(names) else ''
+                detail.document_urls.append((urljoin(detail.url,url.strip()),name or 'attachment'))
         return detail
     def normalize(self,candidate,detail,documents):
         row=candidate.raw_metadata;start,end=parse_period(row.get('reqstBeginEndDe') or row.get('reqstDt'))

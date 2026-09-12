@@ -109,6 +109,25 @@ def test_missing_credentials_explicit(monkeypatch):
     with pytest.raises(SourceFailure,match='MISSING_CREDENTIAL'):list(KStartupApiAdapter(source(),http('')).discover())
 
 
+def test_bizinfo_multiple_attachments_keep_file_names_and_separate_downloads():
+    metadata={'flpthNm':'https://example.org/file?id=1@https://example.org/file?id=2',
+              'fileNm':'신청서.hwp@증빙서류.hwpx',
+              'printFlpthNm':'/notice.pdf','printFileNm':'공고문.pdf'}
+    candidate=Candidate('fixture','1','https://example.org/1','https://example.org/1','Notice',metadata)
+    adapter=BizInfoApiAdapter(source('BIZINFO'),http('<main>Notice</main>'))
+    detail=adapter.fetch_detail(candidate)
+    assert detail.document_urls==[('https://example.org/file?id=1','신청서.hwp'),
+        ('https://example.org/file?id=2','증빙서류.hwpx'),('https://example.org/notice.pdf','공고문.pdf')]
+
+
+def test_bizinfo_missing_attachment_names_do_not_shift_other_names():
+    metadata={'flpthNm':'/one@/two@/three','fileNm':'@second.hwp'}
+    candidate=Candidate('fixture','1','https://example.org/1','https://example.org/1','Notice',metadata)
+    detail=BizInfoApiAdapter(source('BIZINFO'),http('<main>Notice</main>')).fetch_detail(candidate)
+    assert detail.document_urls==[('https://example.org/one','attachment'),
+        ('https://example.org/two','second.hwp'),('https://example.org/three','attachment')]
+
+
 @pytest.mark.parametrize('kind,path', [('docx','word/document.xml'),('hwpx','Contents/section0.xml')])
 def test_xml_document_extractors(kind,path):
     buf=io.BytesIO()
