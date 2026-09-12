@@ -2,7 +2,7 @@
 
 # StartupRadar 2.0 — GFC 공지 허브 통합 보고서
 
-작성 기준: 2026-09-12. 최신 첨부 지시 33개 항목을 기준으로 기존 V2를 확장했다. **코드 구현·로컬 검증·공유 Supabase 적용은 완료했지만, GFC 운영 도메인의 새 프런트엔드와 Python API 연결은 아직 완료하지 않았다.** 실데이터 수집·알림 운영 전환도 보류 상태다. 가상 화면 테스트와 실제 운영 검증을 구분한다.
+작성 기준: 2026-09-12. 최신 첨부 지시 33개 항목을 기준으로 기존 V2를 확장했다. **기존 통합 구현을 보존하면서 Phase A 직접 Supabase 전환을 진행 중이다. 공고·상세·팀 조회는 전환했으며 설정 저장·선호·관리 조회와 실제 운영 검증은 남아 있다.** 실데이터 수집·알림 운영 전환도 보류 상태다. 가상 화면 테스트와 실제 운영 검증을 구분한다.
 
 ## ARCHITECTURE AUDIT
 
@@ -17,7 +17,7 @@ GitHub Actions / Python StartupRadar
           public.profiles.role: 기존 GFC 학회원·운영진 판정
                    │
 gfc-startup.com     │
-  /notice: 공지 Supabase 조회 + Radar Python API 조회 → 화면에서 DTO 통합
+  /notice: 공지 Supabase 조회 + Radar 저장 결과 RPC 조회 → 화면에서 DTO 통합
   /notice/:id: 공지 상세
   /notice/radar/:id: 지원사업의 사실 / 자격 / 추천 / 근거
   /radar/settings: 팀·단계·선호·선택 정보·알림 설정
@@ -87,7 +87,7 @@ gfc-startup.com     │
 
 GFC 공지는 기존 Supabase JS 클라이언트로 `gfc_notices`만 조회한다. 명시적 컬럼 목록, title 검색, 공개 상태, 게시 시점, 정렬, range 및 exact count를 사용한다. RLS가 비회원에게 회원 공지와 초안을 숨긴다.
 
-Radar는 `VITE_RADAR_API_URL`의 Python API를 호출한다. Supabase 세션의 Bearer 토큰을 검증한 후 DB의 현재 GFC 역할을 다시 확인한다. 브라우저에는 DB 비밀번호·service-role·AI 키·Telegram 토큰이 없다.
+Radar 팀·프로필·공고·상세 조회는 기존 Supabase 세션과 RLS를 적용하는 RPC를 호출한다. 남은 설정 저장·선호·운영 상태 경로는 Python API 전송을 전환 중이다. 브라우저에는 DB 비밀번호·service-role·AI 키·Telegram 토큰이 없다.
 
 | 계약 | 용도 / 강제 권한 |
 |---|---|
@@ -178,18 +178,16 @@ GFC `vite build` 성공. 신규 프런트엔드는 기존 스택과 lockfile을 
 
 ## EXTERNAL SETUP REQUIRED
 
-1. Python API 배포 대상과 HTTPS origin 확정. 기존 Docker 실행 진입점은 `python -m radar.deployment --serve`, PORT 기본 8000이다.
-2. 해당 런타임에 공유 Supabase DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY를 안전하게 제공. 웹 client에는 publishable/anon 키만 사용한다. `.env.staging`은 git/출력 ZIP에 포함하지 않는다.
-3. GFC Vercel 환경에 `VITE_RADAR_API_URL=https://실제-API-origin` 설정 후 프런트엔드 빌드·배포. 기존 Supabase VITE 설정과 Google OAuth redirect는 유지한다.
-4. API CORS에 실제 GFC origin만 허용. 기본은 `https://www.gfc-startup.com`, `https://gfc-startup.com`. 검증 preview origin은 별도로 명시하며 `*`를 허용하지 않는다.
-5. 실수집용 ANTHROPIC_API_KEY, KSTARTUP_API_KEY, BIZINFO_API_KEY와 실행 워크플로 연결. 알려진 기존 GitHub secret이 존재하는지와 이번 API 런타임에서 사용할 수 있는지는 다른 문제다.
-6. 승인된 Telegram bot·수신 팀·웹훅 secret, GitHub dispatch 자격 증명 연결. 서비스 역할 비밀키를 브라우저에 넣지 않는다.
-7. 전용 테스트 로그인으로 external/member/admin, 두 Radar 팀, 로그아웃·회원 회수·모바일·예약 공개를 실제 배포에서 확인한다.
+1. GitHub Actions 배치에 `RADAR_DATABASE_URL`을 안전하게 연결하고, 공식 수집용 `KSTARTUP_API_KEY`, `BIZINFO_API_KEY` 및 기존 Anthropic 설정을 확인한다. 비밀값은 채팅·브라우저·출력 ZIP에 넣지 않는다.
+2. GFC의 기존 Supabase VITE 설정과 Google OAuth redirect를 유지한다. `VITE_RADAR_API_URL`이나 새 호스팅 제공자를 현재 단계의 필수 설정으로 요구하지 않는다.
+3. 실제 테스트 계정으로 external/member/admin, 두 Radar 팀, 로그아웃·회원 회수·모바일·공지 공개를 배포된 preview에서 확인한다.
+4. 승인된 Telegram 수신 팀을 연결해 실제 발송을 검증한다. 웹훅은 알림 전송만 하는 배치의 필수 요소가 아니다.
+5. 원자적 프로필 저장·재계산 요청과 선호·관리 조회를 전환한 후 Phase A의 NOT REQUIRED / LIMITED / FULL API 판정을 확정한다.
 
 ## KNOWN LIMITATIONS
 
-- **운영 `gfc-startup.com/notice`의 공개 배포와 실제 Python API 연동은 아직 미완료**다. 브랜치 구현·공유 DB 적용·테스트 성공을 production 완성으로 간주하지 않는다.
-- cold feed는 처음 조회하는 팀/preset의 최신 공고를 결정론적으로 일괄 평가한다. 배치 크기는 제한했지만 총 최초 비용은 공고 수에 비례한다. 데이터가 커지면 사전 계산/작업 큐와 실행계획 측정이 필요하다.
+- **운영 `gfc-startup.com/notice`의 공개 배포와 전체 실운영 검증은 아직 미완료**다. Python API 호스팅은 선행 요건이 아니다. 브랜치 구현·공유 DB 적용·테스트 성공을 production 완성으로 간주하지 않는다.
+- 현재 GFC 피드는 Python 배치가 저장한 결과를 읽는다. 아직 계산하지 않았거나 최신 프로필·공고·서울 날짜·엔진 세대와 맞지 않으면 계산 대기로 표시한다. 계산·저장 비용은 팀과 보존 공고 버전 수에 비례하며 RPC 실행계획 측정이 필요하다. 프로필 저장과 재계산 요청의 원자적 큐는 후속 구현이다.
 - 전체 탭은 별도 두 소스의 각 페이지를 DTO로 합친다. 단일 전역 커서의 완전한 시간순 페이지 계약은 아직 아니므로 소스 간 시점 분포가 크게 다를 때 다음 페이지 경계의 시간순이 완벽하지 않을 수 있다.
 - 자연어 OR/복잡한 예외 조항, 손상된 HWP, 스캔 문서 OCR, 비공개 신청 페이지 등 기존 한계는 유지된다. 확정 근거가 부족한 공고는 UNVERIFIABLE로 남는다.
 - 실제 수집 확인은 이전 단계의 대학 공고 1건·HWP 2개에 한정된다. 이 공고도 evidence_complete=false이며 공식 두 API는 인증 키 없어서 실패로 기록돼 있다. 국내 전체 공고 커버리지나 AI 정확도를 입증한 상태가 아니다.
@@ -208,7 +206,7 @@ V2 DB scheduling.enabled=false, ingestion_enabled=false를 유지했다. V2 실�
 
 ## NEXT MILESTONE
 
-배포 대상·런타임 자격 증명 연결 → GFC preview와 실제 API의 전용 계정 검증 → 기존 GFC 도메인 회귀 확인 → 승인된 수신자 대상으로 수집·알림 검증 → 동일 기간 V1/V2 비교 → cutover 결정 순서다.
+남은 Phase A 설정·운영 조회 전환과 Python API 최종 판정 → 배치 런타임 자격 증명 연결 → GFC preview의 실제 OAuth 계정·실데이터 검증 → 승인된 수신자 알림 검증 → 동일 기간 V1/V2 비교 → cutover 제안 순서다.
 
 ## CUTOVER STATUS
 

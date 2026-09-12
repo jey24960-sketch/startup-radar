@@ -5,5 +5,9 @@
   "anonymous_radar_denied": true,
   "anonymous_radar_context_http": 401,
   "anonymous_radar_context_denied": true,
+  "anonymous_radar_programs_http": 401,
+  "anonymous_radar_programs_denied": true,
+  "anonymous_radar_detail_http": 401,
+  "anonymous_radar_detail_denied": true,
   "real_member_jwt_browser_test": "NOT_RUN: dedicated test login unavailable"
 }

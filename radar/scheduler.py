@@ -19,13 +19,19 @@ def due_tasks(settings,at):
 
 
 def execute(db,kind,source_slug=None,transport=None):
+    from radar.member_results import refresh_member_results
+    if kind=='REFRESH':
+        # Deterministic stored-page refresh; no ingestion, AI or delivery.
+        return refresh_member_results(db)
     if kind=='INGEST':
         sources=None
         if source_slug:
             with db.transaction() as c:sources=c.execute('select * from startup_radar.sources where slug=%s',(source_slug,)).fetchall()
             if not sources:raise ValueError('Unknown source slug')
         result=ingest(db,sources,trigger='v2-job')
-        try:refresh_recommendations(db)
+        try:
+            refresh_recommendations(db)
+            refresh_member_results(db)
         except Exception as error:
             with db.transaction() as c:
                 c.execute("update startup_radar.ingestion_runs set status='PARTIAL_SUCCESS',summary=summary || %s where id=%s",
@@ -41,6 +47,7 @@ def execute(db,kind,source_slug=None,transport=None):
         return result
     if kind not in ('DIGEST','REMINDER','HIGH_FIT'):raise ValueError('Unsupported task kind')
     refresh_recommendations(db)
+    refresh_member_results(db)
     if transport is None:return {'status':'SUCCESS','delivery':'DISABLED','message':'Recommendations refreshed; no notification ledger or external message created'}
     added=plan_notifications(db,kind)
     return {**deliver_pending(db,transport,kind),'planned':added}
@@ -50,6 +57,11 @@ def tick(db,at=None,transport=None,executor=execute):
     at=at or now()
     with db.transaction() as c:settings=c.execute("select value from startup_radar.runtime_settings where key='scheduling'").fetchone()['value']
     results=[]
+    if settings.get('enabled',False):
+        # A profile edit/new day is picked up without a Python HTTP request.
+        # The existing repository and DB scheduling gates still apply.
+        from radar.member_results import refresh_member_results
+        refresh_member_results(db)
     for kind,key in due_tasks(settings,at):
         with db.transaction() as c:
             claimed=c.execute("insert into startup_radar.schedule_claims(task_key,kind,state) values(%s,%s,'RUNNING') on conflict do nothing returning task_key",(key,kind)).fetchone()

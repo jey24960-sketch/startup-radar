@@ -16,7 +16,7 @@ def main(argv=None):
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
     bootstrap=commands.add_parser('bootstrap-team');bootstrap.add_argument('--user-id',type=UUID,required=True)
     bootstrap.add_argument('--name',default='GFC');bootstrap.add_argument('--admin',action='store_true')
-    run=commands.add_parser('run');run.add_argument('--kind',choices=['INGEST','DIGEST','REMINDER','HIGH_FIT','TICK'],default='TICK')
+    run=commands.add_parser('run');run.add_argument('--kind',choices=['INGEST','DIGEST','REMINDER','HIGH_FIT','TICK','REFRESH'],default='TICK')
     run.add_argument('--source');run.add_argument('--job-id');run.add_argument('--deliver',action='store_true',help='Actually send Telegram; default is disabled')
     comparison=commands.add_parser('compare');comparison.add_argument('--v1',required=True);comparison.add_argument('--team-id',type=UUID,required=True)
     comparison.add_argument('--output',required=True)

@@ -7,7 +7,7 @@ on:
       kind:
         description: Task kind
         type: choice
-        options: [TICK, INGEST, DIGEST, REMINDER, HIGH_FIT]
+        options: [TICK, INGEST, DIGEST, REMINDER, HIGH_FIT, REFRESH]
         default: TICK
       source_slug:
         description: Optional registered source slug
