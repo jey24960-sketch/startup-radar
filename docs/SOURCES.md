@@ -15,6 +15,8 @@ After the fix, a second live sample parsed all six HWP/HWPX attachments for the 
 
 K-Startup stopped before its authenticated API request: the gateway's `/robots.txt` returned HTTP 400, producing ROBOTS_UNAVAILABLE. Its saved key is present but is not yet authenticated by this run. Korea Sejong HTML discovery/detail/normalization persisted all 13 homepage-linked candidates; strict AI schema/date-evidence failures on five candidates left the run partial. These observations do not establish nationwide coverage or production cutover readiness.
 
+Follow-up diagnosis reproduced model output using a string for `student_status`, an undefined `REGISTERED` business status, and a quota deadline mislabeled as budget exhaustion. Extractor `requirements-2.0.4` now supplies explicit value/operator contracts, enum values, unsupported-rule handling and deadline distinctions. A schema-valid answer is still not sufficient evidence: LLM `EXISTS` rules remain uncertain, quoted region rules must name the asserted region, and complete evidence requires all mandatory rules to be certain. These guards prevent the observed designation/region approximations from creating an eligible or ineligible result. Semantic coverage and source-specific aliases still require review; strict date failures remain failures rather than guessed deadlines.
+
 ## Adding a Source
 
 1. Verify the organization's public official list/feed/API and its robots/access rules. Do not guess selectors or endpoints.
