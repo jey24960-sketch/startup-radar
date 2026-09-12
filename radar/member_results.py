@@ -17,12 +17,18 @@ def refresh_member_results(db):
     with db.transaction() as c:
         c.execute("update startup_radar.member_read_state set generation=%s,state='RUNNING',started_at=now(),finished_at=null,error_kind=null where singleton", (generation,))
         scopes = c.execute('select team_id,profile,version from startup_radar.team_profiles order by team_id').fetchall()
+        c.execute("update startup_radar.profile_calculation_requests r set state='SUPERSEDED',finished_at=now() "
+                  "from startup_radar.team_profiles p where r.team_id=p.team_id and r.profile_version<p.version and r.state in ('PENDING','RUNNING','FAILED')")
     scopes += [{'team_id': None, 'preset': i, 'profile': apply_preset(TeamProfile(), i).model_dump(mode='json'), 'version': None} for i in range(5)]
     try:
         for scope in scopes:
             team_id = scope['team_id']
             preset = scope.get('preset')
             key = str(team_id) if team_id else f'preset:{preset}'
+            if team_id:
+                with db.transaction() as c:
+                    c.execute("update startup_radar.profile_calculation_requests set state='RUNNING',started_at=now(),finished_at=null,attempts=attempts+1,error_kind=null "
+                              "where team_id=%s and profile_version=%s and state in ('PENDING','RUNNING','FAILED')", (team_id,scope['version']))
             profile = TeamProfile.model_validate(scope['profile'])
             # Historical facts remain browsable and are evaluated against the
             # current scope, explicitly identified as such by the GFC UI.
@@ -52,10 +58,16 @@ def refresh_member_results(db):
                              Jsonb(eligibility.model_dump(mode='json')),Jsonb(asdict(recommendation)) if recommendation else None))
                         computed += 1
                 cursor = rows[-1]['id']
+            if team_id:
+                with db.transaction() as c:
+                    c.execute("update startup_radar.profile_calculation_requests r set state=case when p.version=r.profile_version and p.profile=%s then 'SUCCESS' else 'SUPERSEDED' end,finished_at=now() "
+                              "from startup_radar.team_profiles p where r.team_id=%s and r.profile_version=%s and p.team_id=r.team_id and r.state='RUNNING'",
+                              (Jsonb(scope['profile']),team_id,scope['version']))
         with db.transaction() as c:
             c.execute("update startup_radar.member_read_state set state='SUCCESS',finished_at=now() where singleton")
     except Exception as error:
         with db.transaction() as c:
             c.execute("update startup_radar.member_read_state set state='FAILED',finished_at=now(),error_kind=%s where singleton", (type(error).__name__,))
+            c.execute("update startup_radar.profile_calculation_requests set state='FAILED',finished_at=now(),error_kind=%s where state='RUNNING'", (type(error).__name__,))
         raise
     return {'status': 'SUCCESS', 'computed': computed, 'scopes': len(scopes), 'delivery': 'DISABLED'}

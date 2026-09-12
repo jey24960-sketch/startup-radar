@@ -33,7 +33,6 @@ begin
    insert into startup_radar.teams(name) values('[STAGING ROLLBACK] '||(item->>'name')) returning id into team;
    teams := array_append(teams,team);
    insert into startup_radar.team_profiles(team_id,profile) values(team,item->'profile');
-   insert into startup_radar.team_profile_versions(team_id,version,profile) values(team,1,item->'profile');
   end loop;
   insert into startup_radar.team_members(team_id,user_id,role) values(teams[1],users[1],'OWNER'),(teams[5],users[2],'OWNER');
   insert into startup_radar.telegram_subscriptions(team_id,chat_id,enabled) values(teams[1],'staging-not-a-real-chat',false);
@@ -102,7 +101,7 @@ begin
 
   set local role service_role;
   assert (select count(*)=5 from startup_radar.team_profiles where team_id=any(teams)), 'Service role read failed';
-  update startup_radar.team_profiles set version=version where team_id=teams[1];
+  update startup_radar.team_profiles set version=version+1 where team_id=teams[1];
   get diagnostics changed=row_count;
   assert changed=1, 'Service role write failed';
   reset role;

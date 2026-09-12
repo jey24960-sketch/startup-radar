@@ -1,0 +1,56 @@
+{
+  "date": "2026-09-12",
+  "phase": "A_IN_PROGRESS",
+  "migration": "20260912141227_gfc_radar_profile_commands",
+  "schema": {
+    "before": 1083,
+    "after": 1085,
+    "removed_or_changed": 0,
+    "added": [
+      {
+        "kind": "function",
+        "name": "gfc_radar_create_team(p_name text, p_preset integer, p_request_"
+      },
+      {
+        "kind": "function",
+        "name": "gfc_radar_update_profile(p_team_id uuid, p_expected_version int"
+      }
+    ]
+  },
+  "roles": {
+    "checks": [
+      "anonymous create/update denied",
+      "external create denied",
+      "retry returns same team",
+      "owner binding and Stage 0 UNKNOWN preserved",
+      "profile/history/request atomic and pending",
+      "stale version denied",
+      "invalid profile denied",
+      "raw write cannot skip version",
+      "member cannot forge queue success",
+      "foreign team denied",
+      "viewer denied",
+      "external stray editor denied",
+      "rejected changes leave version intact"
+    ],
+    "status": "PASS",
+    "auth_profiles_modified": false,
+    "synthetic_rows_rolled_back": true
+  },
+  "advisors": {
+    "new_warnings": 0,
+    "new_info": 1,
+    "reason": "team_creation_requests: intentionally private, RLS enabled and no authenticated/anon grants or policies",
+    "existing_security_definer_warnings": 37
+  },
+  "local_tests": {
+    "python_full_before_last_two_new_cases": 160,
+    "profile_commands_latest": 7,
+    "gfc_node": 63,
+    "gfc_browser": 11,
+    "no_python_origin_browser": 2,
+    "build": "PASS"
+  },
+  "real_oauth_browser": "NOT_RUN",
+  "cutover": "NOT_PERFORMED"
+}

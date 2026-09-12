@@ -32,7 +32,6 @@ class Database:
             team=c.execute('insert into startup_radar.teams(name) values(%s) returning *',(name,)).fetchone()
             c.execute("insert into startup_radar.team_members(team_id,user_id,role) values(%s,%s,'OWNER')",(team['id'],owner_id))
             c.execute('insert into startup_radar.team_profiles(team_id,profile) values(%s,%s)',(team['id'],Jsonb(profile.model_dump(mode='json'))))
-            c.execute('insert into startup_radar.team_profile_versions(team_id,version,profile) values(%s,1,%s)',(team['id'],Jsonb(profile.model_dump(mode='json'))))
             return team
 
     def save_profile(self,team_id,profile,user_id,expected_version):
@@ -43,8 +42,6 @@ class Database:
             row=c.execute('update startup_radar.team_profiles set profile=%s,version=version+1,updated_at=now() where team_id=%s returning *',
                           (Jsonb(profile.model_dump(mode='json')),team_id)).fetchone()
             if not row: raise PermissionError('Editing requires owner/editor membership')
-            c.execute('insert into startup_radar.team_profile_versions(team_id,version,profile) values(%s,%s,%s)',
-                      (team_id,row['version'],Jsonb(row['profile'])))
             return row
 
     def upsert_source(self,slug,name,adapter,config):
@@ -145,4 +142,3 @@ class Database:
         c.execute('insert into startup_radar.program_source_snapshots(program_id,program_version_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata,source_config,detail_hash,observation_hash,extraction_metadata) '
                   'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict do nothing',
                   (pid,vid,source_id,source_program_id,discovery_url,detail_url,Jsonb(raw_metadata),Jsonb(source_config),digest(raw_text),digest(observation),Jsonb(extraction_metadata or {})))
-
