@@ -19,6 +19,8 @@ Follow-up diagnosis reproduced model output using a string for `student_status`,
 
 The HTTP layer now distinguishes unavailable robots files from explicit restrictions. [RFC 9309 section 2.3.1.3](https://www.rfc-editor.org/rfc/rfc9309.html#section-2.3.1.3) permits resource access when robots returns 4xx. StartupRadar accepts robots 400/404/410 as unavailable, while continuing to stop on robots 401/403/429, network failures, server errors and explicit Disallow. A 400 response from the actual API remains a typed HTTP failure. No alternative identity, proxy, CAPTCHA bypass or host restriction change is used.
 
+The subsequent K-Startup attempt reached the official endpoint but was denied. Inspection of key formatting (without displaying its value) showed that the supplied key was already percent-encoded. Requests encodes query parameters, so the adapter now decodes the supplied key exactly once with `unquote`, retaining literal `+` characters, before passing it through `params`. Both portal-provided encoded and decoded forms now produce the same wire encoding. This changes request serialization only; it does not alter credentials or bypass API authorization.
+
 ## Adding a Source
 
 1. Verify the organization's public official list/feed/API and its robots/access rules. Do not guess selectors or endpoints.

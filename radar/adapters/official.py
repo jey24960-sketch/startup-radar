@@ -2,7 +2,7 @@
 import json
 import os
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin,unquote
 from radar.adapters.longtail import HtmlAdapter
 from radar.adapters.base import Candidate,SourceFailure
 from radar.dates import korean_date
@@ -27,6 +27,9 @@ class KStartupApiAdapter(HtmlAdapter):
     def discover(self):
         key=os.environ.get(self.config.get('key_env','KSTARTUP_API_KEY'))
         if not key:raise SourceFailure('MISSING_CREDENTIAL','KSTARTUP_API_KEY is required')
+        # Public-data portals supply encoded and decoded key forms. Requests
+        # encodes params itself; decode once without treating literal '+' as space.
+        key=unquote(key)
         maximum=self.config.get('max_pages',100);size=self.config.get('page_size',100)
         for page in range(1,maximum+1):
             data,_,_=self.http.get(self.endpoint,params={'serviceKey':key,'page':page,'perPage':size,'returnType':'json'})

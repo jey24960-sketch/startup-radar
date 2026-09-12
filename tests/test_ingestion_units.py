@@ -94,6 +94,19 @@ def test_kstartup_documented_fields(monkeypatch):
     assert not program.evidence_complete
 
 
+@pytest.mark.parametrize('key',['fixture+key/value==','fixture%2Bkey%2Fvalue%3D%3D'])
+def test_kstartup_encoded_and_decoded_keys_share_one_wire_encoding(monkeypatch,key):
+    import requests
+    monkeypatch.setenv('KSTARTUP_API_KEY',key)
+    client=http({'data':[],'totalCount':0})
+    assert list(KStartupApiAdapter(source('KSTARTUP'),client).discover())==[]
+    params=client.get.call_args.kwargs['params']
+    assert params['serviceKey']=='fixture+key/value=='
+    prepared=requests.Request('GET',KStartupApiAdapter.endpoint,params=params).prepare()
+    assert 'serviceKey=fixture%2Bkey%2Fvalue%3D%3D' in prepared.url
+    assert '%252B' not in prepared.url
+
+
 def test_bizinfo_documented_fields(monkeypatch):
     monkeypatch.setenv('BIZINFO_API_KEY','fixture-key')
     row={'seq':'PBLN1','title':'지원사업','link':'https://example.org/1','author':'Agency','reqstDt':'20260901 ~ 20260930'}
