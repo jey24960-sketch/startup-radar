@@ -86,6 +86,7 @@ def detect_kind(data,filename,mime):
             if any(n.startswith('Contents/section') for n in names):return 'hwpx'
         raise ValueError('Unrecognized ZIP document')
     if mime in ('text/html','application/xhtml+xml') and b'<' in data[:1000]:return 'html'
+    if suffix=='.txt' and mime in ('text/plain','application/octet-stream'):return 'txt'
     raise ValueError('Unsupported or mismatched document type')
 
 
@@ -99,6 +100,9 @@ def extract_document(data,filename,mime):
         text='\n'.join(page.extract_text() or '' for page in reader.pages)
     elif kind in ('docx','hwpx'):text=extract_zip(data,kind)
     elif kind=='hwp':text=extract_hwp(data)
+    elif kind=='txt':
+        text=data.decode('utf-8-sig',errors='strict')
+        if any(ord(c)<32 and c not in '\r\n\t' for c in text):raise ValueError('Binary control characters in text attachment')
     else:text=html_text(data)
     if not text.strip():raise ValueError('No extractable text; OCR/manual review required')
     if len(text)>MAX_TEXT:raise ValueError('Extracted text limit; manual review required')

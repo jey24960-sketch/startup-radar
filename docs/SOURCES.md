@@ -23,6 +23,8 @@ The subsequent K-Startup attempt reached the official endpoint but was denied. I
 
 After request and URL-mapping fixes, the official API returned and persisted all three sampled current notices (IDs 179222/179221/179220). The verified portal detail uses `.app_notice_details-wrap`; downloads use `a[name="downloadBtn"][href^="/afile/fileDownload/"]`, with filenames in the enclosing `li.clear a.file_bg`. Explicitly configured download controls are retained even when extensions are absent or the file type is unsupported. Unsupported documents must produce visible parse failures instead of disappearing from completeness checks. The sample remains bounded and is not a full national crawl.
 
+The portal also publishes UTF-8 `.txt` alternatives beside poster images, served as `application/octet-stream`. One real text download decoded to 917 characters. These explicitly named text attachments now use strict UTF-8/BOM decoding, reject binary controls, and retain the existing byte/text/process limits. Images remain unsupported rather than being mistaken for missing attachments.
+
 ## Adding a Source
 
 1. Verify the organization's public official list/feed/API and its robots/access rules. Do not guess selectors or endpoints.

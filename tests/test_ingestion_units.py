@@ -177,6 +177,15 @@ def test_xml_document_extractors(kind,path):
     assert detected==kind and '예비창업자' in text
 
 
+def test_official_utf8_text_attachment_with_binary_download_mime():
+    kind,text=extract_document('지원대상: 서울시 소재 스타트업'.encode('utf-8-sig'),'poster.txt','application/octet-stream')
+    assert kind=='txt' and text=='지원대상: 서울시 소재 스타트업'
+    with pytest.raises(ValueError,match='control characters'):
+        extract_document(b'hello\x00world','poster.txt','application/octet-stream')
+    with pytest.raises(UnicodeDecodeError):
+        extract_document(b'\xff\xff','poster.txt','text/plain')
+
+
 @pytest.mark.parametrize('filename',['notice.pdf','notice.hwp','notice.hwpx'])
 def test_document_failure_retains_metadata(filename):
     result=fetch_document(http('this is not a document'),'https://example.org/doc',filename)
