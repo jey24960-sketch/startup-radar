@@ -29,6 +29,24 @@ the eligibility result and document state remain authoritative. User profile
 questions address missing user facts separately. Filling them does not resolve a
 source interpretation limitation.
 
+Extractor `requirements-2.0.7` also checks grounded applicant passages even when
+the model omits a rule. A headquarters/factory enterprise qualification cannot
+be certified by a generic `region` value. Facility-qualified AI region rules
+lose certainty (including when a model quotes only the region name); other
+independent confirmed restrictions still apply. A missing business-status rule
+in these bounded applicant passages produces `BUSINESS_STATUS_NOT_EXPLICIT`,
+without inventing a registration requirement or excluding pre-business teams.
+`FACILITY_LOCATION_NOT_REPRESENTED` is retained in administrator metadata and
+currently uses the member projection's generic `UNCLASSIFIED_REVIEW` fallback,
+with the supporting quote. Reported unsupported model logic also retains a
+generic review flag; an unverified model quote is not exposed as evidence.
+
+These are bounded guards, not complete detection of omitted eligibility rules.
+Titles and unrelated benefit text are not used to infer an enterprise condition.
+Ordinary residence/region rules remain usable. Model/schema version changes
+invalidate analysis cache keys; previously saved versions retain their history
+and require re-ingestion to receive these guards.
+
 Migration: `20260912193318_gfc_radar_source_review.sql`. It adds the private helper
 and replaces only the existing public detail implementation. No existing table,
 RLS policy, user identity, profile, schedule, or public Auth object is changed.

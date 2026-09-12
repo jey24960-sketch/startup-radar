@@ -62,6 +62,26 @@ def test_future_commitment_omitted_from_model_quote_still_blocks_complete_claim(
     assert not p.evidence_complete
 
 
+def test_verified_applicant_summary_prevents_cherry_picked_location_coverage():
+    text='수도권에 본사 또는 공장이 소재한 기업'
+    p=Program(title='Fixture',organization='Official',official_url='https://example.org/1',applicant_summary=text)
+    result=extract({'eligibility_section_quote':'수도권','requirements':[{
+        'key':'region','operator':'EQ','value':'수도권','certain':True,
+        'evidence':[{'source_id':'source','text':'수도권','method':'LLM','confidence':1}]}]},text,p)
+    assert not result.evidence_complete and not result.requirements[0].certain
+    assert evaluate(TeamProfile(region='부산'),result.requirements,result.evidence_complete).status=='UNVERIFIABLE'
+
+
+def test_unsupported_logic_retains_grounded_review_reason():
+    text='교육과정 출석률 70% 이상 및 오프라인 행사 참여 필수'
+    payload={'requirements':[],'program_types':['EDUCATION'],'eligibility_section_quote':text,'unsupported_logic':True}
+    client=SimpleNamespace(messages=SimpleNamespace(create=lambda **kw:SimpleNamespace(content=[SimpleNamespace(type='text',text=json.dumps(payload))])))
+    p=Program(title='Fixture',organization='Official',official_url='https://example.org/1')
+    extractor=RequirementExtractor(client)
+    extractor.extract(p,AcquiredDetail(p.official_url,text,p.title),[],'source')
+    assert extractor.review_flags==[{'kind':'UNCLASSIFIED_REVIEW','quotes':[text]}]
+
+
 @pytest.mark.parametrize('quote,value,hour',[
     ('접수 마감: 2026. 9. 30.(수) 오전 11시까지','2026-09-30T11:00:00+09:00',11),
     ('접수 마감: 2026년 9월 30일 오후 1시 30분','2026-09-30T13:30:00+09:00',13),

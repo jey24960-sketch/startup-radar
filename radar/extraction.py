@@ -10,7 +10,7 @@ from radar.models import StrictModel,Requirement,Program,ProductStage,TeamStatus
 from radar.adapters.base import SourceFailure
 from radar.dates import korean_date
 from core.clock import SEOUL
-from radar.extraction_review import rule_review_reasons,future_commitments
+from radar.extraction_review import rule_review_reasons,future_commitments,omitted_applicant_conditions
 
 ProgramType=Literal['GRANT','COMPETITION','INCUBATION','ACCELERATION','INVESTMENT_LINKED','WORKSPACE',
     'GLOBAL','MARKET_ENTRY','EDUCATION','MENTORING','POLICY_LOAN','SME_FINANCING','GENERIC_RD','UNKNOWN']
@@ -80,7 +80,7 @@ def cited_datetime(value,quote,end=False,source_texts=()):
 
 
 class RequirementExtractor:
-    version='requirements-2.0.6'
+    version='requirements-2.0.7'
     def __init__(self,client=None,model=None):
         self.client=client
         self.model=model or os.environ.get('RADAR_EXTRACTION_MODEL','claude-sonnet-4-5')
@@ -117,6 +117,9 @@ class RequirementExtractor:
           'Never replace an unsupported qualification, designation, exclusion, tax rule or administrative sanction with EXISTS '
           'or an approximate business_status/applicant_type rule. Omit rules that cannot be represented and set unsupported_logic=true. '
           'An office/contact/submission address is not evidence of an applicant location restriction. '
+          'The generic region profile field does not specify headquarters, factory, branch or multiple establishments. '
+          'Do not flatten a headquarters/factory location qualification into region; set unsupported_logic=true. '
+          'An enterprise-only applicant passage must not become complete after retaining only its location rule. '
           'Requirements are a conjunction (ALL mandatory rules). If a rule cannot be represented safely, including complex OR/exceptions, '
           'set unsupported_logic=true and evidence_complete=false. Do not turn an OR clause into multiple mandatory rules. '
           'A business-age limit that applies only to existing businesses must not become a mandatory rule for pre-business applicants. '
@@ -168,6 +171,16 @@ class RequirementExtractor:
                 self.review_flags.append({'kind':reason,'requirement_key':rule.key,
                     'quotes':[e.text[:500] for e in rule.evidence if e.verified]})
         self.review_flags.extend(future_commitments(evidence))
+        applicant_flags=omitted_applicant_conditions(evidence,[*program.requirements,*extracted.requirements],
+            program.applicant_summary,extracted.eligibility_section_quote)
+        self.review_flags.extend(applicant_flags)
+        if any(f['kind']=='FACILITY_LOCATION_NOT_REPRESENTED' for f in applicant_flags):
+            for rule in extracted.requirements:
+                if rule.key=='region':rule.certain=False
+        if extracted.unsupported_logic:
+            quote=extracted.eligibility_section_quote.strip()
+            supported=bool(quote) and any(compact(quote) in compact(t) for t in evidence.values())
+            self.review_flags.append({'kind':'UNCLASSIFIED_REVIEW','quotes':[quote[:500]] if supported else []})
         coverage=bool(extracted.eligibility_section_quote.strip()) and any(compact(extracted.eligibility_section_quote) in compact(t) for t in evidence.values())
         date_supported=bool(compact(extracted.date_evidence_quote or '')) and any(compact(extracted.date_evidence_quote) in compact(t) for t in evidence.values())
         def can_fill(which):return getattr(program,'application_'+which+'_at') is None or getattr(program,'application_'+which+'_precision')=='DATE'

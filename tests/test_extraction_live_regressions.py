@@ -83,3 +83,37 @@ def test_broad_applicant_category_cannot_exclude_prebusiness_applicants():
 def test_explicit_registered_business_condition_still_supports_rejection():
     p=extract({'key':'business_status','operator':'IN','value':['SOLE_PROPRIETOR','CORPORATION']},'신청일 현재 사업자등록을 완료한 기업만 지원 가능')
     assert evaluate(TeamProfile(business_status='PRE_BUSINESS'),p.requirements,p.evidence_complete).status=='INELIGIBLE'
+
+
+def test_procurement_facility_alternative_cannot_be_reduced_to_generic_region():
+    quote='신청대상\n수도권에 본사 또는 공장이 소재한 공공조달시장 관심 기업'
+    p=extract({'key':'region','operator':'IN','value':['수도권']},quote)
+    assert not p.evidence_complete and not p.requirements[0].certain
+    for region in (None,'서울','부산'):
+        # Neither approval nor rejection follows from a generic team location:
+        # its headquarters/factory may be elsewhere.
+        result=evaluate(TeamProfile(business_status='PRE_BUSINESS',region=region),p.requirements,p.evidence_complete)
+        assert result.status=='UNVERIFIABLE' and not result.failed_requirements
+
+
+def test_omitted_enterprise_rule_detected_even_when_model_omits_all_rules():
+    from radar.extraction_review import omitted_applicant_conditions
+    text='수도권에 본사 또는 공장이 소재한 공공조달시장 관심 기업'
+    flags=omitted_applicant_conditions({'official':text},[],text,'')
+    assert {f['kind'] for f in flags}=={'BUSINESS_STATUS_NOT_EXPLICIT','FACILITY_LOCATION_NOT_REPRESENTED'}
+    assert all(f['quotes']==[text] for f in flags)
+    assert omitted_applicant_conditions({'official':'다른 원문'},[],text,text)==[]
+    assert omitted_applicant_conditions({'official':text},[],'누구나 참여 가능','')==[]
+
+
+def test_ordinary_region_and_independent_hard_failure_survive_review():
+    from radar.models import Requirement,Evidence
+    from radar.extraction_review import rule_review_reasons
+    rule=Requirement(key='region',operator='EQ',value='서울',certain=True,
+        evidence=[Evidence(source_id='official',text='서울 거주 예비창업자',method='LLM',confidence=1,verified=True)])
+    assert rule_review_reasons(rule)==[]
+    quote='수도권에 본사 또는 공장이 소재한 기업'
+    p=extract({'key':'region','operator':'IN','value':['수도권']},quote)
+    p.requirements.append(Requirement(key='founder_age',operator='LTE',value=39,certain=True,
+        evidence=[Evidence(source_id='official',text='만 39세 이하',method='STRUCTURED_API',confidence=1,verified=True)]))
+    assert evaluate(TeamProfile(founder_age=45),p.requirements,p.evidence_complete).status=='INELIGIBLE'
