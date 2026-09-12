@@ -71,6 +71,48 @@ def test_profile_program_day_and_generation_changes_hide_stale_results(context):
     assert detail(c,version=c['saved']['version_id'])['calculation_state']=='READY'
 
 
+def test_source_review_is_version_scoped_sanitized_and_member_authorized(context):
+    c=context
+    metadata={'review_flags':[{'kind':'FUTURE_COMMITMENT_NOT_REPRESENTED','quote':'입주 후 사업자등록 필요','private_debug':'must-not-leak'},
+                              {'kind':'unknown-internal-code','quotes':['x'*600,17,None,''], 'secret':'must-not-leak'}],
+              'private_provider_debug':'must-not-leak'}
+    c['db'].save_program(c['program'],c['source'],'first',c['program'].official_url,{},'Fixture only',extraction_metadata=metadata)
+    member=c['other']
+    with c['db'].transaction(member) as con:
+        assert con.execute('select count(*) n from startup_radar.program_source_snapshots').fetchone()['n']==0
+    current=detail(c,user=member)
+    assert current['calculation_state'] in ('PENDING','FAILED')
+    findings={f['kind']:f for f in current['source_review']}
+    assert findings['FUTURE_COMMITMENT_NOT_REPRESENTED']['quotes']==['입주 후 사업자등록 필요']
+    assert findings['UNCLASSIFIED_REVIEW']['quotes']==['x'*500]
+    assert all(set(f)=={'kind','quotes','source_url'} for f in findings.values())
+    assert 'must-not-leak' not in json.dumps(current['source_review'])
+    updated=c['program'].model_copy(deep=True);updated.application_end_at+=timedelta(days=1)
+    c['db'].save_program(updated,c['source'],'first',updated.official_url,{},'Changed conditions',extraction_metadata={'review_flags':[]})
+    assert detail(c,user=member)['source_review']==[]
+    assert detail(c,version=c['saved']['version_id'],user=member)['source_review']==current['source_review']
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        detail(c,c['team']['id'],user=member)
+    with c['db'].transaction() as con:
+        con.execute("insert into public.test_gfc_roles values(%s,'external')",(member,))
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        detail(c,user=member)
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        with c['db'].transaction(member) as con:
+            con.execute('select startup_radar.member_source_review(%s)',(c['saved']['version_id'],))
+    with c['db'].transaction() as con:
+        assert not con.execute("select has_function_privilege('anon','startup_radar.member_source_review(uuid)','EXECUTE') allowed").fetchone()['allowed']
+
+
+def test_source_review_uses_latest_observation_and_tolerates_invalid_metadata(context):
+    c=context
+    for flags in ([{'kind':'BUSINESS_STATUS_NOT_EXPLICIT','quotes':['a','a','b','c','d']}], {'malformed':'object'}):
+        c['db'].save_program(c['program'],c['source'],'first',c['program'].official_url,{},'Fixture only',extraction_metadata={'review_flags':flags})
+        findings=detail(c,user=c['other'])['source_review']
+        if isinstance(flags,list):assert findings[0]['quotes']==['a','b','c']
+        else:assert findings==[]
+
+
 def test_member_cache_survives_new_worker_processes(context):
     code = '''
 import json, os
