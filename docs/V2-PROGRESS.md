@@ -18,7 +18,7 @@ Complete approved scope: V2-SPEC.md. Baseline audit: V1-AUDIT.md. Branch: featur
 
 ## Verification
 
-- Final Python verification: 116 passed on native PostgreSQL 18.4, 1 third-party deprecation warning (Starlette/AnyIO BlockingPortal alias). Dependency check reports no broken requirements.
+- Final Python verification: 136 passed on native PostgreSQL 18.4, 1 third-party deprecation warning (Starlette/AnyIO BlockingPortal alias). Dependency check reports no broken requirements.
 - Worker tests: 4 passed.
 - Fresh migrations + team RLS/admin/anonymous denial assertions: passed with PGlite; native PostgreSQL profile/snapshot isolation tests also pass.
 - Four native concurrency tests cover simultaneous version saves, exclusive jobs, cadence claims and parallel high-fit planners/senders. CI configuration provisions PostgreSQL 17; its GitHub execution is pending.
@@ -83,3 +83,14 @@ SOURCES.md: exact official contracts, adding sources and real long-tail evidence
 - The admin job cancellation API retires queued/orphan/uncertain requests under the same execution lock, preserves an audit record, prevents late workflow execution, rejects non-admins/terminal jobs and refuses a concurrent live job. Direct API integration and native lock tests pass. No actual GitHub cancellation or Telegram send occurred.
 - All 116 Python tests passed on native PostgreSQL; all five migrations and RLS assertions passed on a fresh PGlite instance. Python compilation and whitespace checks passed. The previous frontend build and four Worker checks remain valid because neither frontend nor Worker changed in this checkpoint.
 - OPERATIONS.md provides the investigation/recovery runbook. Remaining gaps include production credentials/hosted Auth, real transport/workflow/crash exercises, full matched-period notice validation, complex extraction evaluation and cutover. Schedule-claim reconciliation and automated operator paging are still limited.
+
+
+## Evidence/cutoff checkpoint
+
+- Extraction and eligibility versions are 2.0.2. Unsupported OR output cannot create a hard failure; independent structured rules remain intact. Empty evidence, list/scalar operator mismatch and registration-date EXISTS are handled explicitly.
+- Explicit Korean cutoff times are validated against full date/time citations. Date-only citations cannot hide nearby source times; unsupported formats and incomplete dates remain review failures. AI extraction is atomic with respect to the caller's official Program.
+- Benefits require quoted source support. Quote presence checks do not guarantee semantic correctness or full section coverage.
+- Full native PostgreSQL Python suite: 136 passed, one unchanged third-party deprecation warning. Compilation and whitespace checks passed. No database migration, frontend, Worker or dependency change in this checkpoint.
+- Real previously acquired KHU detail: 2026-09-15 13:00 Seoul preserved; one second after cutoff is CLOSED. This validates deterministic parsing against source text, not live AI extraction accuracy.
+- Current local V2 process environment was checked: DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, ANTHROPIC_API_KEY, KSTARTUP_API_KEY, BIZINFO_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET and RADAR_GITHUB_TOKEN are unset. This does not assert that existing GitHub/production secrets are absent.
+- Supabase project inventory was refreshed; no project is named StartupRadar. No unrelated project was changed. The project ID and web deployment target have been requested from the user. Live Auth/API/delivery/parallel validation remains blocked on actual setup, while local required work continues.

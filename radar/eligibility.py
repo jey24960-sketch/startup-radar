@@ -65,7 +65,7 @@ def evaluate(profile: TeamProfile, requirements: list[Requirement], evidence_com
         try:
             expected=rule.value
             if rule.key=='region':actual=region_value(actual);expected=region_value(expected)
-            if isinstance(actual,date):
+            if isinstance(actual,date) and rule.operator!='EXISTS':
                 expected=[date.fromisoformat(v) for v in expected] if isinstance(expected,list) else date.fromisoformat(expected)
             if alternatives is not None:
                 outcomes=[compare(v,rule.operator,expected) for v in alternatives]

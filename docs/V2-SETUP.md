@@ -135,3 +135,8 @@ python -m radar.cli compare --v1 path/to/v1-report.json --team-id EXISTING_TEAM_
 The command only reads V2 data, evaluates its current program/profile snapshot, and writes a local report. It does not send notifications or approve cutover. It lists exact URL/alias matches, unique title+organization matches, V1-only/V2-only items, ambiguous/fuzzy candidates, eligibility review, source failures and profile version. Missing collection timestamps, old filtered V1 reports and collection gaps over six hours are explicit limitations. The V2 catalog may include closed or older notices; raw count differences are not coverage measurements. Run a matched-period cohort repeatedly and investigate each difference before any production switch. No live matched-period V1/V2 comparison has been completed yet.
 
 See [OPERATIONS.md](OPERATIONS.md) for source failures, dispatch races, audited request cancellation, Telegram recovery and duplicate review.
+
+
+## Extraction schema update
+
+Requirements schema 2.0.2 accepts explicit `application_start_at`/`application_end_at` ISO timestamps with timezone and a full verbatim `date_evidence_quote`. Date-only fields remain supported when the source does not specify a time. `benefit_evidence_quote` is needed to retain an AI-generated benefit summary. Unsupported OR/exceptions yield uncertain AI requirements. Existing official Program data is unchanged when extraction fails. Re-ingest source records to benefit from the new validation; it does not retroactively certify earlier AI outputs.

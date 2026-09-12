@@ -119,6 +119,8 @@ class Requirement(StrictModel):
         if self.operator in ('IN','NOT_IN','RANGE') and not isinstance(self.value,list):
             raise ValueError('Operator requires an array')
         if self.value is None:raise ValueError('Missing requirement value')
+        if self.key in ('industry','prior_support_restrictions') and self.operator not in ('IN','NOT_IN'):
+            raise ValueError('Set-valued profile fields require IN/NOT_IN/EXISTS')
         values=self.value if isinstance(self.value,list) else [self.value]
         if not values:raise ValueError('Requirement values cannot be empty')
         numeric={'founder_age','business_age_months','team_size','revenue'}
@@ -149,7 +151,7 @@ class EligibilityResult(StrictModel):
     missing_profile_fields: list[str] = Field(default_factory=list)
     unverifiable_requirements: list[dict] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
-    engine_version: str = 'eligibility-2.0.1'
+    engine_version: str = 'eligibility-2.0.2'
 
 
 class Program(StrictModel):
