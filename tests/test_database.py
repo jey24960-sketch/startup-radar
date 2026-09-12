@@ -242,6 +242,44 @@ def test_original_source_observation_survives_updates(db):
         assert snapshots[1]['program_version_id']==second['version_id']
 
 
+def test_ocr_draft_survives_unchanged_version_without_rewriting_trusted_documents(db):
+    p=program();s=source(db)
+    doc={'original_url':'https://example.org/poster.png','filename':'poster.png','content_hash':'fixture-image',
+         'fetch_status':'SUCCESS','extraction_status':'FAILED','error_kind':'DOCUMENT_OCR_REQUIRED'}
+    first=db.save_program(p,s,'ocr-source',p.official_url,{},'same source',documents=[doc])
+    doc.update(error_kind='DOCUMENT_OCR_REVIEW',ocr_review={'review_required':True,'pages':[{'page':1,'text':'attendance required'}]})
+    metadata={'review_flags':[]}
+    second=db.save_program(p,s,'ocr-source',p.official_url,{},'same source',documents=[doc],extraction_metadata=metadata)
+    db.save_program(p,s,'ocr-source',p.official_url,{},'same source',documents=[doc],extraction_metadata=metadata)
+    assert first['version_id']==second['version_id'] and second['event'] is None and metadata=={'review_flags':[]}
+    with db.transaction() as c:
+        rows=c.execute('select extraction_metadata from startup_radar.program_source_snapshots order by observed_at').fetchall()
+        assert len(rows)==2
+        review=rows[-1]['extraction_metadata']['document_ocr_reviews'][0]
+        assert review['content_hash']=='fixture-image' and review['draft']['review_required']
+        original=c.execute('select extraction_status,extracted_text from startup_radar.documents').fetchone()
+        assert original['extraction_status']=='FAILED' and original['extracted_text'] is None
+
+
+def test_adding_untrusted_ocr_draft_does_not_repeat_ai_analysis(db):
+    from radar.analysis_cache import extract_cached
+    from radar.adapters.base import AcquiredDetail
+    p=program();s=source(db);detail=AcquiredDetail(p.official_url,'same source',p.title)
+    doc={'original_url':'https://example.org/poster','content_hash':'fixture',
+         'fetch_status':'SUCCESS','extraction_status':'FAILED','error_kind':'DOCUMENT_OCR_REQUIRED'}
+    class Extractor:
+        calls=0
+        def extract(self,program,*args):
+            self.calls+=1
+            return program
+    extractor=Extractor()
+    extract_cached(db,extractor,p,detail,[doc],s,{})
+    doc.update(error_kind='DOCUMENT_OCR_REVIEW',ocr_review={'review_required':True,'pages':[{'text':'draft'}]})
+    metadata={}
+    extract_cached(db,extractor,p,detail,[doc],s,metadata)
+    assert extractor.calls==1 and metadata['cache_hit']
+
+
 def test_parallel_snapshot_is_read_only_and_does_not_invent_collection_time(db):
     from radar.parallel import v2_snapshot,compare
     owner=uuid4()

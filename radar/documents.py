@@ -22,7 +22,7 @@ MAX_EXPANDED=40_000_000
 MAX_TEXT=1_000_000
 DOCUMENT_FAILURE_KINDS=frozenset({
     'DOCUMENT_PARSE','DOCUMENT_OCR_REQUIRED','DOCUMENT_EMPTY','DOCUMENT_LIMIT',
-    'DOCUMENT_TIMEOUT','DOCUMENT_PROCESS',
+    'DOCUMENT_TIMEOUT','DOCUMENT_PROCESS','DOCUMENT_OCR_REVIEW','DOCUMENT_OCR_SETUP',
 })
 
 
@@ -151,6 +151,16 @@ def fetch_document(http,url,filename):
             result.update(extraction_status='SUCCESS',extracted_text=text)
         except DocumentFailure as error:
             result.update(extraction_status='FAILED',error_kind=error.kind,error_message=str(error)[:300])
+            if error.kind=='DOCUMENT_OCR_REQUIRED' and os.environ.get('RADAR_OCR_MODEL_DIR'):
+                try:
+                    from radar.ocr import extract_ocr_isolated
+                    draft=extract_ocr_isolated(data,os.environ['RADAR_OCR_MODEL_DIR'],os.environ.get('RADAR_OCR_CACHE_DIR'))
+                    result.update(ocr_review=draft,error_kind='DOCUMENT_OCR_REVIEW',
+                                  error_message='OCR draft available; compare every page with the original before eligibility use')
+                except DocumentFailure as ocr_error:
+                    result.update(error_kind=ocr_error.kind,error_message=str(ocr_error)[:300])
+                except Exception:
+                    result.update(error_kind='DOCUMENT_PROCESS',error_message='OCR review processing failed')
         except Exception as error:
             result.update(extraction_status='FAILED',error_kind='DOCUMENT_PARSE',error_message=str(error)[:300])
     except SourceFailure as error:

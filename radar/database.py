@@ -51,6 +51,8 @@ class Database:
               (slug,name,adapter,Jsonb(config))).fetchone()
 
     def save_program(self,program:Program,source_id,source_program_id,discovery_url,raw_metadata,raw_text='',documents=None,extraction_metadata=None):
+        from radar.ocr import review_metadata
+        extraction_metadata=review_metadata(documents,extraction_metadata)
         normal=program.model_dump(mode='json'); canonical_url=normalize_url(program.official_url)
         fingerprint=digest({'normalized':normal,'raw':raw_text})
         with self.transaction() as c:
