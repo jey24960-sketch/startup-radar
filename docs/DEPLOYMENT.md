@@ -1,66 +1,59 @@
-> **Current goal:** [GFC integrated operation](GFC-OPERATING-GOAL.md) supersedes earlier hosting assumptions. A permanent Python API is not a prerequisite. [Phase A endpoint audit](PYTHON-API-DECISION.md) tracks direct Supabase conversion, async recalculation and the eventual server decision.
+# StartupRadar V2 배포와 실수집 검증
 
-# StartupRadar V2 배포 준비
+**Phase A 완료: Python HTTP API A. NOT REQUIRED.** GFC React/Vercel이 회원 UI이며 기존 Supabase 세션과 RPC로 필수 Radar 경로를 처리한다. Python은 배치로 실행한다. 별도 Python 호스트와 VITE_RADAR_API_URL을 설정할 필요가 없다. [API 판정](PYTHON-API-DECISION.md), [설정/상태 계약](SETTINGS-HEALTH.md), [현재 운영 Goal](GFC-OPERATING-GOAL.md)을 따른다.
 
-현재는 staging 단계다. 사용자 UI는 기존 GFC React/Vercel 사이트의 `/notice`와 `/radar/settings`로 확정했다. Python은 수집·판정 엔진과 인증 API로 배포한다. Supabase는 기존 GFC 프로젝트 `etvffzxqdgblvkfdikwl`이며 Radar 마이그레이션 3개와 GFC 공지 마이그레이션 1개를 적용했다. Python HTTP 의존성을 Supabase 조회·배치 재계산으로 줄이는 Phase A를 진행 중이며, 상시 Python 호스팅 필요성은 아직 확정하지 않았다. 최신 결정은 [GFC 통합 명세](GFC-NOTICE-INTEGRATION-DECISION.md), 계약과 검증은 [통합 보고서](GFC-NOTICE-INTEGRATION.md)를 따른다. 기존 V1 운영 전환은 하지 않는다.
+공유 Supabase는 `etvffzxqdgblvkfdikwl`, Radar 데이터는 `startup_radar`다. GFC 공지는 별도 `public.gfc_notices`다. 최신 적용은 `20260912143423_gfc_radar_preferences_and_health`이며 두 저장소의 공유 ledger를 일괄 push/repair하지 않는다. 현재 브랜치 구현·공유 DB 적용·자동 테스트는 운영 전환과 구분한다.
 
-## 준비된 실행 방법
+## 필요한 실행 설정
 
-저장소 루트의 Dockerfile은 Node로 프런트엔드를 빌드하고 Python 실행 이미지에 정적 파일을 포함한다. 실행 프로세스는 일반 사용자 권한으로 구동한다. 빌드 대상은 `.dockerignore` 허용 목록으로 제한하며 `.env`, 로컬 작업 자료, Git 기록은 제외한다. 비밀값은 이미지 빌드가 아니라 호스팅의 런타임 환경변수에 설정한다.
+| 실행 위치 | 설정 이름 | 용도/현재 확인 |
+|---|---|---|
+| Radar GitHub Actions Secrets | RADAR_DATABASE_URL | Python에는 DATABASE_URL로 전달. 현재 저장소 Secrets 이름 목록에서 확인되지 않음 |
+| 같은 위치 | KSTARTUP_API_KEY, BIZINFO_API_KEY | 두 공식 API. 현재 저장소 Secrets 이름 목록에서 확인되지 않음 |
+| 같은 위치 | ANTHROPIC_API_KEY | 이름 존재 확인, 유효성·실제 호출 미검증 |
+| 같은 위치 | TELEGRAM_BOT_TOKEN | 이름 존재 확인. 승인 수신자 실검증 전에는 전송하지 않음 |
+| 로컬/기존 보안 배치 환경 | DATABASE_URL, 위 수집 키 | 기존 설정 환경이 있다면 그 환경에서 현재 코드로 검증 가능. 비밀값은 채팅/로그에 출력하지 않음 |
+| 기존 GFC Vercel | VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY | 기존 설정·Google OAuth 유지. DB 비밀번호/service-role은 브라우저에 넣지 않음 |
+
+저장소 설정: [StartupRadar Actions Secrets](https://github.com/jey24960-sketch/startup-radar/settings/secrets/actions). 이름 목록 점검은 조직/Environment/다른 호스트에 키가 없다는 증거가 아니다. GitHub Secret은 값을 다시 읽을 수 있는 로컬 저장소가 아니므로, Secrets 추가만으로 이 로컬 Python에 값이 전달되지는 않는다.
+
+DB 연결 주소는 해당 프로젝트의 Connect 화면에서 복사한다. IPv4 환경이면 session pooler를 사용하고 실제 host/사용자명을 추측하지 않는다. 현재 worker는 장시간 작업 동안 트랜잭션 advisory lock과 별도 DB 트랜잭션을 사용하므로 실제 연결 수·권한·SSL과 타임아웃을 검증한다. [Supabase 연결 안내](https://supabase.com/docs/guides/database/connecting-to-postgres).
+
+## 스케줄을 켜지 않는 수동 검증
+
+아래 명령은 현재 브랜치와 검토된 DB 연결이 있는 안전한 실행 환경에서 사용한다. 로컬 `.env.staging`은 자동 로드되지 않는다. 비밀값을 인자로 쓰거나 셸 출력에 표시하지 않는다.
 
 ```bash
-docker build -t startup-radar-v2 .
-# .env는 사용자가 별도로 설정한 로컬 파일이며 저장소에 커밋하지 않는다.
-docker run --rm --env-file .env -p 127.0.0.1:8000:8000 startup-radar-v2
-```
-
-Docker 없이 배포하는 Python 호스트는 기존 설치·웹 빌드 절차 후 아래 명령으로 시작할 수 있다. 이 명령은 `0.0.0.0`에 바인딩하므로 HTTPS 프록시 뒤의 서버에서 사용한다.
-
-```bash
-python -m radar.deployment --serve
-```
-
-`PORT`는 호스팅에서 제공하는 포트를 사용하고 기본값은 8000이다. 필수 웹 설정이나 정적 파일이 없으면 서버 시작 전에 종료 코드 1로 실패한다. 프록시 전달 헤더는 기본적으로 신뢰하지 않는다. 애플리케이션은 도메인 루트에 배포한다. `/`는 기본적으로 엔진 정보와 GFC 회원 UI 주소를 JSON으로 반환하며 DB·로그인 정상 동작을 보증하지 않는다. 기존 정적 대시보드는 기본 비활성화다. `RADAR_LEGACY_UI_ENABLED=true`는 기존 화면을 별도로 검증할 때만 사용한다.
-
-## 설정 점검
-
-```bash
-python -m radar.deployment
-python -m radar.deployment --component web
 python -m radar.deployment --component ingestion
-python -m radar.deployment --component delivery
-python -m radar.deployment --component webhook
-python -m radar.deployment --component dispatch
+# 등록된 한 소스로 수집·문서·판정·저장을 검증한다.
+python -m radar.cli run --kind INGEST --source korea-startup-html
+# 공식 키가 연결된 뒤 각각 실행한다.
+python -m radar.cli run --kind INGEST --source kstartup
+python -m radar.cli run --kind INGEST --source bizinfo
+# 수집/AI/Telegram 없이 저장 조회 결과만 다시 계산한다.
+python -m radar.cli run --kind REFRESH
 ```
 
-이 점검은 환경변수의 존재 여부와 웹 정적 파일·포트만 검사한다. 값, 비밀번호, 토큰은 출력하지 않는다. 외부 연결과 키 유효성을 검사하거나 공고 수집·메일·텔레그램 발송을 실행하지 않는다. `CONFIGURED`는 입력 준비 상태이며 운영 검증 통과를 의미하지 않는다. `ingestion`은 두 공식 API를 모두 사용하는 기본 수집 구성을 기준으로 한다. 특정 HTML 소스만 실행할 때의 최소 요건과 다르다.
+설정 검사 성공은 존재 여부 확인이며 인증/외부 연결 성공을 뜻하지 않는다. 기본 ingestion 검사는 두 공식 키와 AI까지 요구하므로 개별 HTML 수집의 최소 조건보다 엄격하다. 명시적 INGEST/REFRESH는 비활성 정기 스케줄과 독립적으로 실행된다. `--deliver`를 사용하지 않으면 실제 전송하지 않는다. INGEST는 해당 소스 프로그램을 저장하고 기존 엔진으로 판정과 회원 조회 결과를 갱신한다. 기존 출처·프로필을 초기화하거나 합성 회원을 만들지 않는다.
 
-| 용도 | 환경변수 |
-|---|---|
-| 웹 | DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY |
-| 기본 수집 | DATABASE_URL, ANTHROPIC_API_KEY, KSTARTUP_API_KEY, BIZINFO_API_KEY |
-| 알림 발송 | DATABASE_URL, TELEGRAM_BOT_TOKEN |
-| 텔레그램 명령 수신 | DATABASE_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET |
-| GitHub 작업 요청 | DATABASE_URL, RADAR_GITHUB_TOKEN, GITHUB_REPOSITORY, RADAR_GITHUB_REF |
+실행 전후 scheduling.enabled=false와 ingestion_enabled=false, 구독/알림 상태를 확인한다. 결과에는 실행 ID·소스 상태·공고/문서/버전·추출/판정 근거를 연결한다. 실패를 EMPTY로 기록하지 않는다. 실제 GFC 회원 화면에서 같은 프로그램·버전·근거를 확인하기 전에는 end-to-end PASS로 보고하지 않는다.
 
-## 기존 Python HTTP 경로를 유지할 경우의 조건부 절차
+## GitHub Actions의 현재 제약
 
-1. Radar 현행 마이그레이션 3개와 GFC 공지 마이그레이션 1개는 이미 적용했고 SQL 역할 기반 RLS 검증이 끝났다. 공유 ledger에는 두 저장소의 이력이 있으므로 일괄 db push/repair를 실행하지 않는다. 다음으로 실제 Python 프로세스의 DB 연결·풀러·제한된 권한을 검증한다.
-2. 지정한 웹 호스트에 런타임 설정을 등록하고 이미지를 빌드·실행한다. DB 접속 주소는 Supabase Connect 화면에서 얻는다.
-3. GFC Vercel에 `VITE_RADAR_API_URL`을 API HTTPS origin으로 설정한다. 기존 `VITE_SUPABASE_URL`·`VITE_SUPABASE_ANON_KEY`와 Google OAuth를 유지한다. API의 `RADAR_CORS_ORIGINS`는 정확한 GFC/검증 preview origin만 허용한다. GFC `profiles.role`의 member/admin이 회원 접근 조건이고, 비공개 팀 데이터는 추가 Radar 팀 권한을 요구한다. 별도 로그인·회원 체계를 만들지 않는다.
-4. 서로 다른 팀으로 권한 분리를 검증하고 실제 공고 수집·첨부문서·자격 판정 결과를 확인한다.
-5. V2 API의 `RADAR_GITHUB_REF`는 실제 코드가 있는 `feature/startup-radar-v2` 브랜치로 설정한다. [Radar PR #1](https://github.com/jey24960-sketch/startup-radar/pull/1)과 [GFC PR #9](https://github.com/jey24960-sketch/GFC-startup.com/pull/9)는 업로드된 Draft다. main은 아직 V2 실행 준비 상태가 아니다. 워크플로의 `RADAR_DATABASE_URL` Secret은 프로세스의 `DATABASE_URL`로 전달된다. 브랜치 수동 실행과 기본 브랜치 정기 실행을 구분한다.
-6. 별도 테스트 봇과 지정한 채팅에서 발송·명령·실패 복구를 검증한다. DB 구독 설정도 필요하다.
-7. V1/V2를 같은 기간에 비교한 뒤 운영 전환을 결정한다.
+`.github/workflows/startup_radar_v2.yml`은 기능 브랜치에 있으며 현재 기본 브랜치의 등록된 운영 워크플로 목록에는 없다. GitHub의 workflow_dispatch는 워크플로 파일이 기본 브랜치에 있어야 한다. `--ref feature/startup-radar-v2`만으로 이 선행 조건을 해결할 수 없다. [GitHub 수동 실행 안내](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
-상세 설정은 [V2-SETUP.md](V2-SETUP.md), 완료 기준은 [COMPLETION-AUDIT.md](COMPLETION-AUDIT.md)를 따른다. 애플리케이션 시작은 마이그레이션, 팀 생성, 스케줄 활성화, 알림 발송을 자동 실행하지 않는다.
+기존 V2 운영 job은 `RADAR_V2_ENABLED=true`일 때만 실행된다. 이 변수를 단순히 설정하거나 main에 전체 기능을 먼저 병합하지 않는다. 현재 가능한 첫 검증은 자격증명이 준비된 로컬/기존 보안 배치 환경에서 위 명시적 명령을 실행하는 것이다. Actions만 사용할 수 있다면 별도 검토된 수동 검증 진입점이 필요하며, 기본 브랜치 변경과 production schedule 활성화를 분리해야 한다. 현재 그런 변경·활성화는 수행하지 않았다.
 
-## 이번 검증과 한계
+정상 운영 시 workflow concurrency와 DB advisory lock이 중복 배치를 제한한다. DB TICK의 정기 수집·요약·마감 작업은 서울 기준 runtime_settings를 따른다. V2 repo/DB schedule과 delivery gate는 실운영 수락 기준 확인 전까지 비활성 유지한다.
 
-- 배포 설정 검사·시작 제어 테스트 4개 통과, 프런트엔드 빌드 통과.
-- 로컬 Docker/Podman은 없지만 [Radar CI 34695302768](https://github.com/jey24960-sketch/startup-radar/actions/runs/34695302768)에서 Docker 빌드·앱 import·정적 파일 검사와 Python 151개 테스트가 통과했다. 이는 실제 호스팅 프로세스·DB·OAuth 연결 검증과 별개다.
-- Docker 기본 이미지 태그는 보안 업데이트에 따라 바뀔 수 있다. 운영에서 검증한 이미지 digest를 기록해 재배포·복구한다.
-- 이 이미지는 Python HTTP/문서 수집용이다. 선택적 Playwright/Chromium 브라우저 수집 런타임은 포함하지 않는다.
-- `.env.staging`에 선택된 Supabase URL과 활성 publishable key를 준비했다. 이 파일은 Git/Docker 빌드에서 제외되며 애플리케이션이 자동 로드하지 않는다. DB 연결 문자열, 수집 API·AI·Telegram·GitHub 실행 자격증명은 여전히 필요하다. 기존 운영 서비스의 비밀값이 없다는 의미는 아니다.
+## 보존한 선택적 Python HTTP 유틸리티
 
-컨테이너 구성은 [Docker의 다단계 빌드 문서](https://docs.docker.com/build/building/multi-stage/)를 참고했다.
+기존 FastAPI, Dockerfile, 정적 dashboard, 설정 검사기는 호환성과 진단용으로 보존했다. GFC 배포 요건은 아니다. 필요할 때 기존 절차 `docker build -t startup-radar-v2 .` 및 `python -m radar.deployment --serve`로 검증할 수 있다. HTTP 사용 시에만 web 설정·정적 자산·HTTPS 프록시·허용 CORS를 검토한다. 기존 dashboard는 기본 비활성이고 `RADAR_LEGACY_UI_ENABLED=true`는 별도 유틸리티 검증용이다. 현재 GFC 코드는 VITE_RADAR_API_URL을 읽지 않는다.
+
+컨테이너는 일반 사용자로 실행하며 `.env`와 작업 자료를 빌드에서 제외한다. 선택적 JS 소스 수집용 Chromium은 포함하지 않는다. Container CI 성공은 실제 DB/OAuth/수집 성공을 대신하지 않는다.
+
+## 남은 운영 검증
+
+실제 공식 API/허용 HTML 수집 → 배치/Supabase 저장 → 실제 OAuth 역할과 팀별 GFC 화면 → 승인된 수신자의 요약·중요 공고·마감 알림 → 동일 기간 V1/V2 비교 → cutover 제안 순서다. 이전 profile trigger 이전 Python 코드의 수동 이력 INSERT는 현재 DB와 중복 키 충돌이 생기므로, 현재 브랜치 코드와 DB를 함께 검증해야 한다. [프로필 전환 계약](PROFILE-COMMANDS.md).
+
+실제 수집·계정·알림·병행 근거가 모이기 전에는 DONE/READY로 표시하지 않는다. V1 코드와 워크플로를 유지하며 main 병합·V2 운영 활성화·V1 교체는 수행하지 않았다.
