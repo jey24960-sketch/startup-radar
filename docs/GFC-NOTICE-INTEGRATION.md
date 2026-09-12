@@ -1,8 +1,10 @@
-> **Current goal:** [GFC integrated operation](GFC-OPERATING-GOAL.md) supersedes earlier hosting assumptions. A permanent Python API is not a prerequisite. [Phase A endpoint audit](PYTHON-API-DECISION.md) tracks direct Supabase conversion, async recalculation and the eventual server decision.
+> **최신 판정: Phase A 완료 / Python API A. NOT REQUIRED.** 필수 GFC Radar 9개 경로가 Supabase RPC로 전환됐다. 아래 초기 통합 수치와 구분하여 최신 계약·검증은 [설정/상태 계약](SETTINGS-HEALTH.md), [API 판정](PYTHON-API-DECISION.md), GFC-RADAR-SETTINGS-VERIFICATION.json을 참고한다. 실운영 수락 기준과 cutover는 미완료다.
+
+> **Current goal:** [GFC integrated operation](GFC-OPERATING-GOAL.md) supersedes earlier hosting assumptions. A permanent Python API is not a prerequisite. [Phase A endpoint audit](PYTHON-API-DECISION.md) tracks direct Supabase conversion, async recalculation and the final NOT REQUIRED decision.
 
 # StartupRadar 2.0 — GFC 공지 허브 통합 보고서
 
-작성 기준: 2026-09-12. 최신 첨부 지시 33개 항목을 기준으로 기존 V2를 확장했다. **기존 통합 구현을 보존하면서 Phase A 직접 Supabase 전환을 진행 중이다. 공고·상세·팀 조회 및 프로필 생성/저장은 전환했으며 알림 선호·관리 조회와 실제 운영 검증은 남아 있다.** 실데이터 수집·알림 운영 전환도 보류 상태다. 가상 화면 테스트와 실제 운영 검증을 구분한다.
+작성 기준: 2026-09-12. 기존 V2와 GFC 통합 구현을 보존하며 Phase A를 완료했다. 필수 9개 GFC Radar 경로가 Supabase RPC를 사용하고 Python HTTP 의존성은 제거됐다. 실제 소스·OAuth·알림·V1/V2 병행 검증은 남아 있으며 운영 전환을 수행하지 않았다.
 
 ## ARCHITECTURE AUDIT
 
@@ -71,7 +73,7 @@ gfc-startup.com     │
 
 ### Radar 및 보안
 
-현재 `startup_radar`는 **31개 테이블, 63개 RLS 정책, 91개 인덱스**다. 기존 28개 테이블 전부에 GFC 회원 필수의 RESTRICTIVE 정책을 추가했다. 원래 팀별 permissive 정책과 AND로 결합되므로 Radar 팀 기록만으로 GFC 비회원이 접근할 수 없다.
+현재 `startup_radar`는 **35개 테이블** (정책·인덱스 초기 집계 이후 후속 마이그레이션 추가)다. 기존 28개 테이블 전부에 GFC 회원 필수의 RESTRICTIVE 정책을 추가했다. 원래 팀별 permissive 정책과 AND로 결합되므로 Radar 팀 기록만으로 GFC 비회원이 접근할 수 없다.
 
 프로그램·버전·문서·요건·변경 이력은 검증된 GFC 회원에게 열고, 팀 프로필·판정·추천·팀별 캐시는 그 회원의 소속 팀으로 제한한다. 관리자 API는 기존 GFC admin을 사용한다. 관리자 전체 팀 목록에서도 개인 프로필을 일괄 반환하지 않으며 상세 추적은 해당 팀 접근을 추가 확인한다.
 
@@ -81,13 +83,13 @@ gfc-startup.com     │
 - `extraction_cache`: 수집 원문·첨부 내용·정규화 입력·모델·추출기 버전이 같은 성공 분석을 재사용한다. 브라우저 역할에는 권한이 없다.
 - `team_notification_preferences`: Telegram을 연결하기 전에도 알림 선호를 저장한다. 연결된 채널에는 설정을 반영하고, 이후 운영진이 연결할 때 저장된 선호를 적용한다.
 
-기존 GFC의 profiles/projects/teams/problems/auction/Auth 정책·함수·컬럼을 변경하지 않았다. 새 SECURITY DEFINER 함수는 추가하지 않았다. 공지의 수정 시각·revision 트리거만 SECURITY INVOKER로 추가했다.
+기존 GFC의 profiles/projects/teams/problems/auction/Auth 정책·함수·컬럼을 변경하지 않았다. 최초 공지 통합에는 SECURITY DEFINER를 추가하지 않았다. 후속 팀 최초 생성 및 설정/운영 조회에는 명시적 권한 검사를 수행하는 제한된 private 함수를 추가했다. 공지의 수정 시각·revision 트리거만 SECURITY INVOKER로 추가했다.
 
 ## BACKEND CONTRACTS
 
 GFC 공지는 기존 Supabase JS 클라이언트로 `gfc_notices`만 조회한다. 명시적 컬럼 목록, title 검색, 공개 상태, 게시 시점, 정렬, range 및 exact count를 사용한다. RLS가 비회원에게 회원 공지와 초안을 숨긴다.
 
-Radar 팀·프로필·공고·상세 조회는 기존 Supabase 세션과 RLS를 적용하는 RPC를 호출한다. 프로필 생성/저장은 RPC와 원자적 이력/재계산 요청을 사용한다. 남은 알림 선호·운영 상태 경로는 Python API 전송을 전환 중이다. 브라우저에는 DB 비밀번호·service-role·AI 키·Telegram 토큰이 없다.
+Radar 팀·프로필·공고·상세 조회는 기존 Supabase 세션과 RLS를 적용하는 RPC를 호출한다. 프로필 생성/저장은 RPC와 원자적 이력/재계산 요청을 사용한다. 알림 선호·운영 상태도 안전한 RPC로 전환되어 필수 Python HTTP 경로는 없다. 브라우저에는 DB 비밀번호·service-role·AI 키·Telegram 토큰이 없다.
 
 | 계약 | 용도 / 강제 권한 |
 |---|---|
@@ -117,7 +119,7 @@ Radar 팀·프로필·공고·상세 조회는 기존 Supabase 세션과 RLS를 
 
 기존 GFC의 어두운 내비게이션·푸터를 유지하고 본문은 밝은 slate/white, 강조는 cyan, 버튼은 navy로 구성했다. 390px 모바일에서 가로 넘침을 검사했다. 외부 링크는 HTTPS만 허용한다. 계정 또는 회원 자격 변경 시 해당 페이지의 개인 상태를 재설정하고, 이전 요청 응답이 새 계정 화면에 섞이지 않도록 처리한다.
 
-비회원에게는 Radar 탭의 실제 데이터·제목·건수를 가져오지 않는다. 학회원 전용 기능 설명과 로그인/기존 초대 코드 인증 안내만 표시한다. 로그인한 external도 동일하다. API 미설정·장애 시 GFC 공지는 독립적으로 이용 가능하고 Radar에 준비/재시도 상태를 표시한다.
+비회원에게는 Radar 탭의 실제 데이터·제목·건수를 가져오지 않는다. 학회원 전용 기능 설명과 로그인/기존 초대 코드 인증 안내만 표시한다. 로그인한 external도 동일하다. Radar RPC 장애 시 GFC 공지는 독립적으로 이용 가능하고 Radar에 준비/재시도 상태를 표시한다.
 
 ## ACCESS CONTROL TEST MATRIX
 
@@ -131,7 +133,7 @@ Radar 팀·프로필·공고·상세 조회는 기존 Supabase 세션과 RLS를 
 | 다른 팀의 개인 프로필 | 차단 | 차단 | 차단 | 팀 권한 없으면 차단 |
 | 프로필·알림 수정 | 차단 | 차단 | OWNER/EDITOR | 해당 팀 권한 필요 |
 | 공지 작성·수정·게시·보관 | 차단 | 차단 | 차단 | 허용 |
-| 소스 건강도·실패 운영 정보 | 차단 | 차단 | 차단 | API 허용 |
+| 소스 건강도·실패 운영 정보 | 차단 | 차단 | 차단 | 관리 RPC 허용 |
 
 공유 실제 DB에서도 기존 member 2명/external/admin의 역할을 이용한 SQL role 테스트를 수행했다. 권한 검증용 공지·팀은 예외 서브트랜잭션으로 모두 롤백했다. 새 Auth 계정이나 실제 공지를 만들지 않았다. 회원 역할이나 초대 코드를 수정하지 않았다.
 
@@ -153,12 +155,12 @@ V2 알림에 GFC `/notice` 링크를 추가했다. `/help`는 추천 탐색과 �
 
 ## TEST RESULTS
 
-- Python 전체: **150 passed**. 기존 144개에 GFC 회원 회수, 팀 없는 Stage 0, DB 페이지·필터·캐시 무효화, 동일 해시 AI 건너뛰기, CORS, 연결 전 알림 선호 등을 추가했다. 마지막 권한 수정 이후 관련 22개도 재검증했다.
-- Radar PGlite migration/RLS: PASS. Worker 테스트: **4 passed**.
-- GFC Node/PGlite: **57 passed**. 기존 55개 회귀와 신규 접근 매트릭스·DTO 테스트. 기존 경매 테스트 전부를 Radar 실제 마이그레이션이 함께 적용된 구조에서 실행한다.
-- Playwright: **6 passed**. 익명, external, 회원 피드·팀 전환·근거·설정, 관리자 공지 작성·수정·게시 취소·보관, 비관리자 편집 차단, 390px 레이아웃.
-- 브라우저 테스트의 Auth/REST/Radar 응답은 명시적 가상 fixture다. 실제 DB RLS 검증과 조합해 검증했으며 가상 UI 테스트를 운영 end-to-end 성공으로 표현하지 않는다.
-- 실공유 DB: 13개 권한·수정·롤백 검증 항목 PASS. 검증 결과 JSON 첨부.
+- 최신 로컬 Python 전체 **166 passed**, GFC Node/PGlite **65 passed**, Playwright **15 passed**, Vite build PASS.
+- 브라우저 전체는 Python API origin 없이 실행한다. 기존 GFC/경매 회귀, 네 역할, 팀 전환, 근거/이력, 프로필 충돌·재시도, 설정 저장·다시 읽기, 관리자 실패 상태와 모바일을 검사한다.
+- 브라우저 Auth/REST는 합성 fixture이며 실제 OAuth end-to-end 성공을 뜻하지 않는다.
+- 실제 공유 DB의 초기 통합 13개, 저장 공고 조회 12개, 프로필 명령 13개, 최신 설정/상태 11개 묶음 검사를 각 적용 시점에 수행했다. 테스트 행은 모두 롤백했다.
+- 최신 설정 적용 전 기존 GFC/Auth/Storage 메타 객체 1,085개 변경·삭제 0. public wrapper 3개 추가, security advisor 결과 동일. 새 RPC 3개 익명 REST 모두 401.
+- 최신 커밋 CI와 배포 식별자는 전달물 startup-radar-gfc-delivery.json에 기록한다.
 
 ## BUILD RESULTS
 
@@ -182,7 +184,7 @@ GFC `vite build` 성공. 신규 프런트엔드는 기존 스택과 lockfile을 
 2. GFC의 기존 Supabase VITE 설정과 Google OAuth redirect를 유지한다. `VITE_RADAR_API_URL`이나 새 호스팅 제공자를 현재 단계의 필수 설정으로 요구하지 않는다.
 3. 실제 테스트 계정으로 external/member/admin, 두 Radar 팀, 로그아웃·회원 회수·모바일·공지 공개를 배포된 preview에서 확인한다.
 4. 승인된 Telegram 수신 팀을 연결해 실제 발송을 검증한다. 웹훅은 알림 전송만 하는 배치의 필수 요소가 아니다.
-5. 원자적 프로필 저장·재계산 요청과 선호·관리 조회를 전환한 후 Phase A의 NOT REQUIRED / LIMITED / FULL API 판정을 확정한다.
+5. Phase A 판정은 A. NOT REQUIRED로 확정했다. 배치 런타임과 실운영 검증을 진행하며 Python API 호스팅을 추가 요건으로 요구하지 않는다.
 
 ## KNOWN LIMITATIONS
 
@@ -193,7 +195,7 @@ GFC `vite build` 성공. 신규 프런트엔드는 기존 스택과 lockfile을 
 - 실제 수집 확인은 이전 단계의 대학 공고 1건·HWP 2개에 한정된다. 이 공고도 evidence_complete=false이며 공식 두 API는 인증 키 없어서 실패로 기록돼 있다. 국내 전체 공고 커버리지나 AI 정확도를 입증한 상태가 아니다.
 - AI 캐시 검증은 mock 호출 횟수와 DB 결과를 사용했다. 실제 API 과금액이나 운영 비용 절감률을 측정하지 않았다.
 - 본문 에디터는 일반 텍스트다. 파일 업로드·풍부한 문서 서식·공지 수정 전체 이력·회원 자체 팀 초대·Telegram self-service 연결은 이번 범위에 포함하지 않았다.
-- 연결된 팀의 여러 Telegram 구독은 팀 공통 알림 선호를 함께 적용한다. 채널별 세부 설정은 운영 API에서 관리한다.
+- 연결된 팀의 여러 Telegram 구독은 팀 공통 알림 선호를 함께 적용한다. 저장된 팀 공통 선호가 채널 플래그보다 우선하며 발송 계획·클레임 시 재확인한다. 이미 SENDING으로 실행 중인 전송은 소급 취소할 수 없다.
 - 새 공지·Radar 페이지 내용은 한국어 중심이다. 기존 한·영 내비게이션은 유지하지만 새 페이지 전체 영문 번역은 후속 작업이다.
 
 ## V1/V2 PARALLEL STATUS
@@ -206,7 +208,7 @@ V2 DB scheduling.enabled=false, ingestion_enabled=false를 유지했다. V2 실�
 
 ## NEXT MILESTONE
 
-남은 Phase A 설정·운영 조회 전환과 Python API 최종 판정 → 배치 런타임 자격 증명 연결 → GFC preview의 실제 OAuth 계정·실데이터 검증 → 승인된 수신자 알림 검증 → 동일 기간 V1/V2 비교 → cutover 제안 순서다.
+Phase A 완료 → 배치 런타임 자격 증명 연결 → GFC preview의 실제 OAuth 계정·실데이터 검증 → 승인된 수신자 알림 검증 → 동일 기간 V1/V2 비교 → cutover 제안 순서다.
 
 ## CUTOVER STATUS
 

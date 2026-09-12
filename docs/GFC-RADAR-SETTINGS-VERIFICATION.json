@@ -1,0 +1,55 @@
+{
+  "date": "2026-09-12",
+  "phase": "A_IMPLEMENTED_AND_VERIFIED",
+  "python_api_status": "NOT_REQUIRED",
+  "scope": "Required GFC member UI and health; operational acceptance remains pending",
+  "migration": "20260912143423_gfc_radar_preferences_and_health",
+  "schema": {
+    "before": 1085,
+    "after": 1088,
+    "removed_or_changed": 0,
+    "added": [
+      {
+        "kind": "function",
+        "name": "gfc_radar_health()"
+      },
+      {
+        "kind": "function",
+        "name": "gfc_radar_preferences(p_team_id uuid)"
+      },
+      {
+        "kind": "function",
+        "name": "gfc_radar_save_preferences(p_team_id uuid, p_preferences jsonb)"
+      }
+    ],
+    "advisors_unchanged": true
+  },
+  "roles": {
+    "checks": [
+      "anonymous preferences/health denied",
+      "unlinked preferences persist",
+      "member health denied",
+      "linked state without channel identifier",
+      "preference flags synchronized with audit",
+      "invalid flags denied",
+      "foreign preferences denied",
+      "viewer read allowed and write denied",
+      "external stray editor denied",
+      "external health denied",
+      "GFC admin health allowed with safe projection"
+    ],
+    "status": "PASS",
+    "messages_sent": 0,
+    "auth_profiles_modified": false,
+    "synthetic_rows_rolled_back": true
+  },
+  "local_tests": {
+    "python": 166,
+    "node": 65,
+    "browser_without_python_origin": 15,
+    "build": "PASS"
+  },
+  "real_oauth_browser": "NOT_RUN",
+  "real_notifications": "NOT_RUN",
+  "cutover": "NOT_PERFORMED"
+}

@@ -1,6 +1,6 @@
 # GFC profile commands and calculation requests
 
-Phase A now converts POST team creation and PATCH profile editing to Supabase RPC. Together with the earlier four reads, these member operations do not require a Python HTTP origin. Notification preferences and admin health still await conversion; the final API decision is not yet complete.
+Phase A is complete: all necessary GFC Radar paths use Supabase RPC. Team creation and profile edits retain the contract below. Preferences and admin health are also converted; see [SETTINGS-HEALTH.md](SETTINGS-HEALTH.md). The final Python API decision is A. NOT REQUIRED; operational acceptance is still pending.
 
 ## Atomic mutation boundary
 

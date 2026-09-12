@@ -67,9 +67,12 @@ def plan_notifications(db,kind,at=None):
     with db.transaction() as c:
         policy=policy_for(c)
         # Lock subscriptions in a stable order: parallel planners cannot exceed caps.
-        subscriptions=c.execute('select s.*,t.name,p.profile,p.version profile_version from startup_radar.telegram_subscriptions s '
+        subscriptions=c.execute('select s.*,coalesce(pref.enabled,s.enabled) enabled,coalesce(pref.digest_enabled,s.digest_enabled) digest_enabled,'
+            'coalesce(pref.alerts_enabled,s.alerts_enabled) alerts_enabled,coalesce(pref.reminders_enabled,s.reminders_enabled) reminders_enabled,'
+            't.name,p.profile,p.version profile_version from startup_radar.telegram_subscriptions s '
             'join startup_radar.teams t on t.id=s.team_id join startup_radar.team_profiles p on p.team_id=s.team_id '
-            'where s.enabled=true order by s.id for update of s').fetchall()
+            'left join startup_radar.team_notification_preferences pref on pref.team_id=s.team_id '
+            'where coalesce(pref.enabled,s.enabled)=true order by s.id for update of s').fetchall()
         for sub in subscriptions:
             if not sub[FLAGS[kind]]:continue
             week=at.strftime('%G-W%V')
@@ -148,9 +151,11 @@ def deliver_pending(db,transport,kind,limit=None,at=None):
     states=[];delivered_items=cancelled=0
     for _ in range(limit):
         with db.transaction() as c:
-            batch=c.execute("select b.*,s.chat_id,s.enabled,s.digest_enabled,s.alerts_enabled,s.reminders_enabled,s.reminder_days,s.high_fit_threshold,"
+            batch=c.execute("select b.*,s.chat_id,coalesce(pref.enabled,s.enabled) enabled,coalesce(pref.digest_enabled,s.digest_enabled) digest_enabled,"
+                "coalesce(pref.alerts_enabled,s.alerts_enabled) alerts_enabled,coalesce(pref.reminders_enabled,s.reminders_enabled) reminders_enabled,s.reminder_days,s.high_fit_threshold,"
                 "p.profile,p.version profile_version from startup_radar.notification_batches b join startup_radar.telegram_subscriptions s on s.id=b.subscription_id "
-                "join startup_radar.team_profiles p on p.team_id=s.team_id where b.kind=%s and b.state='PENDING' order by b.created_at for update of b skip locked limit 1",(kind,)).fetchone()
+                "join startup_radar.team_profiles p on p.team_id=s.team_id left join startup_radar.team_notification_preferences pref on pref.team_id=s.team_id "
+                "where b.kind=%s and b.state='PENDING' order by b.created_at for update of b skip locked limit 1",(kind,)).fetchone()
             if not batch:break
             items=c.execute('select i.*,v.normalized,p.current_version_id,r.score from startup_radar.notification_items i '
                 'join startup_radar.program_versions v on v.id=i.program_version_id join startup_radar.programs p on p.id=v.program_id '

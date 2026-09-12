@@ -13,5 +13,10 @@
   "anonymous_radar_create_denied": true,
   "anonymous_radar_update_http": 401,
   "anonymous_radar_update_denied": true,
+  "anonymous_settings_rpc_http": {
+    "gfc_radar_preferences": 401,
+    "gfc_radar_save_preferences": 401,
+    "gfc_radar_health": 401
+  },
   "real_member_jwt_browser_test": "NOT_RUN: dedicated test login unavailable"
 }
