@@ -134,3 +134,30 @@ draft appeared. The document remains failed, keeping incomplete programs
 `UNVERIFIABLE`. No automatic or manual approval action is implemented here. A
 future approval path must bind a reviewer decision to exact file/page evidence and
 model mandatory attendance, fixed dates, alternatives and commitments explicitly.
+
+### Real OCR checkpoint, 2026-09-13
+
+The six-page Pre-WoW card PDF and one-page PNG poster were processed locally with
+the pinned engine/models. Their hashes match the existing shared DB attachment
+records for program `ab587732-09e1-44c1-9906-a25af4e813a7`, version
+`047d92ba-2d74-4812-b6b3-41a446603855`. One private source snapshot now preserves
+both drafts. Existing programs, versions, document rows, results, GFC/team profiles
+and notification items were unchanged, as were disabled scheduling settings.
+Authenticated SQL reads using the existing administrator identity could not read
+the raw snapshot rows, and the member detail RPC did not expose draft metadata.
+That is a database authorization check, not another live browser role test.
+
+Sparse OCR recovered mandatory offline participation, 70% completion and the
+per-team support amount, but still omitted/misread headings, dates and small print.
+The poster's overall score was 84 despite missing its title. No eligibility
+approval, new AI analysis or Telegram message resulted; Stage 0 remains
+`UNVERIFIABLE`.
+
+The same original notice also includes publisher-provided plain-text alternatives
+for the [card news](https://www.k-startup.go.kr/afile/fileDownload/4sXLn) and
+[poster](https://www.k-startup.go.kr/afile/fileDownload/lsXLn). They were already
+successfully extracted and contain the attendance/completion conditions. Their
+presence alone does not prove complete image equivalence. The next review should
+compare each image against those primary text alternatives and bind any coverage
+decision to exact paired file hashes. Prefer this publisher text when confirmed;
+OCR is supplementary evidence for comparison.
