@@ -1,4 +1,4 @@
-# Extraction meaning review — requirements 2.0.5
+# Extraction meaning review — requirements 2.0.6
 
 The live Seokyeong incubation notice (K-Startup publisher ID 179220) exposed three interpretation failures in requirements 2.0.4. A verbatim quote did not prove that its meaning matched the flat profile rule.
 
@@ -6,7 +6,7 @@ The live Seokyeong incubation notice (K-Startup publisher ID 179220) exposed thr
 - Tax arrears, credit restrictions, environmentally disruptive business activities and prohibited industries were stored as arbitrary prior_support_restrictions strings. An empty list or differently worded user input could incorrectly look like absence of all these restrictions.
 - The current profile cannot confirm a promise to register a business or relocate after admission. Such obligations are not established by selecting a present business status.
 
-Requirements 2.0.5 now withdraws certainty for AI-generated free-text history conditions and age quotes with a pre-business branch or fixed announcement-date basis. It also checks supplied source lines for explicit post-admission registration/relocation commitments, even if the model omitted them from its eligibility excerpt. These findings prevent evidence_complete from becoming true and are retained as review_flags in extraction/cache/source-snapshot metadata. This review never creates a new eligibility restriction or fills a user field.
+Requirements 2.0.6 now withdraws certainty for AI-generated free-text history conditions and age quotes with a pre-business branch or fixed announcement-date basis. It also checks supplied source lines for explicit post-admission registration/relocation commitments, even if the model omitted them from its eligibility excerpt. These findings prevent evidence_complete from becoming true and are retained as review_flags in extraction/cache/source-snapshot metadata. This review never creates a new eligibility restriction or fills a user field.
 
 The model prompt explicitly describes these unsupported meanings. The ordinary deterministic eligibility engine continues to let independently verified mandatory failures take precedence. UNKNOWN conditions do not become a known failure or a successful qualification merely because the AI returned valid JSON.
 
@@ -15,3 +15,5 @@ Verified document hashes accidentally placed in source_id are normalized to docu
 Changing the extractor version invalidates obsolete cached extraction; repeated unchanged evidence with the same new version still reuses the analysis, including its review flags. Historical versions and delivered notification receipts are preserved. A previously sent NEEDS_INFO summary describes its historical assessment, not a guarantee that the current version is eligible or recommendable.
 
 These are targeted conservative checks, not complete Korean-language condition interpretation. They may withdraw confidence in cases a human could resolve. They do not yet model arbitrary OR branches, fixed rule reference dates, future commitments, controlled tax/credit declarations or every administrative exception. Typed representations and user-facing questions for those conditions require further work. Other old catalog versions do not become semantically verified without reanalysis.
+
+A second live review found that the IR notice's broad applicant category (general enterprises, one-person creative enterprises) had become a confirmed registered-business requirement. Such categories do not establish registration. Business-status values now require explicit relevant terms in their verified quotes. The stored IR extraction can be reviewed deterministically into a new version, preserving the old AI metadata and marking analysis_reused; this does not claim a new publisher change or a new model call.

@@ -72,3 +72,14 @@ def test_independent_age_limit_remains_usable():
     p=extract({'key':'business_age_months','operator':'LTE','value':84},'신청일 현재 창업 7년 이내 사업자만 신청 가능')
     assert p.evidence_complete and p.requirements[0].certain
     assert evaluate(TeamProfile(business_age_months=100),p.requirements,p.evidence_complete).status=='INELIGIBLE'
+
+
+def test_broad_applicant_category_cannot_exclude_prebusiness_applicants():
+    p=extract({'key':'business_status','operator':'IN','value':['SOLE_PROPRIETOR','CORPORATION']},'대상: 일반기업, 1인 창조기업')
+    assert evaluate(TeamProfile(business_status='PRE_BUSINESS'),p.requirements,p.evidence_complete).status=='UNVERIFIABLE'
+    assert not p.requirements[0].certain
+
+
+def test_explicit_registered_business_condition_still_supports_rejection():
+    p=extract({'key':'business_status','operator':'IN','value':['SOLE_PROPRIETOR','CORPORATION']},'신청일 현재 사업자등록을 완료한 기업만 지원 가능')
+    assert evaluate(TeamProfile(business_status='PRE_BUSINESS'),p.requirements,p.evidence_complete).status=='INELIGIBLE'

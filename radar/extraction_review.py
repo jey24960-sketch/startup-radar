@@ -9,6 +9,13 @@ import re
 def rule_review_reasons(rule):
     quotes='\n'.join(e.text for e in rule.evidence if e.verified)
     reasons=[]
+    if rule.key=='business_status' and rule.operator!='EXISTS':
+        patterns={'PRE_BUSINESS':r'예비\s*창업',
+                  'SOLE_PROPRIETOR':r'개인\s*사업자|기\s*창업자|사업자\s*등록',
+                  'CORPORATION':r'법인|기\s*창업자|사업자\s*등록'}
+        values=rule.value if isinstance(rule.value,list) else [rule.value]
+        if any(not re.search(patterns[value],quotes) for value in values):
+            reasons.append('BUSINESS_STATUS_NOT_EXPLICIT')
     if rule.key=='prior_support_restrictions':
         # User-entered free text is not a controlled declaration of tax, credit,
         # industry, sanctions or every possible prior award/exclusion condition.
