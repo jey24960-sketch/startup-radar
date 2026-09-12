@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 from datetime import timedelta
+from contextlib import contextmanager
 from uuid import uuid4
 import psycopg
 import pytest
@@ -88,6 +89,62 @@ print(json.dumps(run_job(Database(os.environ['TEST_DATABASE_URL']), 'REFRESH')))
     )) for seed in ('1', '2', '3')]
     assert [(r['computed'], r['reused']) for r in results] == [(7, 0), (0, 7), (0, 7)]
     assert all(r['status'] == 'SUCCESS' and r['delivery'] == 'DISABLED' for r in results)
+
+
+def add_history(c, last_version):
+    with c['db'].transaction() as con:
+        con.execute('insert into startup_radar.program_versions(program_id,version,content_hash,normalized,raw_text,evidence_complete) '
+            'select program_id,n,md5(content_hash || n::text),normalized,raw_text,evidence_complete '
+            'from startup_radar.program_versions cross join generate_series(2,%s) n where id=%s',
+            (last_version,c['saved']['version_id']))
+
+
+def test_bounded_cache_lookup_pages_and_mixed_stale_results(context, monkeypatch):
+    c=context
+    add_history(c,101)
+    db=c['db'];transaction=db.transaction;lookup_sizes=[]
+    class TracedConnection:
+        def __init__(self, connection):self.connection=connection
+        def execute(self, sql, params=None):
+            if sql.startswith('select program_version_id from startup_radar.member_program_results'):
+                lookup_sizes.append(len(params[1]))
+            return self.connection.execute(sql,params)
+    @contextmanager
+    def traced(*args,**kwargs):
+        with transaction(*args,**kwargs) as con:yield TracedConnection(con)
+    monkeypatch.setattr(db,'transaction',traced)
+    first=refresh_member_results(db)
+    assert (first['computed'],first['reused'])==(707,0)
+    assert sorted(lookup_sizes)==[1]*7+[100]*7
+    lookup_sizes.clear()
+    with db.transaction() as con:
+        version=c['saved']['version_id']
+        con.execute("update startup_radar.member_program_results set evaluated_on=evaluated_on-1 where scope_key='preset:0' and program_version_id=%s",(version,))
+        con.execute("update startup_radar.member_program_results set generation='obsolete' where scope_key='preset:1' and program_version_id=%s",(version,))
+        con.execute("update startup_radar.member_program_results set profile_snapshot='{}' where scope_key='preset:2' and program_version_id=%s",(version,))
+        con.execute("delete from startup_radar.member_program_results where scope_key='preset:3' and program_version_id=%s",(version,))
+        con.execute('update startup_radar.member_program_results set profile_version=profile_version+1 where team_id=%s and program_version_id=%s',(c['team']['id'],version))
+    second=refresh_member_results(db)
+    assert (second['computed'],second['reused'])==(5,702)
+    assert sorted(lookup_sizes)==[1]*7+[100]*7
+    assert detail(c,c['team']['id'])['eligibility']['status']=='ELIGIBLE'
+    assert detail(c,c['other_team']['id'],user=c['other'])['eligibility']['status']=='INELIGIBLE'
+
+
+def test_batched_cache_rechecks_seoul_day_inside_a_page(context,monkeypatch):
+    import radar.member_results as worker
+    c=context;add_history(c,2)
+    before=now().replace(hour=23,minute=59,second=59,microsecond=0)
+    after=before+timedelta(seconds=2)
+    monkeypatch.setattr(worker,'now',lambda:before)
+    assert refresh_member_results(c['db'])['computed']==14
+    calls=iter([before])
+    monkeypatch.setattr(worker,'now',lambda:next(calls,after))
+    result=refresh_member_results(c['db'])
+    assert (result['computed'],result['reused'])==(13,1)
+    with c['db'].transaction() as con:
+        dates=con.execute('select evaluated_on,count(*) n from startup_radar.member_program_results group by evaluated_on order by evaluated_on').fetchall()
+    assert [(r['evaluated_on'],r['n']) for r in dates]==[(before.date(),1),(after.date(),13)]
 
 def test_historical_facts_document_failures_and_foreign_version(context):
     c=context;updated=c['program'].model_copy(deep=True)

@@ -41,12 +41,22 @@ def refresh_member_results(db):
                 if not rows:
                     break
                 with db.transaction() as c:
+                    page_ids = [row['id'] for row in rows]
+                    cache_day = None
                     for row in rows:
                         at = now().astimezone(SEOUL)
-                        existing = c.execute('select 1 from startup_radar.member_program_results where scope_key=%s and program_version_id=%s '
-                            'and generation=%s and evaluated_on=%s and profile_snapshot=%s and profile_version is not distinct from %s',
-                            (key,row['id'],generation,at.date(),Jsonb(scope['profile']),scope['version'])).fetchone()
-                        if existing:
+                        # One bounded lookup per page/scope, not one network
+                        # round trip per result. Recheck if Seoul midnight is
+                        # crossed while processing this page.
+                        if cache_day != at.date():
+                            cache_day = at.date()
+                            existing = {r['program_version_id'] for r in c.execute(
+                                'select program_version_id from startup_radar.member_program_results '
+                                'where scope_key=%s and program_version_id=any(%s::uuid[]) '
+                                'and generation=%s and evaluated_on=%s and profile_snapshot=%s '
+                                'and profile_version is not distinct from %s',
+                                (key,page_ids,generation,cache_day,Jsonb(scope['profile']),scope['version'])).fetchall()}
+                        if row['id'] in existing:
                             reused += 1
                             continue
                         program = Program.model_validate(row['normalized'])
