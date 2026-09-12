@@ -36,7 +36,7 @@ class SafeHttp:
                     if response.status_code in (401,403): raise SourceFailure('BLOCKED','Source denied access')
                     if response.status_code==429: raise SourceFailure('RATE_LIMIT','Source rate limit',True)
                     if response.status_code==404: raise SourceFailure('NOT_FOUND','Source not found')
-                    if response.status_code>=400: raise SourceFailure('HTTP',f'HTTP {response.status_code}',response.status_code>=500)
+                    if response.status_code>=400: raise SourceFailure('HTTP',f'HTTP {response.status_code}',response.status_code>=500,response.status_code)
                     if int(response.headers.get('Content-Length','0'))>self.max_bytes: raise SourceFailure('SIZE_LIMIT','Response too large')
                     data=bytearray()
                     for chunk in response.iter_content(65536):
@@ -55,7 +55,11 @@ class SafeHttp:
                 parser=RobotFileParser();parser.parse(data.decode('utf-8',errors='replace').splitlines())
                 self.robots[origin]=parser
             except SourceFailure as failure:
-                if failure.kind=='NOT_FOUND': self.robots[origin]=None
+                # RFC 9309 2.3.1.3 permits access when robots is unavailable (4xx).
+                # Retain conservative denial for authentication/access failures,
+                # throttling, network errors and server errors.
+                if failure.kind=='NOT_FOUND' or (failure.kind=='HTTP' and failure.http_status in (400,410)):
+                    self.robots[origin]=None
                 else: raise SourceFailure('ROBOTS_UNAVAILABLE','Cannot verify robots policy',failure.retryable)
         parser=self.robots[origin]
         if parser and not parser.can_fetch('StartupRadar',url): raise SourceFailure('ROBOTS_DENIED','Robots policy disallows this resource')

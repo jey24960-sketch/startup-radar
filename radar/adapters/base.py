@@ -7,6 +7,7 @@ class SourceFailure(Exception):
     kind: str
     message: str
     retryable: bool=False
+    http_status: int | None=None
     def __str__(self): return f'{self.kind}: {self.message}'
 
 
