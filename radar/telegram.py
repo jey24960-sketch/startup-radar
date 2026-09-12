@@ -67,7 +67,7 @@ def handle_update(db,update,transport,dispatcher=dispatch_job):
                 c.execute("update startup_radar.runtime_settings set value=jsonb_set(value,'{enabled}','false'),updated_at=now() where key='scheduling'")
                 c.execute('insert into startup_radar.admin_audit(actor_id,action) values(%s,%s)',(admin['user_id'],'STOP_SCHEDULE'))
             reply='정기 수집·발송을 중지했습니다. 진행 중인 작업은 취소하지 않으며 /run 수동 실행은 가능합니다.'
-        elif command=='/help':reply='/run 수집 실행\n/status 실제 상태\n/health 소스 건강도\n/team 팀 선택\n/stage 0..4 단계 설정\n/digest 주간 요약 요청\n/stop 정기 자동화 중지\n/id 내 ID'
+        elif command=='/help':reply='추천 확인: https://www.gfc-startup.com/notice\n팀 설정: https://www.gfc-startup.com/radar/settings\n/run 수집 실행\n/status 실제 상태\n/health 소스 건강도\n/team 팀 선택\n/stage 0..4 (기존 운영 명령)\n/digest 주간 요약 요청\n/stop 정기 자동화 중지\n/id 내 ID'
         else:reply='알 수 없는 명령입니다. /help를 확인하세요.'
         receipt=transport.send(str(chat_id),html.escape(reply))
         if receipt['state']!='DELIVERED':state='UNCERTAIN';result['reply_error']=receipt.get('error')

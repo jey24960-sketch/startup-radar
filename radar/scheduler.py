@@ -25,7 +25,14 @@ def execute(db,kind,source_slug=None,transport=None):
             with db.transaction() as c:sources=c.execute('select * from startup_radar.sources where slug=%s',(source_slug,)).fetchall()
             if not sources:raise ValueError('Unknown source slug')
         result=ingest(db,sources,trigger='v2-job')
-        refresh_recommendations(db)
+        try:refresh_recommendations(db)
+        except Exception as error:
+            with db.transaction() as c:
+                c.execute("update startup_radar.ingestion_runs set status='PARTIAL_SUCCESS',summary=summary || %s where id=%s",
+                    (Jsonb({'eligibility_error':type(error).__name__}),result['id']))
+            return {**result,'status':'PARTIAL_SUCCESS','eligibility_error':type(error).__name__}
+        with db.transaction() as c:
+            c.execute("delete from startup_radar.feed_snapshots where refreshed_at<now()-interval '7 days'")
         # Valid programs from successful sources survive partial source failure.
         if transport and result['status']!='FAILED':
             plan_notifications(db,'HIGH_FIT')

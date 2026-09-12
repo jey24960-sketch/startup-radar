@@ -44,13 +44,16 @@ def test_anonymous_cannot_read_private_endpoints(context):
     config=client.get('/api/public-config')
     assert config.status_code==200 and len(config.json()['presets'])==5
     assert 'DATABASE_URL' not in config.text and 'frame-ancestors' in config.headers['content-security-policy']
-    assert client.get('/static/app.js').headers['content-type'].startswith('text/javascript')
+    assert client.get('/static/app.js').status_code==404
+    assert client.get('/static/index.html').status_code==404
+    assert TestClient(create_app(context['db'],preview=True)).get('/static/app.js').headers['content-type'].startswith('text/javascript')
 
 
 def test_shared_auth_identity_does_not_grant_radar_membership(context):
     outsider=uuid4()
     with context['db'].transaction() as c:
         c.execute('insert into auth.users values(%s)',(outsider,))
+        c.execute("insert into public.test_gfc_roles values(%s,'external')",(outsider,))
     context['app'].dependency_overrides[authenticated_user]=lambda:outsider
     client=context['client']
     assert client.get('/api/me').json()=={'user_id':str(outsider), 'teams':[], 'is_admin':False}

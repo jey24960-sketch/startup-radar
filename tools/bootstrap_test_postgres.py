@@ -16,6 +16,7 @@ def main():
         c.execute('create schema auth; create table auth.users(id uuid primary key)')
         c.execute("create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$")
         c.execute('grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated')
+        c.execute(Path('tests/fixtures/gfc_identity.sql').read_text(encoding='utf-8'))
         for migration in sorted(Path('supabase/migrations').glob('*.sql')):c.execute(migration.read_text(encoding='utf-8'))
         c.execute("create table public.radar_test_marker(value text primary key); insert into public.radar_test_marker values('ephemeral-test-only')")
     print('Native PostgreSQL test schema initialized (mock Auth identities only)')

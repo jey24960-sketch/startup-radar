@@ -1,0 +1,7 @@
+{
+  "anonymous_notice_http": 200,
+  "anonymous_notice_rows": 0,
+  "anonymous_radar_http": 406,
+  "anonymous_radar_denied": true,
+  "real_member_jwt_browser_test": "NOT_RUN: dedicated test login unavailable"
+}

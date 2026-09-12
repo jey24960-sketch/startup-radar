@@ -1,5 +1,7 @@
 > **StartupRadar 2.0 migration is in progress.** The complete approved requirements are in [docs/V2-SPEC.md](docs/V2-SPEC.md). See [architecture and limits](docs/ARCHITECTURE.md), [implementation status](docs/V2-PROGRESS.md), [setup and safety bridge](docs/V2-SETUP.md), and [Adding a Source](docs/SOURCES.md). V1 is retained; V2 is not yet approved for production cutover. The legacy README below describes the V1 deployment and contains historical examples; use the audit and setup notes for differences.
 
+> **Latest: GFC /notice integration.** Member UI now belongs to the existing GFC React website. This repository provides ingestion, authenticated APIs and deterministic eligibility/recommendation services. Shared DB integration is applied; API hosting and production frontend cutover remain pending. Read the [integration report, contracts, access matrix and remaining setup](docs/GFC-NOTICE-INTEGRATION.md). The standalone dashboard is disabled by default. V1's scheduled workflow was observed `disabled_inactivity`; no workflow was re-enabled by this change.
+
 > **GFC shared staging update:** project `etvffzxqdgblvkfdikwl`, isolated schema `startup_radar`. Hosted migrations and role-based RLS checks are complete; existing GFC schema/data were verified unchanged. See [current report](docs/SHARED-GFC-REPORT.md) and [web integration comparison](docs/WEB-INTEGRATION.md). Preserve existing GFC Auth settings and migration history. V1 cutover has not happened.
 
 # StartupRadar 🚀

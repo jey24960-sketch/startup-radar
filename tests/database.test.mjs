@@ -6,6 +6,7 @@ await db.exec(`create schema auth; create role anon; create role authenticated; 
 create table auth.users(id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
 grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
+await db.exec(await readFile('tests/fixtures/gfc_identity.sql','utf8'));
 for(const file of (await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort()) await db.exec(await readFile('supabase/migrations/'+file,'utf8'));
 const a='00000000-0000-0000-0000-000000000001', b='00000000-0000-0000-0000-000000000002';
 const staging=(await db.query("select value from startup_radar.runtime_settings where key='scheduling'")).rows[0].value;

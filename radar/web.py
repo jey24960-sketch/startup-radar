@@ -4,16 +4,18 @@ import hmac
 import json
 from pathlib import Path
 from uuid import UUID
+from datetime import date
 from typing import Literal
 from fastapi import FastAPI,Depends,HTTPException,Query,Request
 from fastapi.responses import FileResponse,JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import Field
 from psycopg.types.json import Jsonb
 from radar.auth import authenticated_user
 from radar.database import Database
 from radar.models import StrictModel,TeamProfile,PRESETS,apply_preset,update_profile
-from radar.services import memberships,profile_for,browse,detail,health,require_admin,admin_trace
+from radar.services import memberships,profile_for,browse,detail,health,require_admin,require_member,admin_trace
 from radar.recommendations import refresh_recommendations
 from radar.jobs import dispatch_job
 
@@ -28,6 +30,14 @@ class TeamCreate(StrictModel):
     name:str=Field(min_length=1,max_length=100)
     owner_id:UUID
     preset:int=Field(default=0,ge=0,le=4)
+class MyTeamCreate(StrictModel):
+    name:str=Field(default='나의 창업 프로필',min_length=1,max_length=100)
+    preset:int=Field(default=0,ge=0,le=4)
+class NotificationPreferences(StrictModel):
+    enabled:bool=True
+    digest_enabled:bool=True
+    alerts_enabled:bool=True
+    reminders_enabled:bool=True
 class MemberAdd(StrictModel):
     user_id:UUID
     role:Literal['OWNER','EDITOR','MEMBER']='MEMBER'
@@ -62,7 +72,11 @@ class NotificationRecovery(StrictModel):
 
 def create_app(database=None,preview=False):
     app=FastAPI(title='StartupRadar 2.0',docs_url=None,redoc_url=None)
+    legacy_ui=preview or os.environ.get('RADAR_LEGACY_UI_ENABLED')=='true'
     app.state.database=database
+    origins=[x.strip() for x in os.environ.get('RADAR_CORS_ORIGINS','https://www.gfc-startup.com,https://gfc-startup.com').split(',') if x.strip()]
+    if '*' in origins:raise ValueError('RADAR_CORS_ORIGINS must contain explicit GFC origins')
+    app.add_middleware(CORSMiddleware,allow_origins=origins,allow_methods=['GET','POST','PATCH','PUT'],allow_headers=['Authorization','Content-Type'],allow_credentials=False)
     def db():
         if app.state.database is None:
             try:app.state.database=Database()
@@ -83,9 +97,13 @@ def create_app(database=None,preview=False):
     @app.exception_handler(ValueError)
     async def invalid(request,error):return JSONResponse({'detail':str(error)},status_code=400)
     @app.get('/')
-    def index():return FileResponse(ROOT/'web/static/index.html')
+    def index():
+        if legacy_ui:return FileResponse(ROOT/'web/static/index.html')
+        return {'service':'StartupRadar engine','member_ui':'https://www.gfc-startup.com/notice'}
     @app.get('/static/app.js',include_in_schema=False)
-    def javascript():return FileResponse(ROOT/'web/static/app.js',media_type='text/javascript')
+    def javascript():
+        if not legacy_ui:raise HTTPException(404,'Legacy dashboard is disabled; use GFC /notice')
+        return FileResponse(ROOT/'web/static/app.js',media_type='text/javascript')
     @app.get('/api/public-config')
     def public_config():return {'supabase_url':os.environ.get('SUPABASE_URL'),'publishable_key':os.environ.get('SUPABASE_PUBLISHABLE_KEY'),
                                 'presets':[{'id':i,'label':p[0]} for i,p in enumerate(PRESETS)],'preview':preview}
@@ -94,8 +112,37 @@ def create_app(database=None,preview=False):
     @app.get('/api/programs')
     def programs(team_id:UUID|None=None,preset:int|None=Query(default=None,ge=0,le=4),q:str=Query(default='',max_length=200),
                  program_type:str|None=None,status:str|None=None,eligibility:str|None=None,history:bool=False,recommended:bool=False,
-                 limit:int=Query(default=30,ge=1,le=100),offset:int=Query(default=0,ge=0),user=Depends(authenticated_user)):
-        return browse(db(),user,team_id,preset,q,program_type,status,eligibility,history,recommended,limit,offset)
+                 limit:int=Query(default=30,ge=1,le=100),offset:int=Query(default=0,ge=0),date_from:date|None=None,date_to:date|None=None,user=Depends(authenticated_user)):
+        return browse(db(),user,team_id,preset,q,program_type,status,eligibility,history,recommended,limit,offset,date_from,date_to)
+    @app.post('/api/teams',status_code=201)
+    def my_team(body:MyTeamCreate,user=Depends(authenticated_user)):
+        require_member(db(),user)
+        team=db().create_team(body.name,user,apply_preset(TeamProfile(),body.preset))
+        refresh_recommendations(db(),team['id'])
+        return team
+    @app.get('/api/teams/{team_id}/preferences')
+    def preferences(team_id:UUID,user=Depends(authenticated_user)):
+        profile_for(db(),user,team_id)
+        with db().transaction() as c:
+            rows=c.execute('select enabled,digest_enabled,alerts_enabled,reminders_enabled from startup_radar.telegram_subscriptions where team_id=%s order by created_at',(team_id,)).fetchall()
+        with db().transaction(user) as c:
+            prefs=c.execute('select enabled,digest_enabled,alerts_enabled,reminders_enabled from startup_radar.team_notification_preferences where team_id=%s',(team_id,)).fetchone()
+        return {'connected':bool(rows),'subscriptions':rows,'preferences':prefs or (rows[0] if rows else NotificationPreferences().model_dump())}
+    @app.put('/api/teams/{team_id}/preferences')
+    def save_preferences(team_id:UUID,body:NotificationPreferences,user=Depends(authenticated_user)):
+        profile_for(db(),user,team_id)
+        with db().transaction(user) as c:
+            editor=c.execute("select 1 from startup_radar.team_members where team_id=%s and user_id=%s and role in ('OWNER','EDITOR')",(team_id,user)).fetchone()
+        if not editor:raise PermissionError('Editing requires owner/editor membership')
+        with db().transaction(user) as c:
+            c.execute('insert into startup_radar.team_notification_preferences(team_id,enabled,digest_enabled,alerts_enabled,reminders_enabled) values(%s,%s,%s,%s,%s) '
+                'on conflict(team_id) do update set enabled=excluded.enabled,digest_enabled=excluded.digest_enabled,alerts_enabled=excluded.alerts_enabled,reminders_enabled=excluded.reminders_enabled',
+                (team_id,body.enabled,body.digest_enabled,body.alerts_enabled,body.reminders_enabled))
+        with db().transaction() as c:
+            rows=c.execute('update startup_radar.telegram_subscriptions set enabled=%s,digest_enabled=%s,alerts_enabled=%s,reminders_enabled=%s where team_id=%s returning id',
+                (body.enabled,body.digest_enabled,body.alerts_enabled,body.reminders_enabled,team_id)).fetchall()
+            c.execute('insert into startup_radar.admin_audit(actor_id,action,entity_id,detail) values(%s,%s,%s,%s)',(user,'TEAM_NOTIFICATION_PREFERENCES',str(team_id),Jsonb(body.model_dump())))
+        return {'updated':len(rows),'preferences':body.model_dump()}
     @app.get('/api/programs/{program_id}')
     def program_detail(program_id:UUID,team_id:UUID|None=None,preset:int|None=Query(default=None,ge=0,le=4),version_id:UUID|None=None,user=Depends(authenticated_user)):
         return detail(db(),user,program_id,team_id,preset,version_id)
@@ -161,7 +208,7 @@ def create_app(database=None,preview=False):
     @app.get('/api/admin/teams')
     def all_teams(user=Depends(authenticated_user)):
         require_admin(db(),user)
-        with db().transaction() as c:return {'items':c.execute('select t.*,p.profile,p.version from startup_radar.teams t join startup_radar.team_profiles p on p.team_id=t.id order by t.created_at').fetchall()}
+        with db().transaction() as c:return {'items':c.execute('select t.id,t.name,t.created_at from startup_radar.teams t order by t.created_at').fetchall()}
     @app.post('/api/admin/teams',status_code=201)
     def new_team(body:TeamCreate,user=Depends(authenticated_user)):
         require_admin(db(),user)
@@ -190,6 +237,9 @@ def create_app(database=None,preview=False):
         require_admin(db(),user)
         if any(day<0 or day>365 for day in body.reminder_days):raise ValueError('Reminder days must be 0..365')
         with db().transaction() as c:
+            saved=c.execute('select * from startup_radar.team_notification_preferences where team_id=%s',(body.team_id,)).fetchone()
+            if saved:
+                body=body.model_copy(update={key:saved[key] for key in ('enabled','digest_enabled','alerts_enabled','reminders_enabled')})
             return c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,enabled,digest_enabled,alerts_enabled,reminders_enabled,high_fit_threshold,reminder_days) '
                 'values(%s,%s,%s,%s,%s,%s,%s,%s) on conflict(team_id,chat_id) do update set enabled=excluded.enabled,digest_enabled=excluded.digest_enabled,alerts_enabled=excluded.alerts_enabled,reminders_enabled=excluded.reminders_enabled,high_fit_threshold=excluded.high_fit_threshold,reminder_days=excluded.reminder_days returning id',
                 (body.team_id,body.chat_id,body.enabled,body.digest_enabled,body.alerts_enabled,body.reminders_enabled,body.high_fit_threshold,body.reminder_days)).fetchone()
@@ -212,7 +262,7 @@ def create_app(database=None,preview=False):
         token=os.environ.get('TELEGRAM_BOT_TOKEN')
         if not token:raise HTTPException(503,'Telegram transport is not configured')
         return await run_in_threadpool(handle_update,db(),update,TelegramTransport(token))
-    app.mount('/static',StaticFiles(directory=ROOT/'web/static'),name='static')
+    if legacy_ui:app.mount('/static',StaticFiles(directory=ROOT/'web/static'),name='static')
     return app
 
 app=create_app()

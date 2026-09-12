@@ -41,7 +41,7 @@ def message(program,team_name,outcome,score,explanation,kind,at=None):
     for rule in outcome.matched_requirements[:4]:
         lines.append(f'확인 조건: {rule.key} {rule.operator} {rule.value}')
     text='\n'.join(html.escape(line[:700]) for line in lines)
-    for label,url in [('원문 보기',program.official_url),('신청',program.application_url)]:
+    for label,url in [('GFC에서 추천 보기','https://www.gfc-startup.com/notice'),('원문 보기',program.official_url),('신청',program.application_url)]:
         if url and urlsplit(url).scheme=='https':text+=f'\n<a href="{html.escape(url,quote=True)}">{label}</a>'
     if len(text)>4000:raise ValueError('Notification exceeds safe size; cannot silently truncate conditions')
     return text

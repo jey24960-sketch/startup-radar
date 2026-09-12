@@ -7,6 +7,7 @@ from radar.adapters.official import KStartupApiAdapter,BizInfoApiAdapter
 from radar.adapters.longtail import RssAdapter,HtmlAdapter,BrowserAdapter,SearchDiscoveryAdapter
 from radar.http import SafeHttp
 from radar.extraction import RequirementExtractor
+from radar.analysis_cache import extract_cached
 
 ADAPTERS={'KSTARTUP':KStartupApiAdapter,'BIZINFO':BizInfoApiAdapter,'RSS':RssAdapter,'HTML':HtmlAdapter,
           'BROWSER':BrowserAdapter,'SEARCH':SearchDiscoveryAdapter}
@@ -21,7 +22,7 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
     with db.transaction() as c:
         run=c.execute("insert into startup_radar.ingestion_runs(status,trigger_type) values('RUNNING',%s) returning id",(trigger,)).fetchone()['id']
         if sources is None:sources=c.execute('select * from startup_radar.sources where enabled=true order by slug').fetchall()
-    outcomes=[]
+    outcomes=[];new_programs=updated_programs=cache_hits=0
     for source in sources:
         started=time.monotonic();discovered=fetched=parsed=0;failures=[]
         with db.transaction() as c:c.execute('update startup_radar.sources set last_attempted_at=now() where id=%s',(source['id'],))
@@ -37,12 +38,14 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                     program=adapter.normalize(candidate,detail,documents)
                     extraction_metadata={'provider':'anthropic' if isinstance(extractor,RequirementExtractor) else 'injected',
                         'model':getattr(extractor,'model',None),'schema_version':getattr(extractor,'version',None),'status':'SUCCESS'}
-                    try:program=extractor.extract(program,detail,documents,source['id'])
+                    try:program=extract_cached(db,extractor,program,detail,documents,source['id'],extraction_metadata)
                     except SourceFailure as error:
                         program.evidence_complete=False
                         extraction_metadata.update(status='FAILED',error_kind=error.kind)
                         failures.append({'kind':error.kind,'message':error.message,'url':candidate.official_detail_url})
-                    db.save_program(program,source['id'],candidate.source_program_id,candidate.discovery_url,candidate.raw_metadata,detail.text,documents,extraction_metadata)
+                    saved=db.save_program(program,source['id'],candidate.source_program_id,candidate.discovery_url,candidate.raw_metadata,detail.text,documents,extraction_metadata)
+                    new_programs+=saved['event']=='NEW';updated_programs+=saved['event']=='UPDATE'
+                    cache_hits+=bool(extraction_metadata.get('cache_hit'))
                     parsed+=1
                 except SourceFailure as error:failures.append({'kind':error.kind,'message':error.message,'url':candidate.official_detail_url})
                 except Exception as error:failures.append({'kind':'NORMALIZE_OR_PERSIST','message':type(error).__name__,'url':candidate.official_detail_url})
@@ -61,5 +64,5 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
     else:status='FAILED'
     with db.transaction() as c:
         c.execute('update startup_radar.ingestion_runs set status=%s,finished_at=now(),summary=%s where id=%s',
-                  (status,Jsonb({'sources':outcomes,'message':'No enabled sources' if not outcomes else None}),run))
+                  (status,Jsonb({'sources':outcomes,'new_programs':new_programs,'updated_programs':updated_programs,'analysis_cache_hits':cache_hits,'message':'No enabled sources' if not outcomes else None}),run))
     return {'id':str(run),'status':status,'sources':outcomes}

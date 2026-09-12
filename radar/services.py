@@ -9,26 +9,33 @@ from radar.recommendations import rank,configured_weights
 
 def require_admin(db,user_id):
     with db.transaction(user_id) as c:
-        if not c.execute('select 1 from startup_radar.admin_users where user_id=%s',(user_id,)).fetchone():
+        if c.execute('select public.my_role() as role').fetchone()['role']!='admin':
             raise PermissionError('Administrator access required')
+
+
+def require_member(db,user_id):
+    with db.transaction(user_id) as c:
+        if c.execute('select public.my_role() as role').fetchone()['role'] not in ('member','admin'):
+            raise PermissionError('Verified GFC membership required')
 
 
 def memberships(db,user_id):
     with db.transaction(user_id) as c:
         teams=c.execute('select t.id,t.name,m.role,p.profile,p.version from startup_radar.teams t join startup_radar.team_members m on m.team_id=t.id '
             'join startup_radar.team_profiles p on p.team_id=t.id where m.user_id=%s order by t.created_at',(user_id,)).fetchall()
-        admin=c.execute('select 1 from startup_radar.admin_users where user_id=%s',(user_id,)).fetchone() is not None
+        admin=c.execute('select public.my_role() as role').fetchone()['role']=='admin'
     return {'user_id':str(user_id),'teams':teams,'is_admin':admin}
 
 
 def profile_for(db,user_id,team_id=None,preset=None):
+    require_member(db,user_id)
     own=memberships(db,user_id)
-    if not own['teams'] and not own['is_admin']:raise PermissionError('GFC invitation or team membership required')
-    if preset is not None:return apply_preset(TeamProfile(),preset)
     if team_id:
         selected=next((t for t in own['teams'] if str(t['id'])==str(team_id)),None)
         if not selected:raise PermissionError('Team is not accessible')
+        if preset is not None:raise ValueError('Choose a team or a preset, not both')
         return TeamProfile.model_validate(selected['profile'])
+    if preset is not None:return apply_preset(TeamProfile(),preset)
     return apply_preset(TeamProfile(),0)
 
 
@@ -42,24 +49,10 @@ def public_program(row,profile,weights=None):
             'updated_at':row['created_at']}
 
 
-def browse(db,user_id,team_id=None,preset=None,q='',program_type=None,status=None,eligibility=None,history=False,recommended=False,limit=30,offset=0):
+def browse(db,user_id,team_id=None,preset=None,q='',program_type=None,status=None,eligibility=None,history=False,recommended=False,limit=30,offset=0,date_from=None,date_to=None):
     profile=profile_for(db,user_id,team_id,preset)
-    weights=configured_weights(db)
-    with db.transaction(user_id) as c:
-        rows=c.execute('select v.* from startup_radar.program_versions v join startup_radar.programs p on p.current_version_id=v.id '
-                       'where (%s=\'\' or p.title ilike %s or p.organization ilike %s) order by v.created_at desc',
-                       (q,'%'+q+'%','%'+q+'%')).fetchall()
-    output=[]
-    for row in rows:
-        item=public_program(row,profile,weights)
-        if not history and item['status']=='CLOSED':continue
-        if program_type and program_type not in item['facts']['program_types']:continue
-        if status and item['status']!=status:continue
-        if eligibility and item['eligibility']['status']!=eligibility:continue
-        if recommended and item['recommendation'] is None:continue
-        output.append(item)
-    if recommended:output.sort(key=lambda i:i['recommendation']['score'],reverse=True)
-    return {'items':output[offset:offset+limit],'total':len(output),'profile':profile.model_dump(mode='json'),'offset':offset,'limit':limit}
+    from radar.feed import cached_browse
+    return cached_browse(db,user_id,profile,team_id,q,program_type,status,eligibility,history,recommended,limit,offset,date_from,date_to)
 
 
 def detail(db,user_id,program_id,team_id=None,preset=None,version_id=None):
@@ -86,9 +79,11 @@ def health(db,user_id=None):
         jobs=c.execute('select * from startup_radar.job_requests order by created_at desc limit 20').fetchall()
         claims=c.execute('select * from startup_radar.schedule_claims order by created_at desc limit 20').fetchall()
         settings=c.execute('select key,value,updated_at from startup_radar.runtime_settings order by key').fetchall()
+        failure_counts=c.execute("select (select count(*) from startup_radar.documents where extraction_status in ('FAILED','UNSUPPORTED')) documents, "
+            "(select count(*) from startup_radar.ingestion_runs where summary->>'eligibility_error' is not null) eligibility").fetchone()
     active=[s for s in sources if s['enabled']]
     success=sum(s['status']=='SUCCESS' for s in active)
-    return {'sources':sources,'runs':runs,'jobs':jobs,'schedule_claims':claims,'settings':settings,'tracked_sources':len(sources),
+    return {'sources':sources,'runs':runs,'jobs':jobs,'schedule_claims':claims,'settings':settings,'failure_counts':failure_counts,'tracked_sources':len(sources),
             'enabled_sources':len(active),'successful_sources':success,
             'tracked_source_success_rate':round(100*success/len(active),1) if active else None,
             'coverage_note':'등록된 활성 소스의 최근 수집 성공률이며 국내 전체 창업지원사업의 포괄률이 아닙니다.'}
@@ -99,6 +94,7 @@ def admin_trace(db,user_id,recommendation_id):
     with db.transaction() as c:
         rec=c.execute('select * from startup_radar.recommendations where id=%s',(recommendation_id,)).fetchone()
         if not rec:raise LookupError('Recommendation not found')
+        profile_for(db,user_id,rec['team_id'])
         ev=c.execute('select * from startup_radar.eligibility_evaluations where id=%s',(rec['evaluation_id'],)).fetchone()
         version=c.execute('select * from startup_radar.program_versions where id=%s',(ev['program_version_id'],)).fetchone()
         profile=c.execute('select * from startup_radar.team_profile_versions where id=%s',(ev['profile_version_id'],)).fetchone()
