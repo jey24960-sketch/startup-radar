@@ -19,13 +19,15 @@ def _require_env(key: str) -> str:
     return val
 
 
-def load_secrets() -> dict:
-    """필수 환경변수를 로드합니다. 없으면 ValueError를 발생시킵니다."""
-    return {
+def load_secrets(*, delivery: bool = True) -> dict:
+    """검증 실행은 AI 키만, 실제 발송은 Telegram 설정까지 요구합니다."""
+    values = {
         "ANTHROPIC_API_KEY": _require_env("ANTHROPIC_API_KEY"),
-        "TELEGRAM_BOT_TOKEN": _require_env("TELEGRAM_BOT_TOKEN"),
-        "TELEGRAM_CHAT_ID": _require_env("TELEGRAM_CHAT_ID"),
     }
+    if delivery:
+        values.update(TELEGRAM_BOT_TOKEN=_require_env("TELEGRAM_BOT_TOKEN"),
+                      TELEGRAM_CHAT_ID=_require_env("TELEGRAM_CHAT_ID"))
+    return values
 
 
 # ──────────────────────────────────────────────

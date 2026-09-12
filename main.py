@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from config import DATA_DIR, SOURCES, load_secrets
+from config import DATA_DIR, SOURCES, CLUB_PROFILE, MIN_RELEVANCE_SCORE, load_secrets
 from core.clock import now
 from core.crawler import crawl_all
 from core.analyzer import analyze
@@ -22,14 +22,21 @@ def save_results(programs, label="new"):
 
 
 def run_full(dry_run=False):
-    secrets = load_secrets()
+    secrets = load_secrets(delivery=False) if dry_run else load_secrets()
     if not dry_run:
         cleanup_expired(days=90)
+    collection_started_at = now()
     raw, failed_sources = crawl_all()
+    collection_completed_at = now()
     analysis = analyze(raw, api_key=secrets["ANTHROPIC_API_KEY"])
     programs = filter_new_programs(analysis.programs)
     save_results({"status": analysis.status, "programs": programs,"all_programs":analysis.programs,
-                  "observed_at":now().isoformat(),"configured_source_count":len(SOURCES),
+                  "observed_at":collection_started_at.isoformat(),"configured_source_count":len(SOURCES),
+                  "collection_started_at":collection_started_at.isoformat(),
+                  "collection_completed_at":collection_completed_at.isoformat(),
+                  "analysis_completed_at":now().isoformat(),"delivery_enabled":not dry_run,
+                  "configured_sources":SOURCES,"collected_sources":list(raw),
+                  "profile":CLUB_PROFILE.strip(),"minimum_relevance_score":MIN_RELEVANCE_SCORE,
                   "failed_sources": failed_sources,
                   "analysis_failures": [vars(f) for f in analysis.failures]}, "run")
     logger.info("Analysis=%s programs=%s source_failures=%s", analysis.status, len(programs), len(failed_sources))

@@ -110,3 +110,25 @@ def test_valid_results_delivered_despite_partial_failure(monkeypatch,tmp_path):
     monkeypatch.setattr(main,'send_telegram_notification',send)
     assert main.run_full()==1
     assert send.call_args.args[0]==[program()]
+
+
+def test_dry_run_needs_no_telegram_and_preserves_delivery_state(monkeypatch,tmp_path):
+    import config
+    monkeypatch.setenv('ANTHROPIC_API_KEY','test-only')
+    monkeypatch.delenv('TELEGRAM_BOT_TOKEN',raising=False)
+    monkeypatch.delenv('TELEGRAM_CHAT_ID',raising=False)
+    monkeypatch.setattr(main,'DATA_DIR',str(tmp_path))
+    monkeypatch.setattr(main,'crawl_all',lambda:({'ok':'text'},[]))
+    monkeypatch.setattr(main,'analyze',lambda *a,**kw:AnalysisResult([program()],successful_chunks=1))
+    monkeypatch.setattr(main,'filter_new_programs',lambda p:p)
+    forbidden=Mock(side_effect=AssertionError('Dry run must not mutate delivery state'))
+    for name in ('cleanup_expired','mark_as_sent','send_telegram_notification'):
+        monkeypatch.setattr(main,name,forbidden)
+    assert main.run_full(dry_run=True)==0
+    forbidden.assert_not_called()
+    report=json.loads(next(tmp_path.glob('report_*_run.json')).read_text(encoding='utf-8'))
+    assert report['collection_started_at']<=report['collection_completed_at']<=report['analysis_completed_at']
+    assert report['observed_at']==report['collection_started_at'] and report['delivery_enabled'] is False
+    assert report['collected_sources']==['ok'] and report['minimum_relevance_score']==60
+    with pytest.raises(ValueError,match='TELEGRAM_BOT_TOKEN'):
+        config.load_secrets()

@@ -223,6 +223,10 @@ def test_parallel_snapshot_is_read_only_and_does_not_invent_collection_time(db):
     snapshot=v2_snapshot(db,team['id'])
     assert snapshot['observed_at'] is None and snapshot['profile_version_id']
     assert snapshot['programs'][0]['id']==str(saved['program_id'])
+    assert snapshot['scope']=='STORED_CATALOG'
+    assert snapshot['programs'][0]['source_observations'][0]['last_seen_at']
+    assert snapshot['programs'][0]['application_end_precision']==p.application_end_precision
+    assert snapshot['source_results'][0]['run_id'] is None
     report=compare({'status':'SUCCESS','observed_at':now().isoformat(),'all_programs':[{'title':p.title,'organization':p.organization,'apply_url':p.official_url}]},snapshot)
     assert report['counts']['matched']==1 and report['cutover_approved'] is False
     with db.transaction() as c:

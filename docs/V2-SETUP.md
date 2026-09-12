@@ -128,13 +128,13 @@ For real lock/concurrency tests, create an empty local PostgreSQL database named
 
 ## V1/V2 parallel comparison
 
-V1 run reports now include `all_programs` before previously-sent filtering, analysis status, collection timestamp and failures. Keep the V1 and V2 collections close in time and use a separate test bot if delivery is exercised. With the V1 report available:
+V1 run reports include `all_programs` before previously-sent filtering (still after the AI/relevance filters), analysis status, collection start/end, configured/acquired sources, the V1 profile and failures. `python main.py --dry` requires only ANTHROPIC_API_KEY and does not send or update delivery history. Keep collections close in time and use an explicitly approved recipient if delivery is exercised. With the V1 report available:
 
 ```bash
 python -m radar.cli compare --v1 path/to/v1-report.json --team-id EXISTING_TEAM_UUID --output path/to/comparison.json
 ```
 
-The command only reads V2 data, evaluates its current program/profile snapshot, and writes a local report. It does not send notifications or approve cutover. It lists exact URL/alias matches, unique title+organization matches, V1-only/V2-only items, ambiguous/fuzzy candidates, eligibility review, source failures and profile version. Missing collection timestamps, old filtered V1 reports and collection gaps over six hours are explicit limitations. The V2 catalog may include closed or older notices; raw count differences are not coverage measurements. Run a matched-period cohort repeatedly and investigate each difference before any production switch. No live matched-period V1/V2 comparison has been completed yet.
+The command reads V2 data, evaluates its current program/profile snapshot, and writes a local report. It does not send notifications or approve cutover. It includes identity/review candidates, date-only versus precise deadline comparisons, source run intervals/counts, individual last-seen observations and both profile contexts. Homepage/shared URLs never establish identity. Missing or stale source intervals remain explicit even when another source just ran. Nearby times do not prove equal coverage or profiles; raw catalog differences are not coverage measurements. See the [first partial live comparison](LIVE-PARALLEL-REVIEW.md) and repeat a common cohort before any production switch.
 
 See [OPERATIONS.md](OPERATIONS.md) for source failures, dispatch races, audited request cancellation, Telegram recovery and duplicate review.
 
