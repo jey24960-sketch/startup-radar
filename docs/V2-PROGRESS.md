@@ -76,3 +76,7 @@ The local PGlite socket bridge encountered a protocol error after an invalid SQL
 ## External dependencies
 
 Supabase project selection requested asynchronously; no matching dedicated project identified, and no unrelated project mutated. KSTARTUP_API_KEY, BIZINFO_API_KEY and search-provider deployment configuration still required. V2 Auth, Telegram/subscription, Worker and workflow environment setup pending. Full completion remains UNPROVEN.
+
+### Repeat-run test correction
+
+A repeated integration run exposed shared fixture contamination: earlier programs/subscriptions remained in the ephemeral database and changed global notification counts. Tests now require an explicit ephemeral-test marker and reset fixture state between tests. Full suite passed again (55), followed by a repeated database subset (7). This guards against accidentally resetting an arbitrary database and makes repeat runs independent.

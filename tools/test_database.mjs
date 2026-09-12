@@ -8,6 +8,8 @@ create table auth.users(id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
 grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
 for(const file of (await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort()) await db.exec(await readFile('supabase/migrations/'+file,'utf8'));
+await db.exec("create table public.radar_test_marker(value text primary key); insert into public.radar_test_marker values('ephemeral-test-only');");
+await db.exec("create table public.radar_test_marker(value text primary key); insert into public.radar_test_marker values('ephemeral-test-only');");
 const server=new PGLiteSocketServer({db,host:'127.0.0.1',port:55432});
 await server.start();
 console.log('TEST_DATABASE_READY port=55432 (ephemeral test database; no production data)');

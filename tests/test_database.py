@@ -12,7 +12,12 @@ pytestmark=pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Ex
 
 @pytest.fixture
 def db():
-    return Database(os.environ['TEST_DATABASE_URL'])
+    database=Database(os.environ['TEST_DATABASE_URL'])
+    with database.transaction() as c:
+        marker=c.execute('select value from public.radar_test_marker').fetchone()
+        assert marker and marker['value']=='ephemeral-test-only', 'Refusing to reset a non-test database'
+        c.execute('truncate auth.users,radar.teams,radar.sources,radar.programs,radar.ingestion_runs,radar.notification_runs cascade')
+    return database
 
 
 def source(db):
