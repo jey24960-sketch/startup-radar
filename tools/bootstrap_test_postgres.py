@@ -8,7 +8,7 @@ def main():
     with psycopg.connect(os.environ['TEST_DATABASE_URL']) as c:
         if c.info.host not in ('127.0.0.1','localhost','::1') or c.info.dbname!='radar_test':
             raise ValueError('Only the loopback radar_test database may be initialized')
-        if c.execute("select 1 from pg_namespace where nspname in ('radar','auth')").fetchone():
+        if c.execute("select 1 from pg_namespace where nspname in ('radar','startup_radar','auth')").fetchone():
             raise ValueError('Test database already initialized; bootstrap refuses to overwrite it')
         for role in ('anon','authenticated','service_role'):
             if not c.execute('select 1 from pg_roles where rolname=%s',(role,)).fetchone():

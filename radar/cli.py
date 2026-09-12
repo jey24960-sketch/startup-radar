@@ -25,15 +25,15 @@ def main(argv=None):
         rows=json.loads(Path(args.file).read_text(encoding='utf-8'))
         for row in rows:
             source=db.upsert_source(row['slug'],row['name'],row['adapter'],row['config'])
-            with db.transaction() as c:c.execute('update radar.sources set enabled=%s where id=%s',(row.get('enabled',True),source['id']))
+            with db.transaction() as c:c.execute('update startup_radar.sources set enabled=%s where id=%s',(row.get('enabled',True),source['id']))
         result={'status':'SUCCESS','registered':len(rows)}
     elif args.command=='bootstrap-team':
         with db.transaction() as c:
             if not c.execute('select 1 from auth.users where id=%s',(args.user_id,)).fetchone():raise ValueError('Invite/create the Supabase Auth user first')
-            if c.execute('select 1 from radar.team_members where user_id=%s',(args.user_id,)).fetchone():raise ValueError('User already belongs to a team; use the administrator API to add another')
+            if c.execute('select 1 from startup_radar.team_members where user_id=%s',(args.user_id,)).fetchone():raise ValueError('User already belongs to a team; use the administrator API to add another')
         team=db.create_team(args.name,args.user_id,apply_preset(TeamProfile(),0))
         if args.admin:
-            with db.transaction() as c:c.execute('insert into radar.admin_users(user_id) values(%s) on conflict do nothing',(args.user_id,))
+            with db.transaction() as c:c.execute('insert into startup_radar.admin_users(user_id) values(%s) on conflict do nothing',(args.user_id,))
         result={'status':'SUCCESS','team_id':str(team['id'])}
     elif args.command=='compare':
         from radar.parallel import v2_snapshot,compare

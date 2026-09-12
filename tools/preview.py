@@ -17,8 +17,8 @@ def main():
     with db.transaction() as c:
         marker=c.execute('select value from public.radar_test_marker').fetchone()
         if not marker or marker['value']!='ephemeral-test-only':raise ValueError('Preview requires the ephemeral test database')
-        c.execute('truncate auth.users,radar.teams,radar.sources,radar.programs,radar.ingestion_runs,radar.notification_runs cascade')
-        owner=uuid4();c.execute('insert into auth.users values(%s)',(owner,));c.execute('insert into radar.admin_users values(%s)',(owner,))
+        c.execute('truncate auth.users,startup_radar.teams,startup_radar.sources,startup_radar.programs,startup_radar.ingestion_runs,startup_radar.notification_runs cascade')
+        owner=uuid4();c.execute('insert into auth.users values(%s)',(owner,));c.execute('insert into startup_radar.admin_users values(%s)',(owner,))
     team=db.create_team('GFC · 아이디어 팀',owner,apply_preset(TeamProfile(),0))
     db.create_team('GFC · 법인 팀',owner,TeamProfile(business_status='CORPORATION',product_stage='MVP'))
     source=db.upsert_source('preview-only','로컬 검증용 소스','HTML',{})

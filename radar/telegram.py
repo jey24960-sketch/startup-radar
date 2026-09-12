@@ -18,11 +18,11 @@ def handle_update(db,update,transport,dispatcher=dispatch_job):
     sender=str((message.get('from') or {}).get('id',''));chat_id=(message.get('chat') or {}).get('id')
     text=(message.get('text') or '').strip();parts=text.split();command=(parts[0].split('@')[0].lower() if parts else '')
     with db.transaction() as c:
-        admin=c.execute('select * from radar.telegram_admins where telegram_user_id=%s',(sender,)).fetchone()
+        admin=c.execute('select * from startup_radar.telegram_admins where telegram_user_id=%s',(sender,)).fetchone()
     if command!='/id' and not admin:return {'state':'IGNORED'}
     if command!='/id':require_admin(db,admin['user_id'])
     with db.transaction() as c:
-        claimed=c.execute("insert into radar.telegram_updates(update_id,state) values(%s,'PROCESSING') on conflict do nothing returning update_id",(update_id,)).fetchone()
+        claimed=c.execute("insert into startup_radar.telegram_updates(update_id,state) values(%s,'PROCESSING') on conflict do nothing returning update_id",(update_id,)).fetchone()
     if not claimed:return {'state':'DUPLICATE'}
     state='COMPLETED';result={}
     try:
@@ -45,7 +45,7 @@ def handle_update(db,update,transport,dispatcher=dispatch_job):
             else:
                 selected=UUID(parts[1])
                 if not any(t['id']==selected for t in own):raise PermissionError('소속 팀만 선택할 수 있습니다.')
-                with db.transaction() as c:c.execute('update radar.telegram_admins set selected_team_id=%s where telegram_user_id=%s',(selected,sender))
+                with db.transaction() as c:c.execute('update startup_radar.telegram_admins set selected_team_id=%s where telegram_user_id=%s',(selected,sender))
                 reply='팀 선택을 저장했습니다.'
         elif command=='/stage':
             team_id=admin['selected_team_id']
@@ -53,7 +53,7 @@ def handle_update(db,update,transport,dispatcher=dispatch_job):
             elif len(parts)!=2:reply='/stage 0..4 — 0 아이디어 전, 1 팀 구성·아이디어, 2 랜딩, 3 MVP, 4 사업자 보유'
             else:
                 profile=profile_for(db,admin['user_id'],team_id)
-                with db.transaction(admin['user_id']) as c:version=c.execute('select version from radar.team_profiles where team_id=%s',(team_id,)).fetchone()['version']
+                with db.transaction(admin['user_id']) as c:version=c.execute('select version from startup_radar.team_profiles where team_id=%s',(team_id,)).fetchone()['version']
                 if parts[1]=='초기매출':profile=update_profile(profile,{'product_stage':'REVENUE'})
                 else:
                     aliases={'팀빌딩':0,'아이디어':1,'랜딩':2,'MVP':3}
@@ -64,8 +64,8 @@ def handle_update(db,update,transport,dispatcher=dispatch_job):
                 reply='팀 프로필을 저장하고 지원 조건을 다시 평가했습니다.'
         elif command=='/stop':
             with db.transaction() as c:
-                c.execute("update radar.runtime_settings set value=jsonb_set(value,'{enabled}','false'),updated_at=now() where key='scheduling'")
-                c.execute('insert into radar.admin_audit(actor_id,action) values(%s,%s)',(admin['user_id'],'STOP_SCHEDULE'))
+                c.execute("update startup_radar.runtime_settings set value=jsonb_set(value,'{enabled}','false'),updated_at=now() where key='scheduling'")
+                c.execute('insert into startup_radar.admin_audit(actor_id,action) values(%s,%s)',(admin['user_id'],'STOP_SCHEDULE'))
             reply='정기 수집·발송을 중지했습니다. 진행 중인 작업은 취소하지 않으며 /run 수동 실행은 가능합니다.'
         elif command=='/help':reply='/run 수집 실행\n/status 실제 상태\n/health 소스 건강도\n/team 팀 선택\n/stage 0..4 단계 설정\n/digest 주간 요약 요청\n/stop 정기 자동화 중지\n/id 내 ID'
         else:reply='알 수 없는 명령입니다. /help를 확인하세요.'
@@ -76,5 +76,5 @@ def handle_update(db,update,transport,dispatcher=dispatch_job):
         # Do not dispatch again or leak credentials in an exception reply.
         try:transport.send(str(chat_id),'명령을 완료하지 못했습니다. 관리자 화면에서 작업 상태를 확인하세요.')
         except Exception:result['reply_error']='Error reply delivery unknown'
-    with db.transaction() as c:c.execute('update radar.telegram_updates set state=%s,result=%s,updated_at=now() where update_id=%s',(state,Jsonb(result),update_id))
+    with db.transaction() as c:c.execute('update startup_radar.telegram_updates set state=%s,result=%s,updated_at=now() where update_id=%s',(state,Jsonb(result),update_id))
     return {'state':state}

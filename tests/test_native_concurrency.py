@@ -20,7 +20,7 @@ def test_concurrent_identical_program_has_one_version(db):
     def save(_):return db.save_program(p,s,'same-source-id',p.official_url,{},'identical source')
     with ThreadPoolExecutor(max_workers=6) as pool:results=list(pool.map(save,range(12)))
     assert len({r['program_id'] for r in results})==1 and len({r['version_id'] for r in results})==1
-    with db.transaction() as c:assert c.execute('select count(*) n from radar.program_versions').fetchone()['n']==1
+    with db.transaction() as c:assert c.execute('select count(*) n from startup_radar.program_versions').fetchone()['n']==1
 
 
 def test_global_job_lock_rejects_parallel_execution(db):
@@ -60,7 +60,7 @@ def test_parallel_planners_and_senders_respect_daily_cap(db):
     for index in range(8):
         p=program();p.title+=str(index);p.program_types=['EDUCATION'];p.evidence_complete=True;p.application_end_at=now()+timedelta(days=15)
         db.save_program(p,s,str(index),p.official_url,{},'Fixture')
-    with db.transaction() as c:c.execute('insert into radar.telegram_subscriptions(team_id,chat_id,high_fit_threshold) values(%s,%s,0)',(team['id'],'fixture-concurrent'))
+    with db.transaction() as c:c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,high_fit_threshold) values(%s,%s,0)',(team['id'],'fixture-concurrent'))
     refresh_recommendations(db)
     with ThreadPoolExecutor(max_workers=6) as pool:planned=list(pool.map(lambda _:plan_notifications(db,'HIGH_FIT'),range(6)))
     assert sum(planned)==2

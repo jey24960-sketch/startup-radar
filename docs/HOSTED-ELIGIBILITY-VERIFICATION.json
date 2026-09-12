@@ -1,0 +1,373 @@
+{
+  "status": "PASS",
+  "fixture_only": true,
+  "profiles_roundtripped_through_hosted_db": true,
+  "python_engine": "eligibility-2.0.2",
+  "real_notice_or_model_accuracy_claim": false,
+  "results": [
+    {
+      "name": "[STAGING ROLLBACK] Landing",
+      "profile": {
+        "team_status": "TEAMED",
+        "product_stage": "LANDING",
+        "business_status": "PRE_BUSINESS",
+        "business_status_options": null,
+        "team_size": null,
+        "founder_age": null,
+        "age_band": null,
+        "student_status": null,
+        "university_affiliation": null,
+        "region": null,
+        "business_registration_date": null,
+        "business_age_months": null,
+        "industry": null,
+        "has_revenue": null,
+        "revenue": null,
+        "revenue_band": null,
+        "investment_received": null,
+        "investment_stage": null,
+        "preferred_program_types": null,
+        "global_expansion_interest": null,
+        "applicant_type": null,
+        "prior_support_restrictions": null,
+        "preset": 2,
+        "assumed_fields": []
+      },
+      "eligibility": {
+        "status": "INELIGIBLE",
+        "as_of": "2026-09-12",
+        "matched_requirements": [],
+        "failed_requirements": [
+          {
+            "key": "business_status",
+            "operator": "EQ",
+            "value": "CORPORATION",
+            "mandatory": true,
+            "certain": true,
+            "evidence": [
+              {
+                "source_id": "staging-fixture",
+                "document_id": null,
+                "location": null,
+                "text": "검증용 가상 공고: 법인만 지원 가능",
+                "method": "MANUAL",
+                "confidence": 1.0,
+                "verified": true
+              }
+            ]
+          }
+        ],
+        "missing_profile_fields": [],
+        "unverifiable_requirements": [],
+        "evidence": [
+          {
+            "source_id": "staging-fixture",
+            "document_id": null,
+            "location": null,
+            "text": "검증용 가상 공고: 법인만 지원 가능",
+            "method": "MANUAL",
+            "confidence": 1.0,
+            "verified": true
+          }
+        ],
+        "engine_version": "eligibility-2.0.2"
+      }
+    },
+    {
+      "name": "[STAGING ROLLBACK] MVP CORPORATION",
+      "profile": {
+        "team_status": "TEAMED",
+        "product_stage": "MVP",
+        "business_status": "CORPORATION",
+        "business_status_options": null,
+        "team_size": null,
+        "founder_age": null,
+        "age_band": null,
+        "student_status": null,
+        "university_affiliation": null,
+        "region": null,
+        "business_registration_date": null,
+        "business_age_months": null,
+        "industry": null,
+        "has_revenue": null,
+        "revenue": null,
+        "revenue_band": null,
+        "investment_received": null,
+        "investment_stage": null,
+        "preferred_program_types": null,
+        "global_expansion_interest": null,
+        "applicant_type": null,
+        "prior_support_restrictions": null,
+        "preset": 4,
+        "assumed_fields": []
+      },
+      "eligibility": {
+        "status": "ELIGIBLE",
+        "as_of": "2026-09-12",
+        "matched_requirements": [
+          {
+            "key": "business_status",
+            "operator": "EQ",
+            "value": "CORPORATION",
+            "mandatory": true,
+            "certain": true,
+            "evidence": [
+              {
+                "source_id": "staging-fixture",
+                "document_id": null,
+                "location": null,
+                "text": "검증용 가상 공고: 법인만 지원 가능",
+                "method": "MANUAL",
+                "confidence": 1.0,
+                "verified": true
+              }
+            ]
+          }
+        ],
+        "failed_requirements": [],
+        "missing_profile_fields": [],
+        "unverifiable_requirements": [],
+        "evidence": [
+          {
+            "source_id": "staging-fixture",
+            "document_id": null,
+            "location": null,
+            "text": "검증용 가상 공고: 법인만 지원 가능",
+            "method": "MANUAL",
+            "confidence": 1.0,
+            "verified": true
+          }
+        ],
+        "engine_version": "eligibility-2.0.2"
+      }
+    },
+    {
+      "name": "[STAGING ROLLBACK] MVP PRE_BUSINESS",
+      "profile": {
+        "team_status": "TEAMED",
+        "product_stage": "MVP",
+        "business_status": "PRE_BUSINESS",
+        "business_status_options": null,
+        "team_size": null,
+        "founder_age": null,
+        "age_band": null,
+        "student_status": null,
+        "university_affiliation": null,
+        "region": null,
+        "business_registration_date": null,
+        "business_age_months": null,
+        "industry": null,
+        "has_revenue": null,
+        "revenue": null,
+        "revenue_band": null,
+        "investment_received": null,
+        "investment_stage": null,
+        "preferred_program_types": null,
+        "global_expansion_interest": null,
+        "applicant_type": null,
+        "prior_support_restrictions": null,
+        "preset": 3,
+        "assumed_fields": []
+      },
+      "eligibility": {
+        "status": "INELIGIBLE",
+        "as_of": "2026-09-12",
+        "matched_requirements": [],
+        "failed_requirements": [
+          {
+            "key": "business_status",
+            "operator": "EQ",
+            "value": "CORPORATION",
+            "mandatory": true,
+            "certain": true,
+            "evidence": [
+              {
+                "source_id": "staging-fixture",
+                "document_id": null,
+                "location": null,
+                "text": "검증용 가상 공고: 법인만 지원 가능",
+                "method": "MANUAL",
+                "confidence": 1.0,
+                "verified": true
+              }
+            ]
+          }
+        ],
+        "missing_profile_fields": [],
+        "unverifiable_requirements": [],
+        "evidence": [
+          {
+            "source_id": "staging-fixture",
+            "document_id": null,
+            "location": null,
+            "text": "검증용 가상 공고: 법인만 지원 가능",
+            "method": "MANUAL",
+            "confidence": 1.0,
+            "verified": true
+          }
+        ],
+        "engine_version": "eligibility-2.0.2"
+      }
+    },
+    {
+      "name": "[STAGING ROLLBACK] Stage 0",
+      "profile": {
+        "team_status": "PRE_TEAM",
+        "product_stage": "IDEA",
+        "business_status": "PRE_BUSINESS",
+        "business_status_options": null,
+        "team_size": null,
+        "founder_age": null,
+        "age_band": null,
+        "student_status": null,
+        "university_affiliation": null,
+        "region": null,
+        "business_registration_date": null,
+        "business_age_months": null,
+        "industry": null,
+        "has_revenue": false,
+        "revenue": null,
+        "revenue_band": null,
+        "investment_received": null,
+        "investment_stage": null,
+        "preferred_program_types": null,
+        "global_expansion_interest": null,
+        "applicant_type": null,
+        "prior_support_restrictions": null,
+        "preset": 0,
+        "assumed_fields": []
+      },
+      "eligibility": {
+        "status": "INELIGIBLE",
+        "as_of": "2026-09-12",
+        "matched_requirements": [],
+        "failed_requirements": [
+          {
+            "key": "business_status",
+            "operator": "EQ",
+            "value": "CORPORATION",
+            "mandatory": true,
+            "certain": true,
+            "evidence": [
+              {
+                "source_id": "staging-fixture",
+                "document_id": null,
+                "location": null,
+                "text": "검증용 가상 공고: 법인만 지원 가능",
+                "method": "MANUAL",
+                "confidence": 1.0,
+                "verified": true
+              }
+            ]
+          }
+        ],
+        "missing_profile_fields": [],
+        "unverifiable_requirements": [],
+        "evidence": [
+          {
+            "source_id": "staging-fixture",
+            "document_id": null,
+            "location": null,
+            "text": "검증용 가상 공고: 법인만 지원 가능",
+            "method": "MANUAL",
+            "confidence": 1.0,
+            "verified": true
+          }
+        ],
+        "engine_version": "eligibility-2.0.2"
+      }
+    },
+    {
+      "name": "[STAGING ROLLBACK] Team Idea",
+      "profile": {
+        "team_status": "TEAMED",
+        "product_stage": "IDEA",
+        "business_status": "PRE_BUSINESS",
+        "business_status_options": null,
+        "team_size": null,
+        "founder_age": null,
+        "age_band": null,
+        "student_status": null,
+        "university_affiliation": null,
+        "region": null,
+        "business_registration_date": null,
+        "business_age_months": null,
+        "industry": null,
+        "has_revenue": null,
+        "revenue": null,
+        "revenue_band": null,
+        "investment_received": null,
+        "investment_stage": null,
+        "preferred_program_types": null,
+        "global_expansion_interest": null,
+        "applicant_type": null,
+        "prior_support_restrictions": null,
+        "preset": 1,
+        "assumed_fields": []
+      },
+      "eligibility": {
+        "status": "INELIGIBLE",
+        "as_of": "2026-09-12",
+        "matched_requirements": [],
+        "failed_requirements": [
+          {
+            "key": "business_status",
+            "operator": "EQ",
+            "value": "CORPORATION",
+            "mandatory": true,
+            "certain": true,
+            "evidence": [
+              {
+                "source_id": "staging-fixture",
+                "document_id": null,
+                "location": null,
+                "text": "검증용 가상 공고: 법인만 지원 가능",
+                "method": "MANUAL",
+                "confidence": 1.0,
+                "verified": true
+              }
+            ]
+          }
+        ],
+        "missing_profile_fields": [],
+        "unverifiable_requirements": [],
+        "evidence": [
+          {
+            "source_id": "staging-fixture",
+            "document_id": null,
+            "location": null,
+            "text": "검증용 가상 공고: 법인만 지원 가능",
+            "method": "MANUAL",
+            "confidence": 1.0,
+            "verified": true
+          }
+        ],
+        "engine_version": "eligibility-2.0.2"
+      }
+    }
+  ],
+  "stage_zero_no_optional_data": true,
+  "unknown_age_result": {
+    "status": "NEEDS_INFO",
+    "as_of": "2026-09-12",
+    "matched_requirements": [],
+    "failed_requirements": [],
+    "missing_profile_fields": [
+      "founder_age"
+    ],
+    "unverifiable_requirements": [],
+    "evidence": [
+      {
+        "source_id": "staging-fixture",
+        "document_id": null,
+        "location": null,
+        "text": "Synthetic age limit 39",
+        "method": "MANUAL",
+        "confidence": 1.0,
+        "verified": true
+      }
+    ],
+    "engine_version": "eligibility-2.0.2"
+  },
+  "missing_evidence_result": "UNVERIFIABLE"
+}

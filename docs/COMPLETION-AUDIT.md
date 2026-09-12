@@ -1,3 +1,5 @@
+> Current shared-GFC staging results: see SHARED-GFC-REPORT.md. The original implementation matrix below is retained; current hosted verification and remaining gates are updated separately.
+
 # StartupRadar 2.0 requirement audit
 
 Assessment date: 2026-09-12. Full scope: V2-SPEC.md, sections 0–27. Baseline remote main remains c18f84048ddd08adca10d44b83692a1060d957cb. This assessment covers the local V2 branch, including the DATE/DATETIME precision fix. It is **not a completion or production cutover declaration**.
@@ -50,13 +52,13 @@ Evidence levels below are deliberately different: **local** means code plus boun
 | Source isolation; empty API vs failure; document parse; malformed AI/schema | test_ingestion_units.py, test_document_process.py, test_database.py, test_extraction_evidence.py |
 | Unauthorized/duplicate Telegram; RLS/team isolation | tests/worker.test.mjs, tests/database.test.mjs, test_web_runtime.py and test_database.py |
 
-The latest 139-test run used native PostgreSQL 18.4 and finished successfully with one unchanged third-party deprecation warning. Fresh migration/RLS and four Worker checks passed earlier; no migration/Worker change followed those checks. The current frontend was rebuilt and browser-checked: unknown/coarse times display “시각 원문 확인”, while an explicit fixture DATETIME displays “오전 11:00”. Preview uses fictional notices and was stopped after inspection.
+The earlier 139-test checkpoint used native PostgreSQL 18.4 and finished successfully with one unchanged third-party deprecation warning. Fresh migration/RLS and four Worker checks passed earlier; no migration/Worker change followed those checks. The current frontend was rebuilt and browser-checked: unknown/coarse times display “시각 원문 확인”, while an explicit fixture DATETIME displays “오전 11:00”. Preview uses fictional notices and was stopped after inspection.
 
 ## External completion gates and next actions
 
-1. **Select the dedicated Supabase project and web backend host.** The connected inventory was inspected and no StartupRadar-named project was found; no unrelated project was modified. User selection remains pending.
-2. **Configure V2 runtime credentials securely.** The current local process has none of DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, ANTHROPIC_API_KEY, KSTARTUP_API_KEY, BIZINFO_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET or RADAR_GITHUB_TOKEN. This says nothing about inaccessible existing GitHub/production secret values.
-3. **Apply and verify the hosted database/Auth setup.** Run migrations/advisors on that chosen target, configure invite-only Auth and redirects, link GFC membership, and exercise actual login and team isolation.
+1. **Choose the web staging host after the A/B/C audit.** Supabase is now selected: the existing GFC project etvffzxqdgblvkfdikwl, with isolated startup_radar schema. WEB-INTEGRATION.md recommends gradual integration (C). No new Supabase project is needed.
+2. **Configure remaining V2 runtime credentials securely.** The project URL and modern publishable key are prepared in ignored .env.staging. DATABASE_URL, AI/official API keys, Telegram credentials and GitHub dispatch credentials are still needed for the Python runtime. This says nothing about inaccessible existing GitHub/production secrets.
+3. **Complete real Auth/runtime connectivity.** Two hosted migrations, advisor checks and SQL role/claim team-isolation tests now pass. GFC object definitions and data remained unchanged. Preserve existing GFC Auth providers/signup/site settings. Designate Radar memberships and exercise real browser JWT login through the chosen backend/pooler.
 4. **Run real official ingestion and a labeled notice cohort.** Verify pagination/contracts, documents and extraction quality, then investigate eligibility/ranking against original evidence. Synthetic test counts do not substitute for this.
 5. **Exercise an intended test delivery/workflow.** Use a designated test bot/chat and verify receipts, commands, failure/recovery and the chosen pooler. No external messages were sent in this session.
 6. **Run matched-period V1/V2 comparisons and assess reliability.** Only after this proof should the production webhook/schedule switch be performed. V1 remains present and production unchanged.

@@ -10,7 +10,7 @@ DEFAULT_WEIGHTS={'stage':25,'profile':20,'preference':15,'benefit':10,'global':1
 
 def configured_weights(db):
     with db.transaction() as c:
-        row=c.execute("select value from radar.runtime_settings where key='recommendation_weights'").fetchone()
+        row=c.execute("select value from startup_radar.runtime_settings where key='recommendation_weights'").fetchone()
     return row['value'] if row else DEFAULT_WEIGHTS
 
 
@@ -58,20 +58,20 @@ def refresh_recommendations(db,team_id=None):
     results=[]
     weights=configured_weights(db)
     with db.transaction() as c:
-        profiles=c.execute('select v.* from radar.team_profile_versions v join radar.team_profiles p on p.team_id=v.team_id and p.version=v.version '
+        profiles=c.execute('select v.* from startup_radar.team_profile_versions v join startup_radar.team_profiles p on p.team_id=v.team_id and p.version=v.version '
                            'where (%s::uuid is null or v.team_id=%s)',(team_id,team_id)).fetchall()
-        programs=c.execute('select v.* from radar.program_versions v join radar.programs p on p.current_version_id=v.id').fetchall()
+        programs=c.execute('select v.* from startup_radar.program_versions v join startup_radar.programs p on p.current_version_id=v.id').fetchall()
         for profile_row in profiles:
             profile=TeamProfile.model_validate(profile_row['profile'])
             for row in programs:
                 program=Program.model_validate(row['normalized'])
                 outcome=evaluate(profile,program.requirements,program.evidence_complete)
-                ev=c.execute('insert into radar.eligibility_evaluations(team_id,profile_version_id,program_version_id,status,result,engine_version) '
+                ev=c.execute('insert into startup_radar.eligibility_evaluations(team_id,profile_version_id,program_version_id,status,result,engine_version) '
                     'values(%s,%s,%s,%s,%s,%s) returning id',(profile_row['team_id'],profile_row['id'],row['id'],outcome.status,
                     Jsonb(outcome.model_dump(mode='json')),outcome.engine_version)).fetchone()['id']
                 ranking=rank(program,profile,outcome,weights=weights)
                 if ranking:
-                    c.execute('insert into radar.recommendations(team_id,evaluation_id,score,components,provider,model,prompt_version,schema_version,explanation) '
+                    c.execute('insert into startup_radar.recommendations(team_id,evaluation_id,score,components,provider,model,prompt_version,schema_version,explanation) '
                         'values(%s,%s,%s,%s,%s,%s,%s,%s,%s)',(profile_row['team_id'],ev,ranking.score,Jsonb(ranking.components),ranking.provider,
                          ranking.model,ranking.prompt_version,ranking.schema_version,ranking.explanation))
                 results.append({'team_id':str(profile_row['team_id']),'program_version_id':str(row['id']),'status':outcome.status,'score':ranking.score if ranking else None})

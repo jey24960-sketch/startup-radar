@@ -1,6 +1,6 @@
 # StartupRadar V2 배포 준비
 
-현재는 배포 준비 단계다. Supabase 프로젝트와 Python 서버 호스팅을 지정한 뒤 실제 연결을 검증해야 한다. 기존 V1 운영 전환은 별도 검증이 끝난 뒤 진행한다.
+현재는 staging 단계다. Supabase는 기존 GFC 프로젝트 `etvffzxqdgblvkfdikwl`로 확정했고 `startup_radar` 마이그레이션 2개를 적용했다. 웹 호스팅은 [WEB-INTEGRATION.md](WEB-INTEGRATION.md)의 A/B/C 비교 후 결정한다. 기존 V1 운영 전환은 하지 않는다.
 
 ## 준비된 실행 방법
 
@@ -43,9 +43,9 @@ python -m radar.deployment --component dispatch
 
 ## 배포 대상 확정 후 순서
 
-1. 지정한 Supabase에 다섯 마이그레이션을 순서대로 적용하고 RLS·권한·연결 방식을 확인한다.
+1. Supabase의 현행 마이그레이션 2개는 이미 적용했고 SQL 역할 기반 RLS 검증이 끝났다. 다음으로 실제 Python 프로세스의 DB 연결·풀러·제한된 권한을 검증한다.
 2. 지정한 웹 호스트에 런타임 설정을 등록하고 이미지를 빌드·실행한다. DB 접속 주소는 Supabase Connect 화면에서 얻는다.
-3. HTTPS 주소를 Supabase Auth의 사이트·리디렉션 설정에 반영하고 지정된 계정의 로그인과 GFC 멤버십을 구성한다.
+3. 기존 GFC Auth 설정은 유지한다. 필요한 HTTPS 리디렉션을 추가하는 경우 기존 주소를 보존한다. 기존 GFC 계정에 독립적인 StartupRadar 멤버십을 연결한다.
 4. 서로 다른 팀으로 권한 분리를 검증하고 실제 공고 수집·첨부문서·자격 판정 결과를 확인한다.
 5. V2 코드가 있는 GitHub 브랜치에 맞춰 RADAR_GITHUB_REF를 설정한다. 현재 로컬 V2 브랜치는 아직 GitHub에 올리지 않았다. main은 V2 실행 준비 상태로 간주하면 안 된다.
 6. 별도 테스트 봇과 지정한 채팅에서 발송·명령·실패 복구를 검증한다. DB 구독 설정도 필요하다.
@@ -59,6 +59,6 @@ python -m radar.deployment --component dispatch
 - 로컬 Docker/Podman이 없어 Linux 컨테이너 빌드·실행은 미검증이다. GitHub 검증 워크플로에 이미지 빌드·앱 import·정적 파일 검사를 추가했으며 아직 원격 실행하지 않았다.
 - Docker 기본 이미지 태그는 보안 업데이트에 따라 바뀔 수 있다. 운영에서 검증한 이미지 digest를 기록해 재배포·복구한다.
 - 이 이미지는 Python HTTP/문서 수집용이다. 선택적 Playwright/Chromium 브라우저 수집 런타임은 포함하지 않는다.
-- 현재 로컬 환경에서 필요한 외부 설정이 없다. GitHub나 기존 운영 서비스의 저장된 비밀값 상태는 이번 검사로 확인하지 않았다.
+- `.env.staging`에 선택된 Supabase URL과 활성 publishable key를 준비했다. 이 파일은 Git/Docker 빌드에서 제외되며 애플리케이션이 자동 로드하지 않는다. DB 연결 문자열, 수집 API·AI·Telegram·GitHub 실행 자격증명은 여전히 필요하다. 기존 운영 서비스의 비밀값이 없다는 의미는 아니다.
 
 컨테이너 구성은 [Docker의 다단계 빌드 문서](https://docs.docker.com/build/building/multi-stage/)를 참고했다.

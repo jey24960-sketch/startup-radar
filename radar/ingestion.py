@@ -19,12 +19,12 @@ def build_adapter(source):
 def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extractor=None):
     extractor=extractor or RequirementExtractor()
     with db.transaction() as c:
-        run=c.execute("insert into radar.ingestion_runs(status,trigger_type) values('RUNNING',%s) returning id",(trigger,)).fetchone()['id']
-        if sources is None:sources=c.execute('select * from radar.sources where enabled=true order by slug').fetchall()
+        run=c.execute("insert into startup_radar.ingestion_runs(status,trigger_type) values('RUNNING',%s) returning id",(trigger,)).fetchone()['id']
+        if sources is None:sources=c.execute('select * from startup_radar.sources where enabled=true order by slug').fetchall()
     outcomes=[]
     for source in sources:
         started=time.monotonic();discovered=fetched=parsed=0;failures=[]
-        with db.transaction() as c:c.execute('update radar.sources set last_attempted_at=now() where id=%s',(source['id'],))
+        with db.transaction() as c:c.execute('update startup_radar.sources set last_attempted_at=now() where id=%s',(source['id'],))
         try:
             adapter=adapter_factory(source)
             for candidate in adapter.discover():
@@ -51,15 +51,15 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
         state=('PARTIAL' if parsed else 'FAILED') if failures else 'SUCCESS'
         outcome=dict(source_id=str(source['id']),status=state,discovered=discovered,fetched=fetched,parsed=parsed,failures=failures)
         with db.transaction() as c:
-            c.execute('insert into radar.source_run_results(run_id,source_id,status,discovered_count,fetched_count,parsed_count,failures,latency_ms) '
+            c.execute('insert into startup_radar.source_run_results(run_id,source_id,status,discovered_count,fetched_count,parsed_count,failures,latency_ms) '
                       'values(%s,%s,%s,%s,%s,%s,%s,%s)',(run,source['id'],state,discovered,fetched,parsed,Jsonb(failures),int((time.monotonic()-started)*1000)))
-            if state=='SUCCESS':c.execute('update radar.sources set last_successful_at=now() where id=%s',(source['id'],))
+            if state=='SUCCESS':c.execute('update startup_radar.sources set last_successful_at=now() where id=%s',(source['id'],))
         outcomes.append(outcome)
     if not outcomes:status='FAILED'
     elif all(o['status']=='SUCCESS' for o in outcomes):status='SUCCESS'
     elif any(o['status'] in ('SUCCESS','PARTIAL') for o in outcomes):status='PARTIAL_SUCCESS'
     else:status='FAILED'
     with db.transaction() as c:
-        c.execute('update radar.ingestion_runs set status=%s,finished_at=now(),summary=%s where id=%s',
+        c.execute('update startup_radar.ingestion_runs set status=%s,finished_at=now(),summary=%s where id=%s',
                   (status,Jsonb({'sources':outcomes,'message':'No enabled sources' if not outcomes else None}),run))
     return {'id':str(run),'status':status,'sources':outcomes}

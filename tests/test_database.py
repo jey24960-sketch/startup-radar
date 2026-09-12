@@ -16,9 +16,9 @@ def db():
     with database.transaction() as c:
         marker=c.execute('select value from public.radar_test_marker').fetchone()
         assert marker and marker['value']=='ephemeral-test-only', 'Refusing to reset a non-test database'
-        c.execute('truncate auth.users,radar.teams,radar.sources,radar.programs,radar.ingestion_runs,radar.notification_runs cascade')
-        c.execute('truncate radar.telegram_updates,radar.schedule_claims')
-        c.execute("update radar.runtime_settings set value=jsonb_set(value,'{enabled}','true') where key='scheduling'")
+        c.execute('truncate auth.users,startup_radar.teams,startup_radar.sources,startup_radar.programs,startup_radar.ingestion_runs,startup_radar.notification_runs cascade')
+        c.execute('truncate startup_radar.telegram_updates,startup_radar.schedule_claims')
+        c.execute("update startup_radar.runtime_settings set value=value || '{\"enabled\":true,\"ingestion_enabled\":true}'::jsonb where key='scheduling'")
     return database
 
 
@@ -39,10 +39,10 @@ def test_profile_history_and_team_isolation(db):
     p=update_profile(TeamProfile(),{'region':'Seoul'})
     db.save_profile(ta['id'],p,a,1)
     with db.transaction(a) as c:
-        versions=c.execute('select * from radar.team_profile_versions where team_id=%s order by version',(ta['id'],)).fetchall()
+        versions=c.execute('select * from startup_radar.team_profile_versions where team_id=%s order by version',(ta['id'],)).fetchall()
         assert [v['version'] for v in versions]==[1,2]
         assert versions[0]['profile']['region'] is None and versions[1]['profile']['region']=='Seoul'
-        assert c.execute('select * from radar.team_profiles where team_id=%s',(tb['id'],)).fetchone() is None
+        assert c.execute('select * from startup_radar.team_profiles where team_id=%s',(tb['id'],)).fetchone() is None
     with pytest.raises(PermissionError): db.save_profile(tb['id'],p,a,1)
     with pytest.raises(ValueError): db.save_profile(ta['id'],p,a,1)
 
@@ -53,7 +53,7 @@ def test_cross_source_provenance_and_identical_version(db):
     y=db.save_program(p,b,'b1',p.official_url+'?utm_source=b',{},'raw')
     assert x['program_id']==y['program_id'] and x['version_id']==y['version_id']
     with db.transaction() as c:
-        assert c.execute('select count(*) n from radar.program_sources where program_id=%s',(x['program_id'],)).fetchone()['n']==2
+        assert c.execute('select count(*) n from startup_radar.program_sources where program_id=%s',(x['program_id'],)).fetchone()['n']==2
 
 
 def test_changed_url_and_deadline_extension_create_versions(db):
@@ -64,7 +64,7 @@ def test_changed_url_and_deadline_extension_create_versions(db):
     y=db.save_program(p,s,'stable-id',p.official_url,{},'updated')
     assert x['program_id']==y['program_id'] and x['version_id']!=y['version_id'] and y['event']=='UPDATE'
     with db.transaction() as c:
-        events=c.execute('select * from radar.program_change_events where version_id=%s',(y['version_id'],)).fetchall()
+        events=c.execute('select * from startup_radar.program_change_events where version_id=%s',(y['version_id'],)).fetchall()
         assert 'application_end_at' in events[0]['changed_fields']
 
 
@@ -75,7 +75,7 @@ def test_fuzzy_duplicates_are_not_merged(db):
     y=db.save_program(p,s,'two',p.official_url,{},'two')
     assert x['program_id']!=y['program_id']
     with db.transaction() as c:
-        assert c.execute('select * from radar.possible_duplicates where program_id=%s and candidate_program_id=%s',(y['program_id'],x['program_id'])).fetchone()
+        assert c.execute('select * from startup_radar.possible_duplicates where program_id=%s and candidate_program_id=%s',(y['program_id'],x['program_id'])).fetchone()
 
 
 def test_distinct_publisher_ids_on_same_url_remain_distinct(db):
@@ -86,8 +86,8 @@ def test_distinct_publisher_ids_on_same_url_remain_distinct(db):
     again=db.save_program(p,s,'round-two',p.official_url,{'round':2},'second')
     assert again['version_id']==second['version_id']
     with db.transaction() as c:
-        assert c.execute('select count(*) n from radar.program_sources').fetchone()['n']==2
-        assert c.execute('select count(*) n from radar.possible_duplicates').fetchone()['n']==1
+        assert c.execute('select count(*) n from startup_radar.program_sources').fetchone()['n']==2
+        assert c.execute('select count(*) n from startup_radar.possible_duplicates').fetchone()['n']==1
 
 
 def test_authoritative_id_wins_when_url_now_matches_another_notice(db):
@@ -150,8 +150,8 @@ def test_source_failure_does_not_erase_success(db):
     assert run['status']=='PARTIAL_SUCCESS'
     assert run['sources'][0]['parsed']==1 and run['sources'][1]['status']=='FAILED'
     with db.transaction() as c:
-        assert c.execute('select count(*) n from radar.source_run_results where run_id=%s',(run['id'],)).fetchone()['n']==2
-        assert c.execute('select * from radar.program_sources where source_id=%s',(ok['id'],)).fetchone()
+        assert c.execute('select count(*) n from startup_radar.source_run_results where run_id=%s',(run['id'],)).fetchone()['n']==2
+        assert c.execute('select * from startup_radar.program_sources where source_id=%s',(ok['id'],)).fetchone()
 from radar.models import Evidence,Requirement
 from radar.recommendations import refresh_recommendations
 from radar.notifications import plan_notifications,deliver_pending
@@ -169,7 +169,7 @@ def test_notification_idempotency_and_partial_delivery(db):
         p.requirements=[Requirement(key='business_status',operator='EQ',value='PRE_BUSINESS',certain=True,
             evidence=[Evidence(source_id=str(s),text='예비창업자만 신청 가능',method='MANUAL',verified=True,confidence=1)])]
         db.save_program(p,s,str(uuid4()),p.official_url,{},'source')
-    with db.transaction() as c:c.execute('insert into radar.telegram_subscriptions(team_id,chat_id) values(%s,%s)',(team['id'],'fixture-chat'))
+    with db.transaction() as c:c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id) values(%s,%s)',(team['id'],'fixture-chat'))
     refresh_recommendations(db,team['id'])
     first=plan_notifications(db,'REMINDER');second=plan_notifications(db,'REMINDER')
     assert first==2 and second==0
@@ -182,7 +182,7 @@ def test_notification_idempotency_and_partial_delivery(db):
     result=deliver_pending(db,Transport(),'REMINDER')
     assert result['delivered']==1 and result['failed']==1
     with db.transaction() as c:
-        items=c.execute('select state,delivered_at from radar.notification_items where team_id=%s',(team['id'],)).fetchall()
+        items=c.execute('select state,delivered_at from startup_radar.notification_items where team_id=%s',(team['id'],)).fetchall()
         assert sum(item['delivered_at'] is not None for item in items)==1
     assert deliver_pending(db,Transport(),'REMINDER')['delivered']==0
 
@@ -195,7 +195,7 @@ def test_document_evidence_links_to_same_program_version(db):
         'original_url':'https://example.org/evidence.pdf','filename':'evidence.pdf','content_hash':'fixture-document-hash',
         'fetch_status':'SUCCESS','extraction_status':'SUCCESS','extracted_text':'Age <=39'}])
     with db.transaction() as c:
-        row=c.execute('select r.document_id,d.program_version_id from radar.program_requirements r join radar.documents d on d.id=r.document_id where r.program_version_id=%s',(saved['version_id'],)).fetchone()
+        row=c.execute('select r.document_id,d.program_version_id from startup_radar.program_requirements r join startup_radar.documents d on d.id=r.document_id where r.program_version_id=%s',(saved['version_id'],)).fetchone()
         assert row and row['program_version_id']==saved['version_id']
 
 
@@ -206,7 +206,7 @@ def test_original_source_observation_survives_updates(db):
     second=db.save_program(p,s,'stable-source',p.official_url,{'deadline':'extended'},'source v2',extraction_metadata={'model':'fixture-v2'})
     db.save_program(p,s,'stable-source',p.official_url,{'deadline':'extended'},'source v2',extraction_metadata={'model':'fixture-v2'})
     with db.transaction() as c:
-        snapshots=c.execute('select * from radar.program_source_snapshots order by observed_at').fetchall()
+        snapshots=c.execute('select * from startup_radar.program_source_snapshots order by observed_at').fetchall()
         assert len(snapshots)==2
         assert snapshots[0]['program_version_id']==first['version_id'] and snapshots[0]['raw_metadata']=={'deadline':'original'}
         assert snapshots[0]['extraction_metadata']['model']=='fixture-v1'
@@ -226,7 +226,7 @@ def test_parallel_snapshot_is_read_only_and_does_not_invent_collection_time(db):
     report=compare({'status':'SUCCESS','observed_at':now().isoformat(),'all_programs':[{'title':p.title,'organization':p.organization,'apply_url':p.official_url}]},snapshot)
     assert report['counts']['matched']==1 and report['cutover_approved'] is False
     with db.transaction() as c:
-        assert c.execute('select count(*) n from radar.recommendations').fetchone()['n']==0
-        assert c.execute('select count(*) n from radar.notification_items').fetchone()['n']==0
+        assert c.execute('select count(*) n from startup_radar.recommendations').fetchone()['n']==0
+        assert c.execute('select count(*) n from startup_radar.notification_items').fetchone()['n']==0
     with db.transaction(owner) as c:
-        assert c.execute('select count(*) n from radar.program_source_snapshots').fetchone()['n']==0
+        assert c.execute('select count(*) n from startup_radar.program_source_snapshots').fetchone()['n']==0

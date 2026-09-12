@@ -1,5 +1,7 @@
 # StartupRadar 2.0 implementation ledger
 
+**Current shared-GFC staging update:** see SHARED-GFC-REPORT.md. Supabase project etvffzxqdgblvkfdikwl now has the startup_radar baseline and FK-index migrations. Existing GFC objects/data were verified unchanged. The earlier five-migration checkpoint below is historical; its migrations are archived and are not the hosted setup procedure.
+
 Complete approved scope: V2-SPEC.md. Baseline audit: V1-AUDIT.md. Branch: feature/startup-radar-v2. Remote main is still c18f84048ddd08adca10d44b83692a1060d957cb; fetched again 2026-09-12. Production services have not been changed. V1 remains present. **This is a checkpoint, not completed V2 acceptance or cutover.**
 
 ## Current local implementation

@@ -1,6 +1,6 @@
 # StartupRadar 2.0 architecture and limits
 
-Status: local implementation under validation. V1 remains the production baseline. This document describes V2 source code, not an assertion that hosted services are deployed or accepted for cutover.
+Status: shared-GFC staging database applied under startup_radar in project etvffzxqdgblvkfdikwl. Identity comes from existing auth.users; Radar teams/membership/profiles are independent of public GFC objects. V1 remains the production baseline; web and Telegram V2 have not been deployed. See SHARED-GFC-REPORT.md and WEB-INTEGRATION.md for current verification and integration decisions.
 
 ```text
 Hourly GitHub Actions wake-up / dashboard / Telegram admin command

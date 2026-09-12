@@ -20,9 +20,9 @@ pytestmark=pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Ex
 def context(db):
     admin,other=uuid4(),uuid4()
     with db.transaction() as c:
-        c.execute('truncate radar.telegram_updates,radar.schedule_claims')
+        c.execute('truncate startup_radar.telegram_updates,startup_radar.schedule_claims')
         c.execute('insert into auth.users values(%s),(%s)',(admin,other))
-        c.execute('insert into radar.admin_users values(%s)',(admin,))
+        c.execute('insert into startup_radar.admin_users values(%s)',(admin,))
     team=db.create_team('GFC fixture A',admin,apply_preset(TeamProfile(),0))
     other_team=db.create_team('Private fixture B',other,TeamProfile(business_status='CORPORATION'))
     app=create_app(db)
@@ -45,6 +45,18 @@ def test_anonymous_cannot_read_private_endpoints(context):
     assert config.status_code==200 and len(config.json()['presets'])==5
     assert 'DATABASE_URL' not in config.text and 'frame-ancestors' in config.headers['content-security-policy']
     assert client.get('/static/app.js').headers['content-type'].startswith('text/javascript')
+
+
+def test_shared_auth_identity_does_not_grant_radar_membership(context):
+    outsider=uuid4()
+    with context['db'].transaction() as c:
+        c.execute('insert into auth.users values(%s)',(outsider,))
+    context['app'].dependency_overrides[authenticated_user]=lambda:outsider
+    client=context['client']
+    assert client.get('/api/me').json()=={'user_id':str(outsider), 'teams':[], 'is_admin':False}
+    assert client.get('/api/programs?preset=0').status_code==403
+    assert client.get('/api/admin/health').status_code==403
+    assert client.get('/api/teams/'+str(context['team']['id'])+'/profile').status_code==403
 
 
 def test_stage_zero_browsing_and_evidence(context):
@@ -90,7 +102,7 @@ def test_health_and_missing_dispatch_config_visible(context,monkeypatch):
 
 def test_job_cancellation_endpoint_requires_admin_and_records_result(context):
     with context['db'].transaction() as c:
-        job=c.execute("insert into radar.job_requests(kind) values('INGEST') returning id").fetchone()['id']
+        job=c.execute("insert into startup_radar.job_requests(kind) values('INGEST') returning id").fetchone()['id']
     path='/api/admin/jobs/'+str(job)+'/cancel'
     context['app'].dependency_overrides[authenticated_user]=lambda:context['other']
     assert context['client'].post(path,json={'note':'Retire fixture request'}).status_code==403
@@ -115,7 +127,7 @@ class Transport:
 
 def telegram_admin(ctx):
     with ctx['db'].transaction() as c:
-        c.execute('insert into radar.telegram_admins(telegram_user_id,user_id,selected_team_id) values(%s,%s,%s)',('123',ctx['admin'],ctx['team']['id']))
+        c.execute('insert into startup_radar.telegram_admins(telegram_user_id,user_id,selected_team_id) values(%s,%s,%s)',('123',ctx['admin'],ctx['team']['id']))
 
 
 def update(n,text,sender=123):return {'update_id':n,'message':{'from':{'id':sender},'chat':{'id':456},'text':text}}
@@ -131,10 +143,10 @@ def test_telegram_auth_idempotence_real_status_and_profile(context):
     assert len(transport.messages)==1
     assert handle_update(db,update(3,'/stage 3'),transport)['state']=='COMPLETED'
     with db.transaction() as c:
-        row=c.execute('select * from radar.team_profiles where team_id=%s',(context['team']['id'],)).fetchone()
+        row=c.execute('select * from startup_radar.team_profiles where team_id=%s',(context['team']['id'],)).fetchone()
         assert row['version']==2 and row['profile']['product_stage']=='MVP' and row['profile']['business_status'] is None
     assert handle_update(db,update(4,'/stop'),transport)['state']=='COMPLETED'
-    with db.transaction() as c:assert c.execute("select value from radar.runtime_settings where key='scheduling'").fetchone()['value']['enabled'] is False
+    with db.transaction() as c:assert c.execute("select value from startup_radar.runtime_settings where key='scheduling'").fetchone()['value']['enabled'] is False
 
 
 def test_digest_receipt_matches_all_grouped_items(context):
@@ -142,7 +154,7 @@ def test_digest_receipt_matches_all_grouped_items(context):
     p.requirements.append(Requirement(key='founder_age',operator='LTE',value=39,certain=True,
         evidence=[Evidence(source_id=str(context['source']),text='대표자 만 39세 이하',method='MANUAL',verified=True,confidence=1)]))
     db.save_program(p,context['source'],'second',p.official_url,{},'Age fixture')
-    with db.transaction() as c:c.execute('insert into radar.telegram_subscriptions(team_id,chat_id) values(%s,%s)',(context['team']['id'],'fixture-chat'))
+    with db.transaction() as c:c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id) values(%s,%s)',(context['team']['id'],'fixture-chat'))
     refresh_recommendations(db)
     assert plan_notifications(db,'DIGEST')==2
     assert plan_notifications(db,'DIGEST')==0
@@ -151,12 +163,12 @@ def test_digest_receipt_matches_all_grouped_items(context):
     assert '지원 가능 1 · 추가 정보 필요 1' in transport.messages[0][1]
     assert '지원 가능 여부: 추가 정보 필요' in transport.messages[0][1]
     with db.transaction() as c:
-        rows=c.execute('select delivery_receipts,delivered_at from radar.notification_items').fetchall()
+        rows=c.execute('select delivery_receipts,delivered_at from startup_radar.notification_items').fetchall()
         assert all(r['delivered_at'] and r['delivery_receipts']==[{'message_id':1}] for r in rows)
 
 
 def subscribe(context):
-    with context['db'].transaction() as c:c.execute('insert into radar.telegram_subscriptions(team_id,chat_id,high_fit_threshold) values(%s,%s,0)',(context['team']['id'],'fixture-chat'))
+    with context['db'].transaction() as c:c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,high_fit_threshold) values(%s,%s,0)',(context['team']['id'],'fixture-chat'))
     refresh_recommendations(context['db'])
 
 
@@ -172,7 +184,7 @@ def test_uncertain_delivery_never_automatically_retried(context):
     transport=Transport('UNCERTAIN')
     assert deliver_pending(db,transport,'REMINDER')['failed']==1
     assert deliver_pending(db,transport,'REMINDER')['delivered']==0 and len(transport.messages)==1
-    with db.transaction() as c:batch=c.execute('select * from radar.notification_batches').fetchone()
+    with db.transaction() as c:batch=c.execute('select * from startup_radar.notification_batches').fetchone()
     with pytest.raises(ValueError):recover_batch(db,batch['id'],'RETRY_REJECTED','checked fixture',context['admin'])
     assert recover_batch(db,batch['id'],'CONFIRM_NOT_SENT','Confirmed absent in fixture chat',context['admin'])['state']=='PENDING'
     assert deliver_pending(db,Transport(),'REMINDER')['delivered']==1
@@ -195,7 +207,7 @@ def test_high_fit_daily_cap_and_material_update_once(context):
 
 def test_admin_trace_links_profile_program_and_notification(context):
     db=context['db'];subscribe(context);plan_notifications(db,'REMINDER')
-    with db.transaction() as c:rec=c.execute('select recommendation_id from radar.notification_items').fetchone()['recommendation_id']
+    with db.transaction() as c:rec=c.execute('select recommendation_id from startup_radar.notification_items').fetchone()['recommendation_id']
     r=context['client'].get('/api/admin/trace/'+str(rec))
     assert r.status_code==200
     trace=r.json();assert trace['profile_version']['version']==1 and trace['provenance'] and trace['notifications']

@@ -29,27 +29,27 @@ class Database:
         # Privileged invitation/bootstrap operation. Never exposed anonymously.
         profile=profile or TeamProfile()
         with self.transaction() as c:
-            team=c.execute('insert into radar.teams(name) values(%s) returning *',(name,)).fetchone()
-            c.execute("insert into radar.team_members(team_id,user_id,role) values(%s,%s,'OWNER')",(team['id'],owner_id))
-            c.execute('insert into radar.team_profiles(team_id,profile) values(%s,%s)',(team['id'],Jsonb(profile.model_dump(mode='json'))))
-            c.execute('insert into radar.team_profile_versions(team_id,version,profile) values(%s,1,%s)',(team['id'],Jsonb(profile.model_dump(mode='json'))))
+            team=c.execute('insert into startup_radar.teams(name) values(%s) returning *',(name,)).fetchone()
+            c.execute("insert into startup_radar.team_members(team_id,user_id,role) values(%s,%s,'OWNER')",(team['id'],owner_id))
+            c.execute('insert into startup_radar.team_profiles(team_id,profile) values(%s,%s)',(team['id'],Jsonb(profile.model_dump(mode='json'))))
+            c.execute('insert into startup_radar.team_profile_versions(team_id,version,profile) values(%s,1,%s)',(team['id'],Jsonb(profile.model_dump(mode='json'))))
             return team
 
     def save_profile(self,team_id,profile,user_id,expected_version):
         with self.transaction(user_id) as c:
-            current=c.execute('select * from radar.team_profiles where team_id=%s for update',(team_id,)).fetchone()
+            current=c.execute('select * from startup_radar.team_profiles where team_id=%s for update',(team_id,)).fetchone()
             if not current: raise PermissionError('Team is not accessible')
             if current['version']!=expected_version: raise ValueError('Profile changed; refresh before editing')
-            row=c.execute('update radar.team_profiles set profile=%s,version=version+1,updated_at=now() where team_id=%s returning *',
+            row=c.execute('update startup_radar.team_profiles set profile=%s,version=version+1,updated_at=now() where team_id=%s returning *',
                           (Jsonb(profile.model_dump(mode='json')),team_id)).fetchone()
             if not row: raise PermissionError('Editing requires owner/editor membership')
-            c.execute('insert into radar.team_profile_versions(team_id,version,profile) values(%s,%s,%s)',
+            c.execute('insert into startup_radar.team_profile_versions(team_id,version,profile) values(%s,%s,%s)',
                       (team_id,row['version'],Jsonb(row['profile'])))
             return row
 
     def upsert_source(self,slug,name,adapter,config):
         with self.transaction() as c:
-            return c.execute('insert into radar.sources(slug,name,adapter,config) values(%s,%s,%s,%s) '
+            return c.execute('insert into startup_radar.sources(slug,name,adapter,config) values(%s,%s,%s,%s) '
               'on conflict(slug) do update set name=excluded.name,adapter=excluded.adapter,config=excluded.config returning *',
               (slug,name,adapter,Jsonb(config))).fetchone()
 
@@ -60,20 +60,20 @@ class Database:
             # One transaction-scoped lock serializes canonical matching/versioning.
             # Ingestion stays concurrent outside this short database critical section.
             c.execute('select pg_advisory_xact_lock(782394201)')
-            existing=c.execute('select p.* from radar.program_sources s join radar.programs p on p.id=s.program_id '
+            existing=c.execute('select p.* from startup_radar.program_sources s join startup_radar.programs p on p.id=s.program_id '
                 'where s.source_id=%s and s.source_program_id=%s',
                 (source_id,source_program_id)).fetchone() if source_program_id is not None else c.execute(
-                'select p.* from radar.program_sources s join radar.programs p on p.id=s.program_id '
+                'select p.* from startup_radar.program_sources s join startup_radar.programs p on p.id=s.program_id '
                 'where s.source_id=%s and s.source_program_id is null and s.discovery_url=%s',
                 (source_id,discovery_url)).fetchone()
             url_candidates=[]
             if not existing:
-                url_candidates=c.execute('select p.* from radar.programs p where exists '
-                    '(select 1 from radar.program_sources s where s.program_id=p.id and s.official_detail_url=%s)',(canonical_url,)).fetchall()
+                url_candidates=c.execute('select p.* from startup_radar.programs p where exists '
+                    '(select 1 from startup_radar.program_sources s where s.program_id=p.id and s.official_detail_url=%s)',(canonical_url,)).fetchall()
                 matches=[]
                 for candidate in url_candidates:
                     conflict=source_program_id is not None and c.execute(
-                        'select 1 from radar.program_sources where program_id=%s and source_id=%s '
+                        'select 1 from startup_radar.program_sources where program_id=%s and source_id=%s '
                         'and source_program_id is not null and source_program_id<>%s limit 1',
                         (candidate['id'],source_id,source_program_id)).fetchone()
                     same_notice=(normalize_text(candidate['title'])==normalize_text(program.title)
@@ -84,31 +84,31 @@ class Database:
             candidates=[]
             if not existing:
                 # No fuzzy auto-merge. Keep possible relationships for human review.
-                candidates=c.execute('select id,title,organization,official_url from radar.programs where organization=%s',(program.organization,)).fetchall()
+                candidates=c.execute('select id,title,organization,official_url from startup_radar.programs where organization=%s',(program.organization,)).fetchall()
                 candidates=list({row['id']:row for row in candidates+url_candidates}.values())
                 identity={'source_id':str(source_id),'source_program_id':source_program_id} if source_program_id is not None else {
                     'source_id':str(source_id),'discovery_url':discovery_url}
-                existing=c.execute('insert into radar.programs(canonical_key,title,organization,program_types,status,deadline_type,official_url) '
+                existing=c.execute('insert into startup_radar.programs(canonical_key,title,organization,program_types,status,deadline_type,official_url) '
                     'values(%s,%s,%s,%s,%s,%s,%s) returning *',
                     (digest(identity),program.title,program.organization,program.program_types,program_status(program),program.deadline_type,program.official_url)).fetchone()
             pid=existing['id']
-            c.execute('insert into radar.program_sources(program_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata) '
+            c.execute('insert into startup_radar.program_sources(program_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata) '
                 'values(%s,%s,%s,%s,%s,%s) on conflict(source_id,discovery_url) where source_program_id is null do update set last_seen_at=now(),official_detail_url=excluded.official_detail_url,raw_metadata=excluded.raw_metadata',
                 (pid,source_id,source_program_id,discovery_url,canonical_url,Jsonb(raw_metadata))) if source_program_id is None else c.execute(
-                'insert into radar.program_sources(program_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata) '
+                'insert into startup_radar.program_sources(program_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata) '
                 'values(%s,%s,%s,%s,%s,%s) on conflict(source_id,source_program_id) do update set last_seen_at=now(),discovery_url=excluded.discovery_url,official_detail_url=excluded.official_detail_url,raw_metadata=excluded.raw_metadata',
                 (pid,source_id,source_program_id,discovery_url,canonical_url,Jsonb(raw_metadata)))
-            previous=c.execute('select * from radar.program_versions where id=%s',(existing['current_version_id'],)).fetchone() if existing['current_version_id'] else None
+            previous=c.execute('select * from startup_radar.program_versions where id=%s',(existing['current_version_id'],)).fetchone() if existing['current_version_id'] else None
             if previous and previous['content_hash']==fingerprint:
                 # Dates can close a notice without a new content version.
-                c.execute('update radar.programs set status=%s,updated_at=now() where id=%s',(program_status(program),pid))
+                c.execute('update startup_radar.programs set status=%s,updated_at=now() where id=%s',(program_status(program),pid))
                 self._snapshot(c,pid,previous['id'],source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata)
                 return {'program_id':pid,'version_id':previous['id'],'event':None}
-            version=c.execute('insert into radar.program_versions(program_id,version,content_hash,normalized,raw_text,evidence_complete) '
+            version=c.execute('insert into startup_radar.program_versions(program_id,version,content_hash,normalized,raw_text,evidence_complete) '
                 'values(%s,%s,%s,%s,%s,%s) returning *',(pid,previous['version']+1 if previous else 1,fingerprint,Jsonb(normal),raw_text,program.evidence_complete)).fetchone()
             vid=version['id']
             self._snapshot(c,pid,vid,source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata)
-            c.execute('update radar.programs set title=%s,organization=%s,program_types=%s,status=%s,application_start_at=%s,application_end_at=%s,'
+            c.execute('update startup_radar.programs set title=%s,organization=%s,program_types=%s,status=%s,application_start_at=%s,application_end_at=%s,'
                 'deadline_type=%s,official_url=%s,application_url=%s,applicant_summary=%s,support_summary=%s,benefit_summary=%s,'
                 'amount_min=%s,amount_max=%s,currency=%s,current_version_id=%s,updated_at=now() where id=%s',
                 (program.title,program.organization,program.program_types,program_status(program),program.application_start_at,program.application_end_at,
@@ -116,7 +116,7 @@ class Database:
                  program.amount_min,program.amount_max,program.currency,vid,pid))
             document_ids={}
             for doc in documents or []:
-                saved=c.execute('insert into radar.documents(program_version_id,original_url,filename,detected_mime,content_hash,fetch_status,extraction_status,extracted_text,error_kind,error_message,fetched_at) '
+                saved=c.execute('insert into startup_radar.documents(program_version_id,original_url,filename,detected_mime,content_hash,fetch_status,extraction_status,extracted_text,error_kind,error_message,fetched_at) '
                     'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning id',(vid,doc['original_url'],doc['filename'],doc.get('detected_mime'),doc.get('content_hash'),
                     doc['fetch_status'],doc['extraction_status'],doc.get('extracted_text'),doc.get('error_kind'),doc.get('error_message'),doc.get('fetched_at'))).fetchone()
                 if doc.get('content_hash'):document_ids[doc['content_hash']]=saved['id']
@@ -124,25 +124,25 @@ class Database:
                 # Evidence retains stable content hashes; the first referenced document
                 # also has a version-constrained relational FK for trace queries.
                 doc_id=next((document_ids[e.document_id] for e in rule.evidence if e.document_id in document_ids),None)
-                c.execute('insert into radar.program_requirements(program_version_id,document_id,requirement) values(%s,%s,%s)',(vid,doc_id,Jsonb(rule.model_dump(mode='json'))))
+                c.execute('insert into startup_radar.program_requirements(program_version_id,document_id,requirement) values(%s,%s,%s)',(vid,doc_id,Jsonb(rule.model_dump(mode='json'))))
             changed=changed_fields(previous['normalized'],normal) if previous else list(normal)
             event='UPDATE' if previous else 'NEW'
             if changed:
-                c.execute('insert into radar.program_change_events(program_id,version_id,event_type,changed_fields) values(%s,%s,%s,%s)',(pid,vid,event,changed))
+                c.execute('insert into startup_radar.program_change_events(program_id,version_id,event_type,changed_fields) values(%s,%s,%s,%s)',(pid,vid,event,changed))
             for candidate in candidates:
                 confidence=duplicate_confidence(dict(candidate),normal)
                 if confidence>=0.8:
-                    c.execute('insert into radar.possible_duplicates(program_id,candidate_program_id,confidence,reason) values(%s,%s,%s,%s) on conflict do nothing',
+                    c.execute('insert into startup_radar.possible_duplicates(program_id,candidate_program_id,confidence,reason) values(%s,%s,%s,%s) on conflict do nothing',
                               (pid,candidate['id'],confidence,'Shared URL or similar title/organization; publisher IDs and ambiguity require review'))
             return {'program_id':pid,'version_id':vid,'event':event if changed else None}
 
     @staticmethod
     def _snapshot(c,pid,vid,source_id,source_program_id,discovery_url,detail_url,raw_metadata,raw_text,extraction_metadata):
-        source=c.execute('select adapter,config from radar.sources where id=%s',(source_id,)).fetchone()
+        source=c.execute('select adapter,config from startup_radar.sources where id=%s',(source_id,)).fetchone()
         source_config={'adapter':source['adapter'],'config':source['config']}
         observation={'source_program_id':source_program_id,'discovery_url':discovery_url,'official_detail_url':detail_url,
                      'raw_metadata':raw_metadata,'source_config':source_config,'detail_hash':digest(raw_text),'extraction_metadata':extraction_metadata or {}}
-        c.execute('insert into radar.program_source_snapshots(program_id,program_version_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata,source_config,detail_hash,observation_hash,extraction_metadata) '
+        c.execute('insert into startup_radar.program_source_snapshots(program_id,program_version_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata,source_config,detail_hash,observation_hash,extraction_metadata) '
                   'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict do nothing',
                   (pid,vid,source_id,source_program_id,discovery_url,detail_url,Jsonb(raw_metadata),Jsonb(source_config),digest(raw_text),digest(observation),Jsonb(extraction_metadata or {})))
 

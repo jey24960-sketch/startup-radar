@@ -118,8 +118,8 @@ def create_app(database=None,preview=False):
         profile_for(db(),user,team_id)
         # Explicitly project only this team's history, never Telegram IDs/payloads.
         with db().transaction() as c:
-            rows=c.execute('select i.kind,i.state,i.delivered_at,i.created_at,v.program_id,p.title from radar.notification_items i '
-                'join radar.program_versions v on v.id=i.program_version_id join radar.programs p on p.id=v.program_id '
+            rows=c.execute('select i.kind,i.state,i.delivered_at,i.created_at,v.program_id,p.title from startup_radar.notification_items i '
+                'join startup_radar.program_versions v on v.id=i.program_version_id join startup_radar.programs p on p.id=v.program_id '
                 'where i.team_id=%s order by i.created_at desc limit 100',(team_id,)).fetchall()
         return {'items':rows}
     @app.get('/api/admin/health')
@@ -128,20 +128,20 @@ def create_app(database=None,preview=False):
     def failures(user=Depends(authenticated_user)):
         require_admin(db(),user)
         with db().transaction() as c:
-            documents=c.execute("select d.*,p.title from radar.documents d join radar.program_versions v on v.id=d.program_version_id join radar.programs p on p.id=v.program_id where extraction_status<>'SUCCESS' order by fetched_at desc nulls first limit 100").fetchall()
-            sources=c.execute("select r.*,s.name,s.slug from radar.source_run_results r join radar.sources s on s.id=r.source_id where r.status<>'SUCCESS' order by r.created_at desc limit 100").fetchall()
+            documents=c.execute("select d.*,p.title from startup_radar.documents d join startup_radar.program_versions v on v.id=d.program_version_id join startup_radar.programs p on p.id=v.program_id where extraction_status<>'SUCCESS' order by fetched_at desc nulls first limit 100").fetchall()
+            sources=c.execute("select r.*,s.name,s.slug from startup_radar.source_run_results r join startup_radar.sources s on s.id=r.source_id where r.status<>'SUCCESS' order by r.created_at desc limit 100").fetchall()
         return {'documents':documents,'sources':sources}
     @app.get('/api/admin/duplicates')
     def duplicates(user=Depends(authenticated_user)):
         require_admin(db(),user)
-        with db().transaction() as c:return {'items':c.execute('select d.*,p.title,q.title candidate_title from radar.possible_duplicates d join radar.programs p on p.id=d.program_id join radar.programs q on q.id=d.candidate_program_id order by d.created_at desc limit 100').fetchall()}
+        with db().transaction() as c:return {'items':c.execute('select d.*,p.title,q.title candidate_title from startup_radar.possible_duplicates d join startup_radar.programs p on p.id=d.program_id join startup_radar.programs q on q.id=d.candidate_program_id order by d.created_at desc limit 100').fetchall()}
     @app.patch('/api/admin/duplicates/{duplicate_id}')
     def review_duplicate(duplicate_id:UUID,body:DuplicateDecision,user=Depends(authenticated_user)):
         require_admin(db(),user)
         with db().transaction() as c:
-            row=c.execute('update radar.possible_duplicates set state=%s where id=%s returning *',(body.state,duplicate_id)).fetchone()
+            row=c.execute('update startup_radar.possible_duplicates set state=%s where id=%s returning *',(body.state,duplicate_id)).fetchone()
             if not row:raise LookupError('Duplicate relationship not found')
-            c.execute('insert into radar.admin_audit(actor_id,action,entity_id,detail) values(%s,%s,%s,%s)',(user,'REVIEW_DUPLICATE',str(duplicate_id),Jsonb(body.model_dump())))
+            c.execute('insert into startup_radar.admin_audit(actor_id,action,entity_id,detail) values(%s,%s,%s,%s)',(user,'REVIEW_DUPLICATE',str(duplicate_id),Jsonb(body.model_dump())))
         return row
     @app.post('/api/admin/jobs',status_code=202)
     def trigger_job(body:JobInput,user=Depends(authenticated_user)):
@@ -155,13 +155,13 @@ def create_app(database=None,preview=False):
     def scheduling(body:Scheduling,user=Depends(authenticated_user)):
         require_admin(db(),user)
         with db().transaction() as c:
-            c.execute("update radar.runtime_settings set value=%s,updated_at=now() where key='scheduling'",(Jsonb(body.model_dump()),))
-            c.execute('insert into radar.admin_audit(actor_id,action,detail) values(%s,%s,%s)',(user,'UPDATE_SCHEDULING',Jsonb(body.model_dump())))
+            c.execute("update startup_radar.runtime_settings set value=%s,updated_at=now() where key='scheduling'",(Jsonb(body.model_dump()),))
+            c.execute('insert into startup_radar.admin_audit(actor_id,action,detail) values(%s,%s,%s)',(user,'UPDATE_SCHEDULING',Jsonb(body.model_dump())))
         return body
     @app.get('/api/admin/teams')
     def all_teams(user=Depends(authenticated_user)):
         require_admin(db(),user)
-        with db().transaction() as c:return {'items':c.execute('select t.*,p.profile,p.version from radar.teams t join radar.team_profiles p on p.team_id=t.id order by t.created_at').fetchall()}
+        with db().transaction() as c:return {'items':c.execute('select t.*,p.profile,p.version from startup_radar.teams t join startup_radar.team_profiles p on p.team_id=t.id order by t.created_at').fetchall()}
     @app.post('/api/admin/teams',status_code=201)
     def new_team(body:TeamCreate,user=Depends(authenticated_user)):
         require_admin(db(),user)
@@ -170,15 +170,15 @@ def create_app(database=None,preview=False):
     def add_member(team_id:UUID,body:MemberAdd,user=Depends(authenticated_user)):
         require_admin(db(),user)
         with db().transaction() as c:
-            c.execute('insert into radar.team_members(team_id,user_id,role) values(%s,%s,%s) on conflict(team_id,user_id) do update set role=excluded.role',(team_id,body.user_id,body.role))
-            c.execute('insert into radar.admin_audit(actor_id,action,entity_id,detail) values(%s,%s,%s,%s)',(user,'ADD_MEMBERSHIP',str(team_id),Jsonb(body.model_dump(mode='json'))))
+            c.execute('insert into startup_radar.team_members(team_id,user_id,role) values(%s,%s,%s) on conflict(team_id,user_id) do update set role=excluded.role',(team_id,body.user_id,body.role))
+            c.execute('insert into startup_radar.admin_audit(actor_id,action,entity_id,detail) values(%s,%s,%s,%s)',(user,'ADD_MEMBERSHIP',str(team_id),Jsonb(body.model_dump(mode='json'))))
         return {'state':'SAVED'}
     @app.get('/api/admin/notifications')
     def notifications(user=Depends(authenticated_user)):
         require_admin(db(),user)
         with db().transaction() as c:
-            batches=c.execute('select b.*,s.team_id,t.name team_name from radar.notification_batches b join radar.telegram_subscriptions s on s.id=b.subscription_id join radar.teams t on t.id=s.team_id order by b.created_at desc limit 100').fetchall()
-            items=c.execute('select i.id,i.state,i.kind,i.team_id,i.recommendation_id,i.program_version_id,i.delivered_at from radar.notification_items i order by i.created_at desc limit 100').fetchall()
+            batches=c.execute('select b.*,s.team_id,t.name team_name from startup_radar.notification_batches b join startup_radar.telegram_subscriptions s on s.id=b.subscription_id join startup_radar.teams t on t.id=s.team_id order by b.created_at desc limit 100').fetchall()
+            items=c.execute('select i.id,i.state,i.kind,i.team_id,i.recommendation_id,i.program_version_id,i.delivered_at from startup_radar.notification_items i order by i.created_at desc limit 100').fetchall()
         return {'batches':batches,'items':items}
     @app.post('/api/admin/notifications/{batch_id}/recover')
     def recover_notification(batch_id:UUID,body:NotificationRecovery,user=Depends(authenticated_user)):
@@ -190,7 +190,7 @@ def create_app(database=None,preview=False):
         require_admin(db(),user)
         if any(day<0 or day>365 for day in body.reminder_days):raise ValueError('Reminder days must be 0..365')
         with db().transaction() as c:
-            return c.execute('insert into radar.telegram_subscriptions(team_id,chat_id,enabled,digest_enabled,alerts_enabled,reminders_enabled,high_fit_threshold,reminder_days) '
+            return c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,enabled,digest_enabled,alerts_enabled,reminders_enabled,high_fit_threshold,reminder_days) '
                 'values(%s,%s,%s,%s,%s,%s,%s,%s) on conflict(team_id,chat_id) do update set enabled=excluded.enabled,digest_enabled=excluded.digest_enabled,alerts_enabled=excluded.alerts_enabled,reminders_enabled=excluded.reminders_enabled,high_fit_threshold=excluded.high_fit_threshold,reminder_days=excluded.reminder_days returning id',
                 (body.team_id,body.chat_id,body.enabled,body.digest_enabled,body.alerts_enabled,body.reminders_enabled,body.high_fit_threshold,body.reminder_days)).fetchone()
     @app.get('/api/admin/trace/{recommendation_id}')

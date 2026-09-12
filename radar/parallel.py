@@ -15,13 +15,13 @@ def v2_snapshot(db,team_id,at=None):
     if at.tzinfo is None:raise ValueError('An aware comparison timestamp is required')
     at=at.astimezone(SEOUL);weights=configured_weights(db)
     with db.transaction() as c:
-        profile=c.execute('select v.* from radar.team_profile_versions v join radar.team_profiles p on p.team_id=v.team_id and p.version=v.version where v.team_id=%s',(team_id,)).fetchone()
+        profile=c.execute('select v.* from startup_radar.team_profile_versions v join startup_radar.team_profiles p on p.team_id=v.team_id and p.version=v.version where v.team_id=%s',(team_id,)).fetchone()
         if not profile:raise ValueError('Team profile not found')
-        rows=c.execute('select v.* from radar.program_versions v join radar.programs p on p.current_version_id=v.id').fetchall()
-        aliases=c.execute('select program_id,discovery_url,official_detail_url from radar.program_sources').fetchall()
-        sources=c.execute('select s.slug,s.enabled,r.status,r.failures,r.created_at from radar.sources s '
-            'left join lateral(select * from radar.source_run_results r where r.source_id=s.id order by r.created_at desc limit 1) r on true order by s.slug').fetchall()
-        latest_run=c.execute('select id,started_at from radar.ingestion_runs order by started_at desc limit 1').fetchone()
+        rows=c.execute('select v.* from startup_radar.program_versions v join startup_radar.programs p on p.current_version_id=v.id').fetchall()
+        aliases=c.execute('select program_id,discovery_url,official_detail_url from startup_radar.program_sources').fetchall()
+        sources=c.execute('select s.slug,s.enabled,r.status,r.failures,r.created_at from startup_radar.sources s '
+            'left join lateral(select * from startup_radar.source_run_results r where r.source_id=s.id order by r.created_at desc limit 1) r on true order by s.slug').fetchall()
+        latest_run=c.execute('select id,started_at from startup_radar.ingestion_runs order by started_at desc limit 1').fetchone()
     team=TeamProfile.model_validate(profile['profile']);programs=[]
     for row in rows:
         p=Program.model_validate(row['normalized']);outcome=evaluate(team,p.requirements,p.evidence_complete,at.date());ranking=rank(p,team,outcome,weights,at)
