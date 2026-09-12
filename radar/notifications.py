@@ -1,6 +1,7 @@
 """Persistent outbox with explicit delivery uncertainty and per-version keys."""
 import html
 import os
+import re
 from hashlib import sha256
 from datetime import timedelta
 from urllib.parse import urlsplit
@@ -10,6 +11,18 @@ from core.clock import now, SEOUL
 from radar.models import Program,TeamProfile
 from radar.eligibility import evaluate
 from radar.dates import days_left,program_status
+
+FIELD_LABELS={'team_status':'팀 구성 상태','business_status':'사업자 상태','business_age_months':'사업 개월 수',
+    'founder_age':'대표자 연령','region':'지역','student_status':'재학 여부','university_affiliation':'소속 대학',
+    'team_size':'팀 인원','product_stage':'제품 단계','revenue':'매출액','has_revenue':'매출 발생 여부',
+    'investment_received':'투자 유치 여부','industry':'업종','applicant_type':'신청자 유형',
+    'registration_date':'사업자등록일','business_registration_date':'사업자등록일','prior_support_restrictions':'기존 지원 이력'}
+STATE_LABELS={'IDEA':'아이디어','LANDING':'랜딩·프리토타입','MVP':'MVP','REVENUE':'초기 매출',
+    'PRE_BUSINESS':'예비창업','SOLE_PROPRIETOR':'개인사업자','CORPORATION':'법인'}
+
+
+def explain_fields(text):
+    return re.sub(r'\b('+'|'.join(FIELD_LABELS)+r')\b',lambda match:FIELD_LABELS[match[0]],text)
 
 
 class TelegramTransport:
@@ -37,10 +50,11 @@ def message(program,team_name,outcome,score,explanation,kind,at=None):
            f'마감: D-{remaining}' if remaining is not None else '마감: 상시/원문 확인',
            f'지원 가능 여부: {state}',f'적합도: {score}',
            '혜택: '+(program.benefit_summary or program.support_summary or '원문 확인')[:600],
-           '추천 이유: '+explanation[:400]]
-    if outcome.missing_profile_fields:lines.append('필요 정보: '+', '.join(outcome.missing_profile_fields))
+           '추천 이유: '+explain_fields(explanation)[:400]]
+    if outcome.missing_profile_fields:lines.append('필요 정보: '+', '.join(FIELD_LABELS.get(field,'추가 프로필 정보') for field in outcome.missing_profile_fields))
     for rule in outcome.matched_requirements[:4]:
-        lines.append(f'확인 조건: {rule.key} {rule.operator} {rule.value}')
+        quote=next((e.text for e in rule.evidence if e.verified),None)
+        if quote:lines.append('확인 조건(원문): '+quote)
     text='\n'.join(html.escape(line[:700]) for line in lines)
     member_url=os.environ.get('RADAR_MEMBER_NOTICE_URL','https://www.gfc-startup.com/notice')
     parsed=urlsplit(member_url)
@@ -126,7 +140,7 @@ def plan_notifications(db,kind,at=None,*,subscription_id=None):
                 eligible=sum(i['payload']['eligibility']=='ELIGIBLE' for i in selected)
                 closing=sum(i['payload']['days_left'] is not None and i['payload']['days_left']<=7 for i in selected)
                 profile=sub['profile']
-                prefix=html.escape(f"StartupRadar Weekly · {week}\n팀: {sub['name']}\n현재 상태: {profile.get('product_stage') or '미입력'} / {profile.get('business_status') or '미입력'}\n이번 주 선정: 지원 가능 {eligible} · 추가 정보 필요 {len(selected)-eligible} · D-7 이내 {closing}\n\n")
+                prefix=html.escape(f"StartupRadar Weekly · {week}\n팀: {sub['name']}\n현재 상태: {STATE_LABELS.get(profile.get('product_stage'),'미입력')} / {STATE_LABELS.get(profile.get('business_status'),'미입력')}\n이번 주 선정: 지원 가능 {eligible} · 추가 정보 필요 {len(selected)-eligible} · D-7 이내 {closing}\n\n")
             # Every batch is one Telegram API message; item receipts map only to its contents.
             chunks=[];chunk=[];size=len(prefix)
             for item in selected:

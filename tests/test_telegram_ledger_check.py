@@ -9,6 +9,19 @@ from core.clock import now
 from tools.telegram_ledger_check import validate_environment,check
 
 
+def test_message_uses_korean_fields_and_verified_condition_quote():
+    from radar.models import Program,Evidence,Requirement,EligibilityResult
+    from radar.notifications import message
+    rule=Requirement(key='business_status',operator='EQ',value='PRE_BUSINESS',certain=True,
+        evidence=[Evidence(text='예비창업자가 신청할 수 있습니다.',method='MANUAL',verified=True,confidence=1)])
+    p=Program(title='Fixture',organization='Fixture',official_url='https://example.org/notice')
+    outcome=EligibilityResult(status='NEEDS_INFO',missing_profile_fields=['business_age_months','prior_support_restrictions'],matched_requirements=[rule])
+    text=message(p,'Fixture',outcome,70,'추가 정보 필요: business_age_months, prior_support_restrictions','DIGEST')
+    assert '사업 개월 수, 기존 지원 이력' in text
+    assert '확인 조건(원문): 예비창업자가 신청할 수 있습니다.' in text
+    assert all(token not in text for token in ('business_age_months','prior_support_restrictions','PRE_BUSINESS',' EQ '))
+
+
 def env(team=None,mode='prepare'):
     return dict(GITHUB_EVENT_NAME='workflow_dispatch',GITHUB_RUN_ATTEMPT='1',GITHUB_RUN_ID='fixture',
         TELEGRAM_CHAT_ID='-123',TELEGRAM_BOT_TOKEN='fixture',LEDGER_CHECK_MODE=mode,
