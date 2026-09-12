@@ -135,6 +135,20 @@ def test_kstartup_download_controls_preserve_unsupported_attachments():
     assert 'Eligibility section' in detail.text and 'Unrelated portal content' not in detail.text
 
 
+def test_kstartup_period_time_is_saved_before_ai_and_matches_api_calendar():
+    from radar.adapters.official import kstartup_period_time
+    from radar.dates import korean_date
+    text='신청기간\n2026.09.09(수) 09:00 ~ 2026.09.30(수) 17:00 까지\n신청방법\n온라인'
+    day,precision=kstartup_period_time(korean_date('20260930',True),text)
+    assert precision=='DATETIME' and (day.hour,day.minute)==(17,0)
+    unchanged,precision=kstartup_period_time(korean_date('20261001',True),text)
+    assert precision=='DATE' and unchanged.hour==23
+    _,precision=kstartup_period_time(korean_date('20260930',True),'행사일시\n2026.09.30(수) 17:00')
+    assert precision=='DATE'
+    _,precision=kstartup_period_time(korean_date('20260930',True),text+'\n접수기간\n2026.09.30(수) 18:00')
+    assert precision=='DATE'
+
+
 def test_bizinfo_documented_fields(monkeypatch):
     monkeypatch.setenv('BIZINFO_API_KEY','fixture-key')
     row={'seq':'PBLN1','title':'지원사업','link':'https://example.org/1','author':'Agency','reqstDt':'20260901 ~ 20260930'}

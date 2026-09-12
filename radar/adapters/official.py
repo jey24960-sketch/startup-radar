@@ -32,6 +32,21 @@ def kstartup_portal_detail(row):
     return None
 
 
+def kstartup_period_time(day,text):
+    """Only refine an API calendar date from labeled portal application periods."""
+    if day is None:return day,'UNKNOWN'
+    times=set()
+    date_pattern=rf'(?<!\d){day.year}\s*(?:년|[./-])\s*0?{day.month}\s*(?:월|[./-])\s*0?{day.day}(?!\d)(?:\s*일)?'
+    for section in re.finditer(r'(?:신청기간|접수기간)\s*[:：]?\s*([^\n]+)',text):
+        for match in re.finditer(date_pattern+r'\s*\.?\s*(?:\([가-힣A-Za-z]+\))?\s*(\d{1,2}):(\d{2})(?!\d)',section.group(1)):
+            hour,minute=map(int,match.groups())
+            if hour<24 and minute<60:times.add((hour,minute))
+    if len(times)==1:
+        hour,minute=times.pop()
+        return day.replace(hour=hour,minute=minute,second=0,microsecond=0),'DATETIME'
+    return day,'DATE'
+
+
 class KStartupApiAdapter(HtmlAdapter):
     endpoint='https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01'
     def fetch_detail(self,candidate):
@@ -72,10 +87,15 @@ class KStartupApiAdapter(HtmlAdapter):
         row=candidate.raw_metadata
         start=korean_date(row['pbanc_rcpt_bgng_dt']) if row.get('pbanc_rcpt_bgng_dt') else None
         end=korean_date(row['pbanc_rcpt_end_dt'],True) if row.get('pbanc_rcpt_end_dt') else None
+        start_precision='DATE' if start else 'UNKNOWN'
+        end_precision='DATE' if end else 'UNKNOWN'
+        if kstartup_portal_detail(row):
+            start,start_precision=kstartup_period_time(start,detail.text)
+            end,end_precision=kstartup_period_time(end,detail.text)
         return Program(title=row['biz_pbanc_nm'],organization=row.get('pbanc_ntrp_nm') or row.get('sprv_inst') or self.source['name'],
             official_url=detail.url,application_url=None if kstartup_portal_detail(row) else row.get('detl_pg_url') or None,
             application_start_at=start,application_end_at=end,deadline_type='FIXED_DATE' if end else 'UNKNOWN',
-            application_start_precision='DATE' if start else 'UNKNOWN',application_end_precision='DATE' if end else 'UNKNOWN',
+            application_start_precision=start_precision,application_end_precision=end_precision,
             applicant_summary=row.get('aply_trgt_ctnt') or row.get('aply_trgt'),support_summary=html_text(row.get('pbanc_ctnt','')),
             program_types=[row['supt_biz_clsfc']] if row.get('supt_biz_clsfc') else [],
             document_hashes=[d['content_hash'] for d in documents if d.get('content_hash')])

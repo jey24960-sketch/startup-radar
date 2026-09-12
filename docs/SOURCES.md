@@ -25,6 +25,8 @@ After request and URL-mapping fixes, the official API returned and persisted all
 
 The portal also publishes UTF-8 `.txt` alternatives beside poster images, served as `application/octet-stream`. One real text download decoded to 917 characters. These explicitly named text attachments now use strict UTF-8/BOM decoding, reject binary controls, and retain the existing byte/text/process limits. Images remain unsupported rather than being mistaken for missing attachments.
 
+Canonical portal records additionally refine API calendar dates from the explicitly labeled 신청기간/접수기간 text before AI extraction. Only a unique valid time on the same API calendar date is accepted; event dates and conflicting times do not refine the field. This preserves the independently verified 17:00 cutoff even if subsequent requirement extraction fails. Original portal text remains in provenance.
+
 ## Adding a Source
 
 1. Verify the organization's public official list/feed/API and its robots/access rules. Do not guess selectors or endpoints.
