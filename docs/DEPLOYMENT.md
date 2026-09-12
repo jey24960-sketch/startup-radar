@@ -1,6 +1,8 @@
+> **Current goal:** [GFC integrated operation](GFC-OPERATING-GOAL.md) supersedes earlier hosting assumptions. A permanent Python API is not a prerequisite. [Phase A endpoint audit](PYTHON-API-DECISION.md) tracks direct Supabase conversion, async recalculation and the eventual server decision.
+
 # StartupRadar V2 배포 준비
 
-현재는 staging 단계다. 사용자 UI는 기존 GFC React/Vercel 사이트의 `/notice`와 `/radar/settings`로 확정했다. Python은 수집·판정 엔진과 인증 API로 배포한다. Supabase는 기존 GFC 프로젝트 `etvffzxqdgblvkfdikwl`이며 Radar 마이그레이션 3개와 GFC 공지 마이그레이션 1개를 적용했다. Python API 호스팅과 실제 런타임 연결이 남아 있다. 최신 결정은 [GFC 통합 명세](GFC-NOTICE-INTEGRATION-DECISION.md), 계약과 검증은 [통합 보고서](GFC-NOTICE-INTEGRATION.md)를 따른다. 기존 V1 운영 전환은 하지 않는다.
+현재는 staging 단계다. 사용자 UI는 기존 GFC React/Vercel 사이트의 `/notice`와 `/radar/settings`로 확정했다. Python은 수집·판정 엔진과 인증 API로 배포한다. Supabase는 기존 GFC 프로젝트 `etvffzxqdgblvkfdikwl`이며 Radar 마이그레이션 3개와 GFC 공지 마이그레이션 1개를 적용했다. Python HTTP 의존성을 Supabase 조회·배치 재계산으로 줄이는 Phase A를 진행 중이며, 상시 Python 호스팅 필요성은 아직 확정하지 않았다. 최신 결정은 [GFC 통합 명세](GFC-NOTICE-INTEGRATION-DECISION.md), 계약과 검증은 [통합 보고서](GFC-NOTICE-INTEGRATION.md)를 따른다. 기존 V1 운영 전환은 하지 않는다.
 
 ## 준비된 실행 방법
 
@@ -41,7 +43,7 @@ python -m radar.deployment --component dispatch
 | 텔레그램 명령 수신 | DATABASE_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET |
 | GitHub 작업 요청 | DATABASE_URL, RADAR_GITHUB_TOKEN, GITHUB_REPOSITORY, RADAR_GITHUB_REF |
 
-## 배포 대상 확정 후 순서
+## 기존 Python HTTP 경로를 유지할 경우의 조건부 절차
 
 1. Radar 현행 마이그레이션 3개와 GFC 공지 마이그레이션 1개는 이미 적용했고 SQL 역할 기반 RLS 검증이 끝났다. 공유 ledger에는 두 저장소의 이력이 있으므로 일괄 db push/repair를 실행하지 않는다. 다음으로 실제 Python 프로세스의 DB 연결·풀러·제한된 권한을 검증한다.
 2. 지정한 웹 호스트에 런타임 설정을 등록하고 이미지를 빌드·실행한다. DB 접속 주소는 Supabase Connect 화면에서 얻는다.

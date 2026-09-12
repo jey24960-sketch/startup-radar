@@ -1,3 +1,5 @@
+> **Current goal:** [GFC integrated operation](GFC-OPERATING-GOAL.md) supersedes earlier hosting assumptions. A permanent Python API is not a prerequisite. [Phase A endpoint audit](PYTHON-API-DECISION.md) tracks direct Supabase conversion, async recalculation and the eventual server decision.
+
 # V2 setup and migration checkpoint
 
 ## Status

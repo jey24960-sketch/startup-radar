@@ -1,3 +1,5 @@
+> **Current goal:** [GFC integrated operation](GFC-OPERATING-GOAL.md) supersedes earlier hosting assumptions. A permanent Python API is not a prerequisite. [Phase A endpoint audit](PYTHON-API-DECISION.md) tracks direct Supabase conversion, async recalculation and the eventual server decision.
+
 > Historical implementation audit: the matrix below describes the earlier standalone-dashboard checkpoint. It is retained as dated evidence, not deployment instructions. The GFC /notice decision supersedes its frontend/auth design, migration counts and test totals. Use GFC-NOTICE-INTEGRATION.md for current integration evidence and DEPLOYMENT.md / V2-SETUP.md for current operating instructions.
 
 # StartupRadar 2.0 requirement audit
@@ -79,4 +81,4 @@ The full objective remains unproven. The latest instruction integrates the membe
 | Runtime dependencies | Repository Secret names read on 2026-09-12 include ANTHROPIC_API_KEY and TELEGRAM_BOT_TOKEN; no RADAR_DATABASE_URL, KSTARTUP_API_KEY or BIZINFO_API_KEY in that repository-level list. Repository Actions variables list is empty | Configure verified credentials in the designated runtime; names do not prove values are valid. Organization/environment/other-host secrets were not inferred absent |
 | Delivery and cutover | V2 disabled by absent repository enable variables and paused DB scheduling; draft PRs unmerged; V1 retained | Designated test bot/chat, actual receipt/command verification, matched-period V1/V2 comparison, then cutover decision |
 
-Python API hosting remains unspecified. Do not replace it with a new frontend service or count a Vercel preview as a functioning engine. No current endpoint, real test account, or intended test recipient is available to finish the operating gates. All required behavior and external proof remain in scope.
+The updated goal removes Python API hosting as a prerequisite. Phase A audits every endpoint and converts suitable member paths to Supabase/RLS, preserving the Python engine for batch calculations. Actual test accounts, intended notification recipients and live data validation remain later operating gates. The full updated goal remains in scope.

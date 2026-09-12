@@ -1,3 +1,5 @@
+> **Current goal:** [GFC integrated operation](GFC-OPERATING-GOAL.md) supersedes earlier hosting assumptions. A permanent Python API is not a prerequisite. [Phase A endpoint audit](PYTHON-API-DECISION.md) tracks direct Supabase conversion, async recalculation and the eventual server decision.
+
 # StartupRadar 2.0 — GFC 공지 허브 통합 보고서
 
 작성 기준: 2026-09-12. 최신 첨부 지시 33개 항목을 기준으로 기존 V2를 확장했다. **코드 구현·로컬 검증·공유 Supabase 적용은 완료했지만, GFC 운영 도메인의 새 프런트엔드와 Python API 연결은 아직 완료하지 않았다.** 실데이터 수집·알림 운영 전환도 보류 상태다. 가상 화면 테스트와 실제 운영 검증을 구분한다.
