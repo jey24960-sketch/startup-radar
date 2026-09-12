@@ -34,6 +34,8 @@ class MemberAdd(StrictModel):
 class JobInput(StrictModel):
     kind:Literal['INGEST','DIGEST','REMINDER','HIGH_FIT']='INGEST'
     source_slug:str|None=Field(default=None,max_length=100)
+class JobCancellation(StrictModel):
+    note:str=Field(min_length=5,max_length=500)
 class DuplicateDecision(StrictModel):
     state:Literal['CONFIRMED','REJECTED']
 class Scheduling(StrictModel):
@@ -145,6 +147,10 @@ def create_app(database=None,preview=False):
     def trigger_job(body:JobInput,user=Depends(authenticated_user)):
         require_admin(db(),user)
         return dispatch_job(db(),body.kind,body.source_slug,user)
+    @app.post('/api/admin/jobs/{job_id}/cancel')
+    def cancel_job_request(job_id:UUID,body:JobCancellation,user=Depends(authenticated_user)):
+        from radar.jobs import cancel_job
+        return cancel_job(db(),job_id,body.note,user)
     @app.put('/api/admin/scheduling')
     def scheduling(body:Scheduling,user=Depends(authenticated_user)):
         require_admin(db(),user)

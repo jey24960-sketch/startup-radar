@@ -88,6 +88,17 @@ def test_health_and_missing_dispatch_config_visible(context,monkeypatch):
     assert result['tracked_source_success_rate']==0
 
 
+def test_job_cancellation_endpoint_requires_admin_and_records_result(context):
+    with context['db'].transaction() as c:
+        job=c.execute("insert into radar.job_requests(kind) values('INGEST') returning id").fetchone()['id']
+    path='/api/admin/jobs/'+str(job)+'/cancel'
+    context['app'].dependency_overrides[authenticated_user]=lambda:context['other']
+    assert context['client'].post(path,json={'note':'Retire fixture request'}).status_code==403
+    context['app'].dependency_overrides[authenticated_user]=lambda:context['admin']
+    result=context['client'].post(path,json={'note':'Retire fixture request'})
+    assert result.status_code==200 and result.json()['state']=='CANCELLED'
+
+
 def test_webhook_rejects_forgery_and_nonobjects(context,monkeypatch):
     monkeypatch.setenv('TELEGRAM_WEBHOOK_SECRET','fixture-only-secret')
     assert context['client'].post('/telegram/webhook',json={'update_id':1}).status_code==403

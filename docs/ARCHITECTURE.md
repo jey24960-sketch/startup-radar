@@ -100,3 +100,10 @@ The third migration adds `program_source_snapshots`, an append-only application 
 Eligibility 2.0.1 records the evaluation date and validates requirement values against their field/operator before evaluation. Korean province aliases normalize common Korean/English spellings. Invalid types and non-finite numbers produce extraction schema failures, not hard eligibility rejection. Alias matching does not interpret district-level restrictions or complex geographic exceptions.
 
 `radar.parallel` reads a current catalog/profile snapshot and compares it with V1's complete pre-send-filter report. It retains ambiguity, failure context and collection-window limitations, and never approves cutover or sends a message. Native PostgreSQL concurrent save/job/cadence/planner/sender tests now pass locally; hosted pooler, API semantics and actual Telegram/network crash behavior remain external validation work.
+
+
+## Authoritative identity and job recovery
+
+The fourth migration replaces unconditional source/discovery-URL uniqueness with a partial unique index for observations lacking source IDs. Canonical keys for new records use source identity, allowing separate official IDs on a shared page. Existing source IDs resolve first, including changed URLs. Cross-source URL corroboration requires matching normalized title/organization and a single candidate; contradictory publisher IDs or ambiguous matches stay separate and create review candidates. This prevents new incorrect merges but does not automatically undo old ones.
+
+The fifth migration permits CANCELLED job requests. Administrator cancellation acquires the execution advisory lock, rejects live execution and terminal jobs, records the previous state/result and prevents a late dispatch from running the retired ID. It does not roll back completed work or cancel notification batches. Dispatch callbacks only update still-REQUESTED rows, so an HTTP timeout/rejection cannot overwrite an already-running or completed workflow. See OPERATIONS.md for the recovery boundary and verification limits.

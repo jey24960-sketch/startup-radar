@@ -78,6 +78,53 @@ def test_fuzzy_duplicates_are_not_merged(db):
         assert c.execute('select * from radar.possible_duplicates where program_id=%s and candidate_program_id=%s',(y['program_id'],x['program_id'])).fetchone()
 
 
+def test_distinct_publisher_ids_on_same_url_remain_distinct(db):
+    p=program();s=source(db)
+    first=db.save_program(p,s,'round-one',p.official_url,{'round':1},'first')
+    second=db.save_program(p,s,'round-two',p.official_url,{'round':2},'second')
+    assert first['program_id']!=second['program_id']
+    again=db.save_program(p,s,'round-two',p.official_url,{'round':2},'second')
+    assert again['version_id']==second['version_id']
+    with db.transaction() as c:
+        assert c.execute('select count(*) n from radar.program_sources').fetchone()['n']==2
+        assert c.execute('select count(*) n from radar.possible_duplicates').fetchone()['n']==1
+
+
+def test_authoritative_id_wins_when_url_now_matches_another_notice(db):
+    p=program();s=source(db);other=p.model_copy(deep=True);other.official_url+='/other'
+    first=db.save_program(p,s,'stable-id',p.official_url,{},'one')
+    second=db.save_program(other,s,'other-id',other.official_url,{},'two')
+    p.official_url=other.official_url
+    updated=db.save_program(p,s,'stable-id',p.official_url,{},'changed URL')
+    assert updated['program_id']==first['program_id'] and updated['program_id']!=second['program_id']
+
+
+def test_shared_url_from_other_source_with_different_title_is_review_only(db):
+    p=program();a,b=source(db),source(db)
+    first=db.save_program(p,a,'a',p.official_url,{},'one')
+    p.title='Completely separate 2027 program'
+    second=db.save_program(p,b,'b',p.official_url,{},'two')
+    assert first['program_id']!=second['program_id']
+
+
+def test_ambiguous_cross_source_url_does_not_choose_first_record(db):
+    p=program();a,b=source(db),source(db)
+    first=db.save_program(p,a,'a1',p.official_url,{},'one')
+    second=db.save_program(p,a,'a2',p.official_url,{},'two')
+    third=db.save_program(p,b,'b',p.official_url,{},'three')
+    assert len({first['program_id'],second['program_id'],third['program_id']})==3
+
+
+def test_unidentified_source_url_keeps_versions_and_can_gain_an_id(db):
+    p=program();s=source(db)
+    first=db.save_program(p,s,None,p.official_url,{},'one')
+    p.title+=' revised'
+    second=db.save_program(p,s,None,p.official_url,{},'two')
+    identified=db.save_program(p,s,'now-known',p.official_url,{},'two')
+    assert first['program_id']==second['program_id']==identified['program_id']
+    assert first['version_id']!=second['version_id']==identified['version_id']
+
+
 def test_normalization():
     assert normalize_text('ＧＦＣ 창업 - 지원')==normalize_text('GFC창업지원')
     assert normalize_url('https://example.org/p?utm_source=x&id=2#top')=='https://example.org/p?id=2'

@@ -56,7 +56,7 @@ def tick(db,at=None,transport=None,executor=execute):
 
 
 def run_job(db,kind,source_slug=None,job_id=None,transport=None,executor=execute):
-    # Hold one session-level lock across work; process exit releases it. The outbox
+    # Hold one transaction-level lock across work; process exit releases it. The outbox
     # additionally uses per-batch locks/claims, so a crash never blindly resends.
     with db.transaction() as lock:
         if not lock.execute('select pg_try_advisory_xact_lock(782394202) acquired').fetchone()['acquired']:

@@ -5,7 +5,7 @@ Complete approved scope: V2-SPEC.md. Baseline audit: V1-AUDIT.md. Branch: featur
 ## Current local implementation
 
 - V1 typed analysis failures, delivered-item-only accounting, nonzero incomplete run status, Seoul clock, workflow concurrency and webhook authentication/update claims.
-- Three additive PostgreSQL migrations with 28 RLS-enabled tables, profiles/program versions, source provenance, requirements, recommendation traces, outbox, message batches, runtime settings, job/cadence claims and audit.
+- Five PostgreSQL migrations with 28 RLS-enabled tables, profiles/program versions, source provenance, requirements, recommendation traces, outbox, message batches, runtime settings, job/cadence claims and audit.
 - Five presets, independent team/product/business dimensions, unknown values, progressive profile updates and version conflict detection.
 - Deterministic evidence-gated eligibility, dates and configurable ranking components. A failed condition cannot be overridden by AI/ranking.
 - K-Startup/BizInfo adapters, RSS/Atom, configurable HTML, optional browser and explicit injected search interfaces. sources.json wires the initial registry into the CLI.
@@ -18,7 +18,7 @@ Complete approved scope: V2-SPEC.md. Baseline audit: V1-AUDIT.md. Branch: featur
 
 ## Verification
 
-- Final Python verification: 102 passed on native PostgreSQL 18.4, 1 third-party deprecation warning (Starlette/AnyIO BlockingPortal alias). Dependency check reports no broken requirements.
+- Final Python verification: 116 passed on native PostgreSQL 18.4, 1 third-party deprecation warning (Starlette/AnyIO BlockingPortal alias). Dependency check reports no broken requirements.
 - Worker tests: 4 passed.
 - Fresh migrations + team RLS/admin/anonymous denial assertions: passed with PGlite; native PostgreSQL profile/snapshot isolation tests also pass.
 - Four native concurrency tests cover simultaneous version saves, exclusive jobs, cadence claims and parallel high-fit planners/senders. CI configuration provisions PostgreSQL 17; its GitHub execution is pending.
@@ -60,7 +60,7 @@ Complete approved scope: V2-SPEC.md. Baseline audit: V1-AUDIT.md. Branch: featur
 - Select and configure the dedicated Supabase project, apply migrations/advisors, verify actual Auth invitation/login, team isolation and pooler behavior. The earlier project-selection question remains unanswered; no unrelated connected project was modified.
 - Configure official API credentials and validate real paginated responses. Legacy source inventory is audited; disabled adapters still require validated routes or policy/host availability before enabling. Search provider remains unconfigured; optional Playwright is not installed for deployment.
 - Measure extraction completeness/semantic accuracy on a labeled Korean notice corpus, including complex OR/exceptions, dates, tables, images and scanned PDF. No claim of certified eligibility or nationwide coverage.
-- Historical source snapshots are implemented. Remaining work includes cross-source conflict/trust resolution, authoritative ID handling when distinct notices share a landing URL, normalization consistency and binary document archival/retention where needed.
+- Historical source snapshots are implemented. Remaining work includes cross-source conflict/trust resolution, normalization consistency and binary document archival/retention where needed.
 - Validate production multi-process claims, crashes, timeouts and recovery. Externally exactly-once delivery is not guaranteed. Queued profile/program changes currently cancel the whole batch conservatively and may defer remaining opportunities.
 - Membership and subscription management APIs exist; polished administrator invitation/team/subscription forms are not yet complete. Some condition/history labels remain internal keys. Large-catalog browsing currently filters in Python.
 - Read-only V1/V2 comparison tooling is implemented; run live matched-period comparisons: V1-only/V2-only, duplicates, eligibility disagreements and failed sources. Define/observe acceptable reliability before switching the actual Telegram webhook or retiring V1.
@@ -74,3 +74,12 @@ New migration: 20260912073008_source_snapshots.sql. New verification workflow: .
 V2-SETUP.md: environment, migrations, membership/bootstrap, web, Telegram, Actions and local fixture preview.
 SOURCES.md: exact official contracts, adding sources and real long-tail evidence.
 .env.example: names only, no credentials.
+
+
+## Identity and recovery checkpoint
+
+- Distinct publisher IDs now remain separate on a shared URL. Existing ID identity wins over conflicting URL matches; cross-source URL candidates require normalized title/organization agreement and uniqueness. Five new database regression cases pass. Existing wrongly merged historical records need reviewed repair and are not automatically split.
+- Slow/rejected/timed-out GitHub dispatch responses cannot overwrite completed execution state. Three response-race tests pass.
+- The admin job cancellation API retires queued/orphan/uncertain requests under the same execution lock, preserves an audit record, prevents late workflow execution, rejects non-admins/terminal jobs and refuses a concurrent live job. Direct API integration and native lock tests pass. No actual GitHub cancellation or Telegram send occurred.
+- All 116 Python tests passed on native PostgreSQL; all five migrations and RLS assertions passed on a fresh PGlite instance. Python compilation and whitespace checks passed. The previous frontend build and four Worker checks remain valid because neither frontend nor Worker changed in this checkpoint.
+- OPERATIONS.md provides the investigation/recovery runbook. Remaining gaps include production credentials/hosted Auth, real transport/workflow/crash exercises, full matched-period notice validation, complex extraction evaluation and cutover. Schedule-claim reconciliation and automated operator paging are still limited.

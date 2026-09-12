@@ -6,7 +6,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from radar.models import TeamProfile, Program
-from radar.identity import normalize_url,digest,changed_fields,duplicate_confidence
+from radar.identity import normalize_url,normalize_text,digest,changed_fields,duplicate_confidence
 from radar.dates import program_status
 
 
@@ -61,23 +61,40 @@ class Database:
             # Ingestion stays concurrent outside this short database critical section.
             c.execute('select pg_advisory_xact_lock(782394201)')
             existing=c.execute('select p.* from radar.program_sources s join radar.programs p on p.id=s.program_id '
-                'where s.source_id=%s and ((%s::text is not null and s.source_program_id=%s) or s.discovery_url=%s) limit 1',
-                (source_id,source_program_id,source_program_id,discovery_url)).fetchone()
+                'where s.source_id=%s and s.source_program_id=%s',
+                (source_id,source_program_id)).fetchone() if source_program_id is not None else c.execute(
+                'select p.* from radar.program_sources s join radar.programs p on p.id=s.program_id '
+                'where s.source_id=%s and s.source_program_id is null and s.discovery_url=%s',
+                (source_id,discovery_url)).fetchone()
+            url_candidates=[]
             if not existing:
-                existing=c.execute('select * from radar.programs where canonical_key=%s',(digest(canonical_url),)).fetchone()
-            if not existing:
-                existing=c.execute('select p.* from radar.program_sources s join radar.programs p on p.id=s.program_id where s.official_detail_url=%s limit 1',(canonical_url,)).fetchone()
+                url_candidates=c.execute('select p.* from radar.programs p where exists '
+                    '(select 1 from radar.program_sources s where s.program_id=p.id and s.official_detail_url=%s)',(canonical_url,)).fetchall()
+                matches=[]
+                for candidate in url_candidates:
+                    conflict=source_program_id is not None and c.execute(
+                        'select 1 from radar.program_sources where program_id=%s and source_id=%s '
+                        'and source_program_id is not null and source_program_id<>%s limit 1',
+                        (candidate['id'],source_id,source_program_id)).fetchone()
+                    same_notice=(normalize_text(candidate['title'])==normalize_text(program.title)
+                        and normalize_text(candidate['organization'])==normalize_text(program.organization))
+                    if not conflict and same_notice:matches.append(candidate)
+                # A shared URL is only corroboration, never an override of publisher IDs.
+                if len(matches)==1:existing=matches[0]
             candidates=[]
             if not existing:
                 # No fuzzy auto-merge. Keep possible relationships for human review.
                 candidates=c.execute('select id,title,organization,official_url from radar.programs where organization=%s',(program.organization,)).fetchall()
+                candidates=list({row['id']:row for row in candidates+url_candidates}.values())
+                identity={'source_id':str(source_id),'source_program_id':source_program_id} if source_program_id is not None else {
+                    'source_id':str(source_id),'discovery_url':discovery_url}
                 existing=c.execute('insert into radar.programs(canonical_key,title,organization,program_types,status,deadline_type,official_url) '
                     'values(%s,%s,%s,%s,%s,%s,%s) returning *',
-                    (digest(canonical_url),program.title,program.organization,program.program_types,program_status(program),program.deadline_type,program.official_url)).fetchone()
+                    (digest(identity),program.title,program.organization,program.program_types,program_status(program),program.deadline_type,program.official_url)).fetchone()
             pid=existing['id']
             c.execute('insert into radar.program_sources(program_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata) '
-                'values(%s,%s,%s,%s,%s,%s) on conflict(source_id,discovery_url) do update set last_seen_at=now(),raw_metadata=excluded.raw_metadata',
-                (pid,source_id,source_program_id,discovery_url,canonical_url,Jsonb(raw_metadata))) if not source_program_id else c.execute(
+                'values(%s,%s,%s,%s,%s,%s) on conflict(source_id,discovery_url) where source_program_id is null do update set last_seen_at=now(),official_detail_url=excluded.official_detail_url,raw_metadata=excluded.raw_metadata',
+                (pid,source_id,source_program_id,discovery_url,canonical_url,Jsonb(raw_metadata))) if source_program_id is None else c.execute(
                 'insert into radar.program_sources(program_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata) '
                 'values(%s,%s,%s,%s,%s,%s) on conflict(source_id,source_program_id) do update set last_seen_at=now(),discovery_url=excluded.discovery_url,official_detail_url=excluded.official_detail_url,raw_metadata=excluded.raw_metadata',
                 (pid,source_id,source_program_id,discovery_url,canonical_url,Jsonb(raw_metadata)))
@@ -116,7 +133,7 @@ class Database:
                 confidence=duplicate_confidence(dict(candidate),normal)
                 if confidence>=0.8:
                     c.execute('insert into radar.possible_duplicates(program_id,candidate_program_id,confidence,reason) values(%s,%s,%s,%s) on conflict do nothing',
-                              (pid,candidate['id'],confidence,'Similar title/organization; requires review'))
+                              (pid,candidate['id'],confidence,'Shared URL or similar title/organization; publisher IDs and ambiguity require review'))
             return {'program_id':pid,'version_id':vid,'event':event if changed else None}
 
     @staticmethod

@@ -84,10 +84,11 @@ def health(db,user_id=None):
             'from radar.sources s left join lateral(select * from radar.source_run_results r where r.source_id=s.id order by r.created_at desc limit 1) r on true order by s.slug').fetchall()
         runs=c.execute('select * from radar.ingestion_runs order by started_at desc limit 20').fetchall()
         jobs=c.execute('select * from radar.job_requests order by created_at desc limit 20').fetchall()
+        claims=c.execute('select * from radar.schedule_claims order by created_at desc limit 20').fetchall()
         settings=c.execute('select key,value,updated_at from radar.runtime_settings order by key').fetchall()
     active=[s for s in sources if s['enabled']]
     success=sum(s['status']=='SUCCESS' for s in active)
-    return {'sources':sources,'runs':runs,'jobs':jobs,'settings':settings,'tracked_sources':len(sources),
+    return {'sources':sources,'runs':runs,'jobs':jobs,'schedule_claims':claims,'settings':settings,'tracked_sources':len(sources),
             'enabled_sources':len(active),'successful_sources':success,
             'tracked_source_success_rate':round(100*success/len(active),1) if active else None,
             'coverage_note':'등록된 활성 소스의 최근 수집 성공률이며 국내 전체 창업지원사업의 포괄률이 아닙니다.'}
