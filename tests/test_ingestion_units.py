@@ -90,6 +90,7 @@ def test_kstartup_documented_fields(monkeypatch):
     program=adapter.normalize(candidate,AcquiredDetail(candidate.official_detail_url,'text',candidate.title),[])
     assert candidate.source_program_id=='123' and program.application_url=='https://example.org/apply'
     assert program.application_end_at.hour==23 and program.application_end_at.utcoffset().total_seconds()==9*3600
+    assert program.application_end_precision=='DATE'
     assert not program.evidence_complete
 
 
@@ -100,6 +101,7 @@ def test_bizinfo_documented_fields(monkeypatch):
     candidate=list(adapter.discover())[0]
     p=adapter.normalize(candidate,AcquiredDetail(candidate.official_detail_url,'text',candidate.title),[])
     assert p.title=='지원사업' and p.application_end_at.day==30
+    assert p.application_end_precision=='DATE'
 
 
 def test_missing_credentials_explicit(monkeypatch):

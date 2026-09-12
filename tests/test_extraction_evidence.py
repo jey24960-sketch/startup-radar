@@ -100,6 +100,27 @@ def test_existing_structured_deadline_is_not_replaced_by_ai():
     assert result.application_end_at==original.application_end_at
 
 
+def test_date_precision_from_official_api_can_gain_same_day_source_time():
+    original=Program(title='Fixture',organization='Org',official_url='https://example.org/1',application_end_at=korean_date('20260930',True),application_end_precision='DATE')
+    text='2026.9.30 오전 11시 마감'
+    result=extract({'application_end_at':'2026-09-30T11:00:00+09:00','date_evidence_quote':text},text,original)
+    assert result.application_end_at.hour==11 and result.application_end_precision=='DATETIME'
+    assert original.application_end_at.hour==23 and original.application_end_precision=='DATE'
+
+
+def test_refinement_cannot_change_official_calendar_day():
+    original=Program(title='Fixture',organization='Org',official_url='https://example.org/1',application_end_at=korean_date('20260920',True),application_end_precision='DATE')
+    text='2026.9.30 오전 11시 마감'
+    with pytest.raises(SourceFailure,match='AI_DATE_CONFLICT'):
+        extract({'application_end_at':'2026-09-30T11:00:00+09:00','date_evidence_quote':text},text,original)
+    assert original.application_end_at.day==20
+
+
+def test_omitted_ai_timestamp_cannot_certify_a_coarse_api_deadline():
+    original=Program(title='Fixture',organization='Org',official_url='https://example.org/1',application_end_at=korean_date('20260930',True),application_end_precision='DATE')
+    with pytest.raises(SourceFailure,match='AI_DATE_TIME_REQUIRED'):extract({},'2026.9.30 오전 11시 마감',original)
+
+
 def test_known_registration_date_satisfies_exists():
     rule=Requirement(key='registration_date',operator='EXISTS',certain=True,evidence=[Evidence(source_id='source',text='사업자등록 필요',method='MANUAL',confidence=1,verified=True)])
     assert evaluate(TeamProfile(business_registration_date=date(2026,1,1)),[rule],True).status=='ELIGIBLE'

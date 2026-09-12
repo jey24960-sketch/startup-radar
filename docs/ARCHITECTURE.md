@@ -118,3 +118,10 @@ Date extraction accepts optional ISO timestamps in `application_start_at`/`appli
 Extraction works on a copy and returns only a validated Program, so failure cannot partially mutate official facts retained by ingestion. New benefit summaries require a nonempty verbatim supporting quote. Set-valued profile rules use IN/NOT_IN/EXISTS; scalar equality on a list is rejected at schema validation. Registration-date EXISTS now evaluates presence without trying to parse its null comparison value.
 
 Twenty synthetic Korean evidence/temporal regression cases were added. The full native PostgreSQL suite passes 136 tests. TEMPORAL-EVIDENCE-CHECK.json also demonstrates a previously acquired KHU notice's 2026-09-15 13:00 cutoff and deterministic closure one second later; its timestamp was supplied from visible source text, not extracted by a live model. Full-model accuracy and source-section completeness still need a labeled real-notice cohort.
+
+
+## Date precision 2.0.3
+
+Official API calendar dates now carry DATE precision. Explicit quoted times can refine them within the same Seoul calendar day; a conflicting day fails extraction rather than overwriting the official date. An omitted AI time cannot certify a DATE value when the source has a nearby explicit time. DATETIME values and older values with UNKNOWN precision retain their supplied date priority. Older records need re-ingestion to recover known precision. These normalized JSON fields need no SQL migration.
+
+The dashboard displays date-only/unknown precision with “시각 원문 확인”; DATETIME shows the actual time. Native tests: 139 passed. The rebuilt browser UI was checked in both states using labeled fictional notices, then its preview server was stopped. See COMPLETION-AUDIT.md for the full remaining acceptance gates.

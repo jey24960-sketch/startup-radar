@@ -34,6 +34,19 @@ class Extraction(StrictModel):
 
 def compact(text):return re.sub(r'\s+',' ',text).strip()
 
+DATE_PATTERN=r'(?<!\d)(20\d{2})\s*(?:년|[./-])\s*(\d{1,2})\s*(?:월|[./-])\s*(\d{1,2})(?!\d)(?:\s*일)?'
+
+
+def has_nearby_time(day,source_texts):
+    for source_text in source_texts:
+        for match in re.finditer(DATE_PATTERN,source_text):
+            if tuple(map(int,match.groups()))!=(day.year,day.month,day.day):continue
+            tail=source_text[match.end():match.end()+100]
+            next_date=re.search(DATE_PATTERN,tail)
+            if next_date:tail=tail[:next_date.start()]
+            if re.search(r'\d{1,2}\s*:\s*\d{2}|(?:오전|오후)\s*\d{1,2}\s*시|\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?',tail):return True
+    return False
+
 
 def cited_datetime(value,quote,end=False,source_texts=()):
     """Validate a full cited date and any adjacent time; never silently extend a cutoff."""
@@ -43,8 +56,7 @@ def cited_datetime(value,quote,end=False,source_texts=()):
         if parsed.tzinfo is None:raise ValueError('Extracted timestamp requires an explicit timezone')
         parsed=parsed.astimezone(SEOUL)
     except (ValueError,TypeError):raise SourceFailure('AI_DATE_SCHEMA','Invalid extracted application date/time')
-    pattern=r'(?<!\d)(20\d{2})\s*(?:년|[./-])\s*(\d{1,2})\s*(?:월|[./-])\s*(\d{1,2})(?!\d)(?:\s*일)?'
-    matches=[m for m in re.finditer(pattern,quote) if tuple(map(int,m.groups()))==(parsed.year,parsed.month,parsed.day)]
+    matches=[m for m in re.finditer(DATE_PATTERN,quote) if tuple(map(int,m.groups()))==(parsed.year,parsed.month,parsed.day)]
     if not matches:raise SourceFailure('AI_DATE_EVIDENCE','Extracted date is not present as a full date in its citation')
     times=[]
     for match in matches:
@@ -62,21 +74,12 @@ def cited_datetime(value,quote,end=False,source_texts=()):
             raise SourceFailure('AI_DATE_EVIDENCE','Extracted timestamp does not match its cited time')
     else:
         # A model must not omit an adjacent cutoff by quoting only the date token.
-        contextual_time=False
-        for source_text in source_texts:
-            for match in re.finditer(pattern,source_text):
-                if tuple(map(int,match.groups()))!=(parsed.year,parsed.month,parsed.day):continue
-                tail=source_text[match.end():match.end()+100]
-                next_date=re.search(pattern,tail)
-                if next_date:tail=tail[:next_date.start()]
-                if re.search(r'\d{1,2}\s*:\s*\d{2}|(?:오전|오후)\s*\d{1,2}\s*시|\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?',tail):
-                    contextual_time=True
-        if times or contextual_time:raise SourceFailure('AI_DATE_TIME_REQUIRED','Source specifies a nearby time; a date-only cutoff would be inaccurate')
+        if times or has_nearby_time(parsed,source_texts):raise SourceFailure('AI_DATE_TIME_REQUIRED','Source specifies a nearby time; a date-only cutoff would be inaccurate')
     return parsed
 
 
 class RequirementExtractor:
-    version='requirements-2.0.2'
+    version='requirements-2.0.3'
     def __init__(self,client=None,model=None):
         self.client=client
         self.model=model or os.environ.get('RADAR_EXTRACTION_MODEL','claude-sonnet-4-5')
@@ -103,6 +106,7 @@ class RequirementExtractor:
           'eligibility_section_quote must be verbatim from that section. Prefer structured official values, but broad applicant labels do not prove full eligibility. '
           'For dates, quote the complete year/month/day. Preserve explicit cutoff times using application_start_at/application_end_at '
           'as ISO-8601 timestamps with +09:00. Use date-only fields only when no time is specified. Do not guess a missing year or cutoff time. '
+          'A structured DATE precision supplies the calendar day, not a precise time. Extract its explicit source time when present, without changing the official calendar day. '
           'Provide a verbatim benefit_evidence_quote for any benefit summary. '
           'Preserve program category distinctions: general policy loans, SME finance and unrelated R&D are excluded categories. '
           'Schema: '+json.dumps(Extraction.model_json_schema(),ensure_ascii=False)
@@ -125,15 +129,21 @@ class RequirementExtractor:
             if extracted.unsupported_logic or not rule.evidence or not any(e.verified for e in rule.evidence):rule.certain=False
         coverage=bool(extracted.eligibility_section_quote.strip()) and any(compact(extracted.eligibility_section_quote) in compact(t) for t in evidence.values())
         date_supported=bool(compact(extracted.date_evidence_quote or '')) and any(compact(extracted.date_evidence_quote) in compact(t) for t in evidence.values())
-        needs_date=((program.application_start_at is None and (extracted.application_start_at or extracted.application_start_date)) or
-            (program.application_end_at is None and (extracted.application_end_at or extracted.application_end_date)))
+        def can_fill(which):return getattr(program,'application_'+which+'_at') is None or getattr(program,'application_'+which+'_precision')=='DATE'
+        needs_date=((can_fill('start') and (extracted.application_start_at or extracted.application_start_date)) or
+            (can_fill('end') and (extracted.application_end_at or extracted.application_end_date)))
         if needs_date and not date_supported:raise SourceFailure('AI_DATE_EVIDENCE','Extracted dates require a verbatim citation')
         if date_supported:
             try:
-                if program.application_start_at is None and (extracted.application_start_at or extracted.application_start_date):
-                    program.application_start_at=cited_datetime(extracted.application_start_at or extracted.application_start_date,extracted.date_evidence_quote,source_texts=evidence.values())
-                if program.application_end_at is None and (extracted.application_end_at or extracted.application_end_date):
-                    program.application_end_at=cited_datetime(extracted.application_end_at or extracted.application_end_date,extracted.date_evidence_quote,True,evidence.values())
+                for which in ('start','end'):
+                    value=getattr(extracted,'application_'+which+'_at') or getattr(extracted,'application_'+which+'_date')
+                    if not value or not can_fill(which):continue
+                    parsed=cited_datetime(value,extracted.date_evidence_quote,which=='end',evidence.values())
+                    previous=getattr(program,'application_'+which+'_at')
+                    if previous and previous.astimezone(SEOUL).date()!=parsed.date():
+                        raise SourceFailure('AI_DATE_CONFLICT','Extracted time cannot change the official calendar day')
+                    setattr(program,'application_'+which+'_at',parsed)
+                    setattr(program,'application_'+which+'_precision','DATETIME' if 'T' in value or ' ' in value.strip() else 'DATE')
                 if program.deadline_type=='UNKNOWN':
                     if extracted.deadline_type=='ROLLING' and not re.search(r'상시|연중|수시\s*모집',extracted.date_evidence_quote):
                         raise SourceFailure('AI_DATE_EVIDENCE','Rolling deadline lacks a supporting phrase')
@@ -141,6 +151,10 @@ class RequirementExtractor:
                         raise SourceFailure('AI_DATE_EVIDENCE','Budget deadline lacks a supporting phrase')
                     program.deadline_type=extracted.deadline_type
             except ValueError:raise SourceFailure('AI_DATE_SCHEMA','Invalid extracted application dates')
+        for which in ('start','end'):
+            value=getattr(program,'application_'+which+'_at')
+            if value and getattr(program,'application_'+which+'_precision')=='DATE' and has_nearby_time(value.astimezone(SEOUL),evidence.values()):
+                raise SourceFailure('AI_DATE_TIME_REQUIRED','Official API supplies only a date; the source time remains unresolved')
         program.requirements=[*program.requirements,*extracted.requirements]
         program.program_types=list(extracted.program_types)
         program.product_stages=extracted.product_stages

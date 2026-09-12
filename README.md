@@ -249,6 +249,8 @@ MIN_RELEVANCE_SCORE = 50        # AI 적합도 점수 50점 미만은 필터링
 
 ### V2 verification checkpoint (2026-09-12)
 
-136 Python tests passed against native PostgreSQL 18.4, including real concurrent locks/claims/planning; four Worker tests, PGlite migration/RLS assertions and the frontend build also pass. Five migrations now include immutable source observations. The 16-entry source registry records four enabled sources and explicit reasons for disabled legacy sources. See [source audit](docs/LONGTAIL-SOURCE-AUDIT.json) and [parallel comparison/setup](docs/V2-SETUP.md). Hosted credentials, real delivery and matched-period V1/V2 validation are still required; V1 has not been retired.
+139 Python tests passed against native PostgreSQL 18.4, including real concurrent locks/claims/planning; four Worker tests, PGlite migration/RLS assertions and the frontend build also pass. Five migrations now include immutable source observations. The 16-entry source registry records four enabled sources and explicit reasons for disabled legacy sources. See [source audit](docs/LONGTAIL-SOURCE-AUDIT.json) and [parallel comparison/setup](docs/V2-SETUP.md). Hosted credentials, real delivery and matched-period V1/V2 validation are still required; V1 has not been retired.
 
 Evidence extraction 2.0.2 preserves explicit cutoff times, prevents unsupported OR clauses from producing hard rejection, and keeps official facts intact on failed extraction. See [temporal source check](docs/TEMPORAL-EVIDENCE-CHECK.json).
+
+The [completion audit](docs/COMPLETION-AUDIT.md) maps every specification section to implementation evidence and identifies the remaining hosted setup, real-service and parallel-run gates. Extraction 2.0.3 distinguishes official date-only precision from explicit cutoff times.

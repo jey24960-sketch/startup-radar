@@ -18,7 +18,7 @@ Complete approved scope: V2-SPEC.md. Baseline audit: V1-AUDIT.md. Branch: featur
 
 ## Verification
 
-- Final Python verification: 136 passed on native PostgreSQL 18.4, 1 third-party deprecation warning (Starlette/AnyIO BlockingPortal alias). Dependency check reports no broken requirements.
+- Final Python verification: 139 passed on native PostgreSQL 18.4, 1 third-party deprecation warning (Starlette/AnyIO BlockingPortal alias). Dependency check reports no broken requirements.
 - Worker tests: 4 passed.
 - Fresh migrations + team RLS/admin/anonymous denial assertions: passed with PGlite; native PostgreSQL profile/snapshot isolation tests also pass.
 - Four native concurrency tests cover simultaneous version saves, exclusive jobs, cadence claims and parallel high-fit planners/senders. CI configuration provisions PostgreSQL 17; its GitHub execution is pending.
@@ -94,3 +94,10 @@ SOURCES.md: exact official contracts, adding sources and real long-tail evidence
 - Real previously acquired KHU detail: 2026-09-15 13:00 Seoul preserved; one second after cutoff is CLOSED. This validates deterministic parsing against source text, not live AI extraction accuracy.
 - Current local V2 process environment was checked: DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, ANTHROPIC_API_KEY, KSTARTUP_API_KEY, BIZINFO_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET and RADAR_GITHUB_TOKEN are unset. This does not assert that existing GitHub/production secrets are absent.
 - Supabase project inventory was refreshed; no project is named StartupRadar. No unrelated project was changed. The project ID and web deployment target have been requested from the user. Live Auth/API/delivery/parallel validation remains blocked on actual setup, while local required work continues.
+
+
+## Final local audit / external setup gate
+
+The full specification audit is COMPLETION-AUDIT.md. During this audit, official date-only values were found to prevent finer source times from being applied. Program now records DATE/DATETIME/UNKNOWN precision, official adapters set DATE, and extraction 2.0.3 permits only same-day refinement. Three additional regressions pass. Browser display differentiates actual times from unknown/date-only precision; both states were inspected. The latest full native PostgreSQL run passes 139 tests; the frontend build and Python compilation pass.
+
+The same outstanding project/host/runtime-credential selection has persisted across the recent checkpoints. Local fixes and documentation do not prove actual Auth, API/model response quality, Telegram receipt, workflow operation or matched-period V1/V2 reliability. The next required work is the six external gates in COMPLETION-AUDIT.md. No unrelated Supabase project, production deployment or external message was changed. The user has been asked for the dedicated project ID and web host; secret values should be configured in the execution environment rather than posted in chat.

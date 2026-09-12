@@ -51,6 +51,7 @@ class KStartupApiAdapter(HtmlAdapter):
         return Program(title=row['biz_pbanc_nm'],organization=row.get('pbanc_ntrp_nm') or row.get('sprv_inst') or self.source['name'],
             official_url=detail.url,application_url=row.get('detl_pg_url') or None,
             application_start_at=start,application_end_at=end,deadline_type='FIXED_DATE' if end else 'UNKNOWN',
+            application_start_precision='DATE' if start else 'UNKNOWN',application_end_precision='DATE' if end else 'UNKNOWN',
             applicant_summary=row.get('aply_trgt_ctnt') or row.get('aply_trgt'),support_summary=html_text(row.get('pbanc_ctnt','')),
             program_types=[row['supt_biz_clsfc']] if row.get('supt_biz_clsfc') else [],
             document_hashes=[d['content_hash'] for d in documents if d.get('content_hash')])
@@ -90,6 +91,7 @@ class BizInfoApiAdapter(HtmlAdapter):
         return Program(title=candidate.title,organization=row.get('jrsdInsttNm') or row.get('author') or self.source['name'],
             official_url=detail.url,application_url=row.get('rceptEngnHmpgUrl') or None,
             application_start_at=start,application_end_at=end,deadline_type='FIXED_DATE' if end else 'UNKNOWN',
+            application_start_precision='DATE' if start else 'UNKNOWN',application_end_precision='DATE' if end else 'UNKNOWN',
             applicant_summary=row.get('trgetNm'),support_summary=html_text(row.get('bsnsSumryCn') or row.get('description') or ''),
             program_types=[row.get('pldirSportRealmLclasCodeNm') or row.get('lcategory') or 'UNKNOWN'],
             document_hashes=[d['content_hash'] for d in documents if d.get('content_hash')])

@@ -140,3 +140,8 @@ See [OPERATIONS.md](OPERATIONS.md) for source failures, dispatch races, audited 
 ## Extraction schema update
 
 Requirements schema 2.0.2 accepts explicit `application_start_at`/`application_end_at` ISO timestamps with timezone and a full verbatim `date_evidence_quote`. Date-only fields remain supported when the source does not specify a time. `benefit_evidence_quote` is needed to retain an AI-generated benefit summary. Unsupported OR/exceptions yield uncertain AI requirements. Existing official Program data is unchanged when extraction fails. Re-ingest source records to benefit from the new validation; it does not retroactively certify earlier AI outputs.
+
+
+Official API dates carry DATE precision in extraction 2.0.3. A matching original notice can add a same-day time and produce DATETIME; it cannot change the API calendar day. Existing records with UNKNOWN precision require re-ingestion to classify their granularity. The web detail marks times requiring original-source confirmation. No new environment variable or migration is needed for this normalized schema change.
+
+Before declaring the project complete, follow the external gates in [COMPLETION-AUDIT.md](COMPLETION-AUDIT.md).

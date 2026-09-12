@@ -162,6 +162,8 @@ class Program(StrictModel):
     application_url: str | None = None
     application_start_at: datetime | None = None
     application_end_at: datetime | None = None
+    application_start_precision: Literal['UNKNOWN','DATE','DATETIME']='UNKNOWN'
+    application_end_precision: Literal['UNKNOWN','DATE','DATETIME']='UNKNOWN'
     deadline_type: Literal['FIXED_DATE','ROLLING','UNTIL_BUDGET_EXHAUSTED','UNKNOWN']='UNKNOWN'
     applicant_summary: str | None = None
     support_summary: str | None = None
