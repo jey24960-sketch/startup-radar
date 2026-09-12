@@ -14,7 +14,7 @@ def main():
         path,filename,mime=sys.argv[1:4]
         kind,text=extract_document(Path(path).read_bytes(),filename,mime)
         result={'kind':kind,'text':text}
-    except Exception as error:result={'error':str(error)[:300]}
+    except Exception as error:result={'error':str(error)[:300],'error_kind':getattr(error,'kind','DOCUMENT_PARSE')}
     print(json.dumps(result,ensure_ascii=False))
 
 

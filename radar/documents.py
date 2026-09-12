@@ -20,6 +20,17 @@ from radar.adapters.base import SourceFailure
 
 MAX_EXPANDED=40_000_000
 MAX_TEXT=1_000_000
+DOCUMENT_FAILURE_KINDS=frozenset({
+    'DOCUMENT_PARSE','DOCUMENT_OCR_REQUIRED','DOCUMENT_EMPTY','DOCUMENT_LIMIT',
+    'DOCUMENT_TIMEOUT','DOCUMENT_PROCESS',
+})
+
+
+class DocumentFailure(ValueError):
+    """An actionable parser failure that survives the subprocess boundary."""
+    def __init__(self,kind,message):
+        self.kind=kind if kind in DOCUMENT_FAILURE_KINDS else 'DOCUMENT_PARSE'
+        super().__init__(message)
 
 
 def html_text(data):
@@ -31,7 +42,7 @@ def html_text(data):
 def extract_zip(data,kind):
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         entries=archive.infolist()
-        if len(entries)>2000 or sum(e.file_size for e in entries)>MAX_EXPANDED: raise ValueError('Archive expansion limit')
+        if len(entries)>2000 or sum(e.file_size for e in entries)>MAX_EXPANDED: raise DocumentFailure('DOCUMENT_LIMIT','Archive expansion limit')
         if any(e.flag_bits & 1 for e in entries): raise ValueError('Encrypted archive')
         names=archive.namelist()
         if kind=='docx': targets=[n for n in names if n=='word/document.xml']
@@ -54,13 +65,13 @@ def extract_hwp(data):
         for path in doc.listdir():
             if len(path)!=2 or path[0]!='BodyText' or not path[1].startswith('Section'):continue
             raw=doc.openstream(path).read(MAX_EXPANDED+1)
-            if len(raw)>MAX_EXPANDED:raise ValueError('HWP stream size limit')
+            if len(raw)>MAX_EXPANDED:raise DocumentFailure('DOCUMENT_LIMIT','HWP stream size limit')
             if flags&1:
                 decoder=zlib.decompressobj(-15)
                 raw=decoder.decompress(raw,MAX_EXPANDED+1)
-                if len(raw)>MAX_EXPANDED or decoder.unconsumed_tail:raise ValueError('HWP expansion limit')
+                if len(raw)>MAX_EXPANDED or decoder.unconsumed_tail:raise DocumentFailure('DOCUMENT_LIMIT','HWP expansion limit')
             total+=len(raw)
-            if total>MAX_EXPANDED:raise ValueError('HWP expansion limit')
+            if total>MAX_EXPANDED:raise DocumentFailure('DOCUMENT_LIMIT','HWP expansion limit')
             pos=0
             while pos+4<=len(raw):
                 word=struct.unpack_from('<I',raw,pos)[0];pos+=4
@@ -78,6 +89,8 @@ def extract_hwp(data):
 def detect_kind(data,filename,mime):
     suffix=PurePosixPath(filename.lower()).suffix
     if data.startswith(b'%PDF-'):return 'pdf'
+    if data.startswith(b'\x89PNG\r\n\x1a\n') or data.startswith(b'\xff\xd8\xff'):
+        raise DocumentFailure('DOCUMENT_OCR_REQUIRED','Image attachment requires OCR and evidence review')
     if data.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'):return 'hwp'
     if data.startswith(b'PK'):
         with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -90,22 +103,41 @@ def detect_kind(data,filename,mime):
     raise ValueError('Unsupported or mismatched document type')
 
 
+def extract_pdf(data):
+    reader=PdfReader(io.BytesIO(data))
+    if reader.is_encrypted:raise ValueError('Encrypted PDF')
+    if len(reader.pages)>500:raise DocumentFailure('DOCUMENT_LIMIT','PDF page limit')
+    texts=[];unread_pages=[];total=0
+    for number,page in enumerate(reader.pages,1):
+        text=page.extract_text() or ''
+        total+=len(text)+1
+        if total>MAX_TEXT:raise DocumentFailure('DOCUMENT_LIMIT','Extracted text limit; manual review required')
+        texts.append(text)
+        if not text.strip():
+            # A blank page with no drawing content is harmless. A nonempty stream
+            # may contain a scan, outlined text or other unread evidence. Never
+            # certify the whole file merely because another page yielded text.
+            content=page.get_contents()
+            if (content is not None and content.get_data().strip()) or page.get('/Annots'):
+                unread_pages.append(number)
+    if unread_pages:
+        pages=', '.join(map(str,unread_pages[:12]))+(' …' if len(unread_pages)>12 else '')
+        raise DocumentFailure('DOCUMENT_OCR_REQUIRED',f'PDF pages with content but no readable text: {pages}; OCR/manual review required')
+    return '\n'.join(texts)
+
+
 def extract_document(data,filename,mime):
-    if len(data)>20_000_000:raise ValueError('File size limit')
+    if len(data)>20_000_000:raise DocumentFailure('DOCUMENT_LIMIT','File size limit')
     kind=detect_kind(data,filename,mime)
-    if kind=='pdf':
-        reader=PdfReader(io.BytesIO(data))
-        if reader.is_encrypted:raise ValueError('Encrypted PDF')
-        if len(reader.pages)>500:raise ValueError('PDF page limit')
-        text='\n'.join(page.extract_text() or '' for page in reader.pages)
+    if kind=='pdf':text=extract_pdf(data)
     elif kind in ('docx','hwpx'):text=extract_zip(data,kind)
     elif kind=='hwp':text=extract_hwp(data)
     elif kind=='txt':
         text=data.decode('utf-8-sig',errors='strict')
         if any(ord(c)<32 and c not in '\r\n\t' for c in text):raise ValueError('Binary control characters in text attachment')
     else:text=html_text(data)
-    if not text.strip():raise ValueError('No extractable text; OCR/manual review required')
-    if len(text)>MAX_TEXT:raise ValueError('Extracted text limit; manual review required')
+    if not text.strip():raise DocumentFailure('DOCUMENT_EMPTY','No extractable text; manual review required')
+    if len(text)>MAX_TEXT:raise DocumentFailure('DOCUMENT_LIMIT','Extracted text limit; manual review required')
     return kind,text
 
 
@@ -117,6 +149,8 @@ def fetch_document(http,url,filename):
         try:
             kind,text=extract_isolated(data,filename,mime)
             result.update(extraction_status='SUCCESS',extracted_text=text)
+        except DocumentFailure as error:
+            result.update(extraction_status='FAILED',error_kind=error.kind,error_message=str(error)[:300])
         except Exception as error:
             result.update(extraction_status='FAILED',error_kind='DOCUMENT_PARSE',error_message=str(error)[:300])
     except SourceFailure as error:
@@ -127,7 +161,7 @@ def fetch_document(http,url,filename):
 
 def extract_isolated(data,filename,mime,timeout=25):
     """Keep native/parser failures and runaway CPU outside the ingestion process."""
-    if len(data)>20_000_000:raise ValueError('File size limit')
+    if len(data)>20_000_000:raise DocumentFailure('DOCUMENT_LIMIT','File size limit')
     with tempfile.TemporaryDirectory(prefix='radar-document-') as folder:
         path=Path(folder)/'document.bin';path.write_bytes(data)
         env={k:v for k,v in os.environ.items() if k in ('PATH','SYSTEMROOT','WINDIR','TEMP','TMP')}
@@ -135,8 +169,8 @@ def extract_isolated(data,filename,mime,timeout=25):
         try:
             result=subprocess.run([sys.executable,'-m','radar.document_worker',str(path),filename,mime],
                 cwd=Path(__file__).resolve().parent.parent,env=env,capture_output=True,text=True,encoding='utf-8',timeout=timeout)
-        except subprocess.TimeoutExpired:raise ValueError('Document parser time limit exceeded')
-        if result.returncode:raise ValueError('Document parser process failed or resource limit exceeded')
+        except subprocess.TimeoutExpired:raise DocumentFailure('DOCUMENT_TIMEOUT','Document parser time limit exceeded')
+        if result.returncode:raise DocumentFailure('DOCUMENT_PROCESS','Document parser process failed or resource limit exceeded')
         parsed=json.loads(result.stdout)
-        if parsed.get('error'):raise ValueError(parsed['error'])
+        if parsed.get('error'):raise DocumentFailure(parsed.get('error_kind','DOCUMENT_PARSE'),parsed['error'])
         return parsed['kind'],parsed['text']

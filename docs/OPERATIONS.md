@@ -84,6 +84,15 @@ coordinated batch overlap, not an atomic transaction spanning all sources and
 Telegram. Existing per-item/batch idempotency and uncertain-delivery recovery
 remain necessary.
 
+## Attachment failures
+
+Downloads and text extraction have separate outcomes. `DOCUMENT_OCR_REQUIRED`
+identifies image evidence or unread PDF pages; `DOCUMENT_EMPTY`, `DOCUMENT_LIMIT`,
+`DOCUMENT_TIMEOUT` and `DOCUMENT_PROCESS` distinguish other review/recovery paths.
+Generic malformed/unsupported content remains `DOCUMENT_PARSE`. All remain
+non-successful evidence. See [attachment evidence and review](DOCUMENT-EVIDENCE.md)
+for page coverage, original-source observations and remaining OCR limitations.
+
 ## Telegram failures and uncertain receipts
 
 `/api/admin/notifications` lists batches and items. PENDING is queued, SENDING is durably claimed before HTTP, DELIVERED requires a receipt, FAILED is a definite rejection, and UNCERTAIN needs investigation. An HTTP timeout is not proof of no delivery.
