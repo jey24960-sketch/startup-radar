@@ -145,3 +145,5 @@ Requirements schema 2.0.2 accepts explicit `application_start_at`/`application_e
 Official API dates carry DATE precision in extraction 2.0.3. A matching original notice can add a same-day time and produce DATETIME; it cannot change the API calendar day. Existing records with UNKNOWN precision require re-ingestion to classify their granularity. The web detail marks times requiring original-source confirmation. No new environment variable or migration is needed for this normalized schema change.
 
 Before declaring the project complete, follow the external gates in [COMPLETION-AUDIT.md](COMPLETION-AUDIT.md).
+
+Portable Docker packaging and an offline configuration checker are now available. See [DEPLOYMENT.md](DEPLOYMENT.md). `python -m radar.deployment --serve` checks web inputs and starts the production application on the host's PORT. Container build verification is added to the GitHub test workflow but has not run remotely; this workstation has no Docker/Podman runtime.

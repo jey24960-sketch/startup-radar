@@ -8,6 +8,17 @@ concurrency:
   group: radar-v2-tests-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag startup-radar-v2:verify .
+      - run: >-
+          docker run --rm startup-radar-v2:verify python -c
+          "from radar.web import app; from radar.deployment import configuration_report;
+          assert app.title == 'StartupRadar 2.0';
+          assert configuration_report('web')['checks']['assets']['status'] == 'PRESENT'"
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20

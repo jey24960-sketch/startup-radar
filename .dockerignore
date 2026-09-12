@@ -1,0 +1,18 @@
+# Allow only the runtime and frontend build inputs into the build context.
+**
+!Dockerfile
+!.dockerignore
+!requirements-v2.lock.txt
+!package.json
+!package-lock.json
+!sources.json
+!radar/
+!radar/**
+!core/
+!core/**
+!web/
+!web/**
+**/__pycache__/
+**/*.pyc
+**/.env*
+**/node_modules/
