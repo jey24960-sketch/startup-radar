@@ -2,7 +2,7 @@
 
 ## Status
 
-V2 remains staging. The user selected the existing GFC project `etvffzxqdgblvkfdikwl`; the isolated `startup_radar` baseline and FK indexes have been applied. Existing GFC objects/data were verified unchanged. No V1 cutover, web deployment, or Telegram switch has happened. The newer decisions in GFC-SHARED-DEPLOYMENT-DECISION.md take precedence over the original infrastructure setup. See SHARED-GFC-REPORT.md for the current validation and remaining gates.
+V2 remains staging. The user selected the existing GFC project `etvffzxqdgblvkfdikwl`; the isolated `startup_radar` baseline and FK indexes have been applied. Existing GFC objects/data were verified unchanged. GFC branch previews have deployed, but production /notice and Python API integration remain pending. No V1 cutover or Telegram switch has happened. GFC-NOTICE-INTEGRATION-DECISION.md is the latest architecture: existing GFC Google OAuth and React UI, separate Radar API/engine. See GFC-NOTICE-INTEGRATION.md and DEPLOYMENT.md for current contracts and remaining gates.
 
 ## Local verification
 
@@ -21,11 +21,11 @@ The PGlite test engine does not emulate Supabase Auth, hosted API settings, prod
 
 Use the existing GFC Supabase project `etvffzxqdgblvkfdikwl`. Do not create a new project. All Radar data belongs to `startup_radar`; public.teams/profiles/projects are independent GFC objects. Obtain DATABASE_URL from the selected project's Connect panel, use TLS, and verify a backend identity restricted to the required Radar privileges. The repository disables prepared statements for transaction pooling (prepare_threshold=None). Do not guess pooler hosts.
 
-The current baseline creates 28 tables in startup_radar with RLS. Shared auth.users supplies identity; Radar membership and administrator mappings remain independent. No users or memberships are created by migration. The former five local-only radar migrations are archived under docs/legacy-migrations and must not be applied to this project.
+The baseline creates 28 tables; the GFC membership/cache migration brings startup_radar to 31 tables with RLS. Shared auth.users supplies identity. Existing public.profiles.role member/admin is required for Radar access; Radar team memberships additionally isolate private team data. Web and Telegram administrator checks use public.my_role(), not the legacy admin_users table alone. No users or memberships are created by migration. The former five local-only radar migrations are archived under docs/legacy-migrations and must not be applied to this project.
 
 The backend repository can impersonate an authenticated request only after the application validates the Supabase user identity. It sets a transaction-local authenticated role and auth.uid claim. FastAPI now validates the bearer token with Supabase auth.get_user before setting the transaction-local identity. Never pass an untrusted user_id directly from a browser to Database methods.
 
-No anon access is granted. Team profiles/evaluations/recommendations are membership-scoped; Telegram IDs and internal operational tables are administrator-only. Only privileged invitation/bootstrap operations can create teams and membership. Browser-facing service-role keys are prohibited. Profile versions are append-only for member roles.
+No anon access is granted. Team profiles/evaluations/recommendations are membership-scoped; Telegram IDs and internal operational tables are administrator-only. Verified GFC members can create their own Radar team through POST /api/teams, including preset 0 without optional profile data. Cross-user membership management remains an administrator operation. Browser-facing service-role keys are prohibited. Profile versions are append-only for member roles.
 
 ## V1 safety bridge
 
@@ -54,6 +54,9 @@ The following reviewed migrations have been applied to the shared project:
 
 - `20260912114449_startup_radar_shared_gfc_staging.sql`
 - `20260912114958_startup_radar_fk_indexes.sql`
+- `20260912123752_gfc_member_access_and_feed_cache.sql`
+
+The GFC repository owns the separately applied `20260912123813_gfc_manual_notices.sql`. It creates public.gfc_notices without copying Radar programs. These entries coexist in the shared migration ledger.
 
 The baseline folds the complete former five-migration model into additive DDL, including snapshots, authoritative publisher identity, job cancellation and delivery batches. The follow-up supplies 16 FK indexes. Both use transactions and short lock timeouts. The shared migration ledger contains GFC entries owned by another repository: never bulk-push or repair that history from this repository. Future reviewed migrations must be applied individually after a fresh shared-object inventory. Never run test reset fixtures on the hosted project. Existing JSON delivery history has not been imported.
 
@@ -71,13 +74,13 @@ Set process environment variables first; `.env.example` documents names but `.en
 
 ## Auth and membership setup
 
-Preserve the shared GFC Auth signup/providers/site URL/settings. Do not disable signup or replace its redirect configuration for Radar. Existing GFC accounts are the identity source. Select the intended user's existing UUID and explicitly grant only the intended Radar membership/admin role. No invitation email is needed to create a separate Radar identity. If staging eventually needs an extra redirect URL, add the precise URL while retaining existing GFC entries. For an explicitly designated initial Radar administrator:
+Preserve the shared GFC Auth signup/providers/site URL/settings. Do not disable signup or replace its redirect configuration for Radar. Existing GFC accounts are the identity source. Use the existing GFC membership process to verify public.profiles.role. Radar team membership never grants GFC membership or admin status. No separate Radar identity or login is required. If staging eventually needs an extra redirect URL, add the precise URL while retaining existing GFC entries. A backend operator can bootstrap a team for an explicitly designated existing GFC member. This command does not grant GFC membership or GFC administrator rights:
 
 ```bash
-python -m radar.cli bootstrap-team --user-id EXISTING_AUTH_UUID --name GFC --admin
+python -m radar.cli bootstrap-team --user-id EXISTING_AUTH_UUID --name GFC
 ```
 
-This creates preset-0 membership, a profile and immutable profile version. Never derive administrator status from user-editable metadata. Further teams/members are managed through authenticated admin endpoints (`POST /api/admin/teams`, `POST /api/admin/teams/{id}/members`). The application currently supplies APIs, not a complete in-app invitation management screen. Invitation email remains a Supabase administrative operation. Browser login uses `signInWithOtp` with `shouldCreateUser:false`.
+This creates preset-0 membership, a profile and immutable profile version. Never derive administrator status from user-editable metadata. Further teams/members are managed through authenticated admin endpoints (`POST /api/admin/teams`, `POST /api/admin/teams/{id}/members`). The application currently supplies APIs, not a complete in-app invitation management screen. Invitation email remains a Supabase administrative operation. Production member login uses the existing GFC Google OAuth session. GFC sends its access token in the Radar API Authorization header. The preserved, disabled legacy dashboard has an OTP flow for separate utility testing; it is not the member onboarding path.
 
 `startup_radar` is not added to the public Data API schemas: the backend uses direct PostgreSQL. RLS remains enabled. Configure a restricted backend DB identity and verify role switching through the selected pooler. Hosted role/claim SQL tests passed, but real browser JWT login and backend/pooler connections remain pending. Separate origins do not automatically share a browser session merely because they use the same Supabase project; see WEB-INTEGRATION.md.
 
@@ -85,7 +88,7 @@ This creates preset-0 membership, a profile and immutable profile version. Never
 
 V2 webhook endpoint is `POST /telegram/webhook` on the HTTPS backend. It checks `X-Telegram-Bot-Api-Secret-Token` against `TELEGRAM_WEBHOOK_SECRET`. Register Telegram's webhook with that matching `secret_token` through a secure POST; keep bot tokens out of shared links and browser history. Telegram permits one webhook per bot. Use a separate test bot during parallel validation; switching the existing bot would replace the V1 command path.
 
-Map an authorized Telegram sender to an application administrator in `startup_radar.telegram_admins`. `/id` returns the sender/chat identifiers; other commands require both this mapping and `startup_radar.admin_users`. Create a `telegram_subscriptions` record through `PUT /api/admin/subscriptions`; V2 does not read the single V1 TELEGRAM_CHAT_ID for delivery. Commands: `/run`, `/digest`, `/status`, `/health`, `/sources`, `/team`, `/stage`, `/stop`, `/help`, `/id`. `/stop` changes PostgreSQL scheduling state and does not interrupt already running/manual jobs.
+Map an authorized Telegram sender to an application administrator in `startup_radar.telegram_admins`. `/id` returns the sender/chat identifiers; other commands require this mapping and the linked user's existing GFC admin role, checked through `public.my_role()`. Create a `telegram_subscriptions` record through `PUT /api/admin/subscriptions`; V2 does not read the single V1 TELEGRAM_CHAT_ID for delivery. Commands: `/run`, `/digest`, `/status`, `/health`, `/sources`, `/team`, `/stage`, `/stop`, `/help`, `/id`. `/stop` changes PostgreSQL scheduling state and does not interrupt already running/manual jobs.
 
 `/run` and dashboard requests need RADAR_GITHUB_TOKEN (repository Actions write permission), GITHUB_REPOSITORY, and RADAR_GITHUB_REF. The workflow must exist at that ref. Request IDs are persisted before dispatch; missing credentials/rejection/uncertainty appear in job history. A GitHub HTTP 204 means accepted for dispatch, not completed execution.
 
@@ -119,7 +122,7 @@ Start `node tools/test_database.mjs`, set TEST_DATABASE_URL to its loopback URL,
 
 For real lock/concurrency tests, create an empty local PostgreSQL database named `radar_test`. Set `TEST_DATABASE_URL` to its loopback connection and `TEST_NATIVE_POSTGRES=1`, then run `python -m tools.bootstrap_test_postgres` once and `python -m pytest -q`. Bootstrap refuses hosted targets, another database name or existing auth/radar schemas. The tests require the explicit ephemeral marker and reset fixture data. Auth users are mocked; this does not validate hosted Supabase Auth.
 
-`.github/workflows/test_v2.yml` provisions PostgreSQL 17 for pull requests/manual verification, bootstraps all migrations, runs Python/native concurrency tests, PGlite RLS assertions, Worker tests and the frontend build. Locally, the native concurrency suite was exercised against PostgreSQL 18.4; the new GitHub job itself has not been dispatched.
+`.github/workflows/test_v2.yml` provisions PostgreSQL 17 for pull requests/manual verification, bootstraps all migrations, runs Python/native concurrency tests, PGlite RLS assertions, Worker tests and the frontend build. Locally, the native concurrency suite was exercised against PostgreSQL 18.4; the GitHub job has passed remotely, including PostgreSQL integration and native concurrency checks (run 34695302768, Python 151 passed).
 
 ## V1/V2 parallel comparison
 
@@ -143,4 +146,4 @@ Official API dates carry DATE precision in extraction 2.0.3. A matching original
 
 Before declaring the project complete, follow the external gates in [COMPLETION-AUDIT.md](COMPLETION-AUDIT.md).
 
-Portable Docker packaging and an offline configuration checker are now available. See [DEPLOYMENT.md](DEPLOYMENT.md). `python -m radar.deployment --serve` checks web inputs and starts the production application on the host's PORT. Container build verification is added to the GitHub test workflow but has not run remotely; this workstation has no Docker/Podman runtime.
+Portable Docker packaging and an offline configuration checker are now available. See [DEPLOYMENT.md](DEPLOYMENT.md). `python -m radar.deployment --serve` checks web inputs and starts the production application on the host's PORT. Container build/import/asset verification passed remotely in run 34695302768; this workstation has no Docker/Podman runtime. The container has not yet been connected to a hosted API runtime and the real shared DB.

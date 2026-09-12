@@ -1,4 +1,4 @@
-> Current shared-GFC staging results: see SHARED-GFC-REPORT.md. The original implementation matrix below is retained; current hosted verification and remaining gates are updated separately.
+> Historical implementation audit: the matrix below describes the earlier standalone-dashboard checkpoint. It is retained as dated evidence, not deployment instructions. The GFC /notice decision supersedes its frontend/auth design, migration counts and test totals. Use GFC-NOTICE-INTEGRATION.md for current integration evidence and DEPLOYMENT.md / V2-SETUP.md for current operating instructions.
 
 # StartupRadar 2.0 requirement audit
 
@@ -54,7 +54,7 @@ Evidence levels below are deliberately different: **local** means code plus boun
 
 The earlier 139-test checkpoint used native PostgreSQL 18.4 and finished successfully with one unchanged third-party deprecation warning. Fresh migration/RLS and four Worker checks passed earlier; no migration/Worker change followed those checks. The current frontend was rebuilt and browser-checked: unknown/coarse times display “시각 원문 확인”, while an explicit fixture DATETIME displays “오전 11:00”. Preview uses fictional notices and was stopped after inspection.
 
-## External completion gates and next actions
+## Earlier external-gate snapshot (superseded by current status below)
 
 1. **Choose the web staging host after the A/B/C audit.** Supabase is now selected: the existing GFC project etvffzxqdgblvkfdikwl, with isolated startup_radar schema. WEB-INTEGRATION.md recommends gradual integration (C). No new Supabase project is needed.
 2. **Configure remaining V2 runtime credentials securely.** The project URL and modern publishable key are prepared in ignored .env.staging. DATABASE_URL, AI/official API keys, Telegram credentials and GitHub dispatch credentials are still needed for the Python runtime. This says nothing about inaccessible existing GitHub/production secrets.
@@ -64,3 +64,19 @@ The earlier 139-test checkpoint used native PostgreSQL 18.4 and finished success
 6. **Run matched-period V1/V2 comparisons and assess reliability.** Only after this proof should the production webhook/schedule switch be performed. V1 remains present and production unchanged.
 
 These are actual setup and operating gates, not missing code that can be replaced by more fixture tests. Optional future hardening (OCR, broader source-specific pagination, polished invitation forms, binary retention, automated paging and catalog query scaling) is documented separately and does not establish hosted acceptance.
+
+
+## Current completion gates — GFC integration, 2026-09-12
+
+The full objective remains unproven. The latest instruction integrates the member UI into the existing GFC website; the preserved standalone dashboard cannot satisfy hosted GFC acceptance.
+
+| Gate | Authoritative evidence | Remaining proof |
+|---|---|---|
+| Shared DB and existing GFC protection | Three Radar migrations and one GFC notice migration applied; GFC-NOTICE-INTEGRATION-VERIFICATION.json records 1,048 unchanged existing objects, existing data hashes, and 13 rollback-based access checks | Actual API identity/pooler connectivity and real OAuth roles |
+| Member UI, progressive profile, notice administration | GFC PR #9; 57 Node/PGlite and 8 Chromium checks in run 34695298531; existing GFC Google OAuth/roles reused | Production /notice, real member/admin interactions and existing site functional regression |
+| Evidence, document failures and history | GFC detail shows failed/matched/unverifiable requirements, file statuses and versions; real PostgreSQL detail-version contract test in Radar run 34695302768 | Real authenticated deployed display of source-derived program data |
+| Engine correctness and packaging | Python 151 passed, Worker and Docker checks passed in Radar run 34695302768 | Hosted scheduled ingestion, live AI evidence quality and official API cohort |
+| Runtime dependencies | Repository Secret names read on 2026-09-12 include ANTHROPIC_API_KEY and TELEGRAM_BOT_TOKEN; no RADAR_DATABASE_URL, KSTARTUP_API_KEY or BIZINFO_API_KEY in that repository-level list. Repository Actions variables list is empty | Configure verified credentials in the designated runtime; names do not prove values are valid. Organization/environment/other-host secrets were not inferred absent |
+| Delivery and cutover | V2 disabled by absent repository enable variables and paused DB scheduling; draft PRs unmerged; V1 retained | Designated test bot/chat, actual receipt/command verification, matched-period V1/V2 comparison, then cutover decision |
+
+Python API hosting remains unspecified. Do not replace it with a new frontend service or count a Vercel preview as a functioning engine. No current endpoint, real test account, or intended test recipient is available to finish the operating gates. All required behavior and external proof remain in scope.
