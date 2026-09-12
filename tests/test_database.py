@@ -150,3 +150,36 @@ def test_document_evidence_links_to_same_program_version(db):
     with db.transaction() as c:
         row=c.execute('select r.document_id,d.program_version_id from radar.program_requirements r join radar.documents d on d.id=r.document_id where r.program_version_id=%s',(saved['version_id'],)).fetchone()
         assert row and row['program_version_id']==saved['version_id']
+
+
+def test_original_source_observation_survives_updates(db):
+    p=program();s=source(db)
+    first=db.save_program(p,s,'stable-source',p.official_url,{'deadline':'original'},'source v1',extraction_metadata={'model':'fixture-v1'})
+    p.application_end_at+=timedelta(days=7)
+    second=db.save_program(p,s,'stable-source',p.official_url,{'deadline':'extended'},'source v2',extraction_metadata={'model':'fixture-v2'})
+    db.save_program(p,s,'stable-source',p.official_url,{'deadline':'extended'},'source v2',extraction_metadata={'model':'fixture-v2'})
+    with db.transaction() as c:
+        snapshots=c.execute('select * from radar.program_source_snapshots order by observed_at').fetchall()
+        assert len(snapshots)==2
+        assert snapshots[0]['program_version_id']==first['version_id'] and snapshots[0]['raw_metadata']=={'deadline':'original'}
+        assert snapshots[0]['extraction_metadata']['model']=='fixture-v1'
+        assert snapshots[1]['program_version_id']==second['version_id']
+
+
+def test_parallel_snapshot_is_read_only_and_does_not_invent_collection_time(db):
+    from radar.parallel import v2_snapshot,compare
+    owner=uuid4()
+    with db.transaction() as c:c.execute('insert into auth.users values(%s)',(owner,))
+    team=db.create_team('Comparison fixture',owner,TeamProfile(business_status='PRE_BUSINESS'))
+    p=program();p.program_types=['GRANT'];p.evidence_complete=True;s=source(db)
+    saved=db.save_program(p,s,'comparison',p.official_url,{'fixture':True},'source')
+    snapshot=v2_snapshot(db,team['id'])
+    assert snapshot['observed_at'] is None and snapshot['profile_version_id']
+    assert snapshot['programs'][0]['id']==str(saved['program_id'])
+    report=compare({'status':'SUCCESS','observed_at':now().isoformat(),'all_programs':[{'title':p.title,'organization':p.organization,'apply_url':p.official_url}]},snapshot)
+    assert report['counts']['matched']==1 and report['cutover_approved'] is False
+    with db.transaction() as c:
+        assert c.execute('select count(*) n from radar.recommendations').fetchone()['n']==0
+        assert c.execute('select count(*) n from radar.notification_items').fetchone()['n']==0
+    with db.transaction(owner) as c:
+        assert c.execute('select count(*) n from radar.program_source_snapshots').fetchone()['n']==0

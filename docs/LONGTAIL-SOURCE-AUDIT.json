@@ -1,0 +1,250 @@
+{
+  "observed_on": "2026-09-12",
+  "method": "Public read-only SafeHttp robots/host guard; browser DOM read for Hanyang. No AI or Telegram.",
+  "scope": "11 legacy supplemental sources; not a nationwide denominator",
+  "sources": [
+    {
+      "name": "서울산업진흥원",
+      "url": "https://www.sba.seoul.kr/pages/bizSup/bizSupList.do",
+      "state": "FAILED",
+      "kind": "ROBOTS_UNAVAILABLE",
+      "message": "Cannot verify robots policy"
+    },
+    {
+      "name": "한양대 창업지원단",
+      "url": "https://startup.hanyang.ac.kr/",
+      "final": "https://startup.hanyang.ac.kr/",
+      "state": "FETCHED",
+      "bytes": 409884
+    },
+    {
+      "name": "경희대 창업지원단",
+      "url": "https://startup.khu.ac.kr/",
+      "final": "https://startup.khu.ac.kr/startup_kor/user/main/view.do",
+      "state": "FETCHED",
+      "bytes": 100922
+    },
+    {
+      "name": "동덕여대 창업지원단",
+      "url": "https://startup.dongduk.ac.kr/",
+      "state": "FAILED",
+      "kind": "ROBOTS_DENIED",
+      "message": "Robots policy disallows this resource"
+    },
+    {
+      "name": "숙명여대 창업지원단",
+      "url": "https://startup.sookmyung.ac.kr/",
+      "final": "https://startup.sookmyung.ac.kr:443/smstartup/index.do",
+      "state": "FETCHED",
+      "bytes": 50702
+    },
+    {
+      "name": "스파크랩",
+      "url": "https://www.sparklabs.co.kr/",
+      "state": "FAILED",
+      "kind": "UNAPPROVED_HOST",
+      "message": "Host must be configured for this source"
+    },
+    {
+      "name": "프라이머",
+      "url": "https://www.primer.kr/",
+      "final": "https://www.primer.kr/",
+      "state": "FETCHED",
+      "bytes": 310088
+    },
+    {
+      "name": "매쉬업엔젤스",
+      "url": "https://www.mashupangels.com/portfolio",
+      "state": "FAILED",
+      "kind": "ROBOTS_UNAVAILABLE",
+      "message": "Cannot verify robots policy"
+    },
+    {
+      "name": "퓨처플레이",
+      "url": "https://futureplay.co/",
+      "final": "https://futureplay.co/",
+      "state": "FETCHED",
+      "bytes": 122921
+    },
+    {
+      "name": "아산나눔재단",
+      "url": "https://www.asan-nanum.org/program/",
+      "state": "FAILED",
+      "kind": "ROBOTS_UNAVAILABLE",
+      "message": "Cannot verify robots policy"
+    },
+    {
+      "name": "카카오임팩트",
+      "url": "https://kakaoimpact.org/",
+      "state": "FAILED",
+      "kind": "ROBOTS_UNAVAILABLE",
+      "message": "Cannot verify robots policy"
+    }
+  ],
+  "follow_up": [
+    {
+      "slug": "khu-startup-html",
+      "enabled": true,
+      "config": {
+        "url": "https://startup.khu.ac.kr/",
+        "organization": "경희대학교 창업지원단",
+        "allowed_hosts": [
+          "startup.khu.ac.kr"
+        ],
+        "link_selector": "a[href^=\"javascript:viewNotice(\"]",
+        "javascript_link_pattern": "javascript:viewNotice\\('(?P<bbs>[A-Z0-9]+)',\\s*'(?P<board>[0-9]+)',\\s*'(?P<menu>[0-9]+)'\\)",
+        "javascript_url_template": "/startup_kor/user/bbs/{bbs}/view.do?boardId={board}&menuNo={menu}",
+        "source_program_id_template": "{bbs}:{board}",
+        "detail_selector": "article.bbs-view",
+        "detail_title_selector": "article.bbs-view h2.t",
+        "validated_at": "2026-09-12",
+        "pagination_note": "Homepage links only; not exhaustive. Literal mapping verified against public viewNotice function and fetched detail.",
+        "validation_note": "Live discovery yielded 12 links; first two public details parsed successfully (665 and 507 characters). Unrelated survey/maintenance notices may also be discovered; category/evidence filtering still applies."
+      }
+    },
+    {
+      "slug": "sba-html",
+      "enabled": false,
+      "config": {
+        "url": "https://www.sba.seoul.kr/pages/bizSup/bizSupList.do",
+        "allowed_hosts": [
+          "www.sba.seoul.kr"
+        ],
+        "validated_at": "2026-09-12",
+        "disabled_reason": "ROBOTS_UNAVAILABLE: Cannot verify robots policy",
+        "last_audit_failure": "ROBOTS_UNAVAILABLE"
+      }
+    },
+    {
+      "slug": "hanyang-browser",
+      "enabled": false,
+      "config": {
+        "url": "https://startup.hanyang.ac.kr/",
+        "allowed_hosts": [
+          "startup.hanyang.ac.kr"
+        ],
+        "validated_at": "2026-09-12",
+        "disabled_reason": "Public browser detail verified. HTTP detail is a JS shell; production browser resource allowlist and PDF download-button mapping remain unvalidated."
+      }
+    },
+    {
+      "slug": "dongduk-html",
+      "enabled": false,
+      "config": {
+        "url": "https://startup.dongduk.ac.kr/",
+        "allowed_hosts": [
+          "startup.dongduk.ac.kr"
+        ],
+        "validated_at": "2026-09-12",
+        "disabled_reason": "ROBOTS_DENIED: Robots policy disallows this resource",
+        "last_audit_failure": "ROBOTS_DENIED"
+      }
+    },
+    {
+      "slug": "sookmyung-legacy-html",
+      "enabled": false,
+      "config": {
+        "url": "https://startup.sookmyung.ac.kr/",
+        "allowed_hosts": [
+          "startup.sookmyung.ac.kr"
+        ],
+        "validated_at": "2026-09-12",
+        "disabled_reason": "Legacy URL belongs to Global Entrepreneurship graduate department; observed notices are graduate admissions, not current startup support."
+      }
+    },
+    {
+      "slug": "sparklabs-html",
+      "enabled": false,
+      "config": {
+        "url": "https://www.sparklabs.co.kr/",
+        "allowed_hosts": [
+          "www.sparklabs.co.kr"
+        ],
+        "validated_at": "2026-09-12",
+        "disabled_reason": "UNAPPROVED_HOST: Host must be configured for this source",
+        "last_audit_failure": "UNAPPROVED_HOST"
+      }
+    },
+    {
+      "slug": "primer-html",
+      "enabled": false,
+      "config": {
+        "url": "https://www.primer.kr/",
+        "allowed_hosts": [
+          "www.primer.kr"
+        ],
+        "validated_at": "2026-09-12",
+        "disabled_reason": "Verified Apply landing page says no ongoing programs and lists future rounds together; per-program identity/detail extraction is not yet implemented."
+      }
+    },
+    {
+      "slug": "mashup-legacy-html",
+      "enabled": false,
+      "config": {
+        "url": "https://www.mashupangels.com/portfolio",
+        "allowed_hosts": [
+          "www.mashupangels.com"
+        ],
+        "validated_at": "2026-09-12",
+        "disabled_reason": "ROBOTS_UNAVAILABLE: Cannot verify robots policy",
+        "last_audit_failure": "ROBOTS_UNAVAILABLE"
+      }
+    },
+    {
+      "slug": "futureplay-html",
+      "enabled": false,
+      "config": {
+        "url": "https://futureplay.co/",
+        "allowed_hosts": [
+          "futureplay.co"
+        ],
+        "validated_at": "2026-09-12",
+        "disabled_reason": "Observed /notices contains shareholder and corporate governance notices, not startup support opportunities."
+      }
+    },
+    {
+      "slug": "asan-html",
+      "enabled": false,
+      "config": {
+        "url": "https://www.asan-nanum.org/program/",
+        "allowed_hosts": [
+          "www.asan-nanum.org"
+        ],
+        "validated_at": "2026-09-12",
+        "disabled_reason": "ROBOTS_UNAVAILABLE: Cannot verify robots policy",
+        "last_audit_failure": "ROBOTS_UNAVAILABLE"
+      }
+    },
+    {
+      "slug": "kakaoimpact-html",
+      "enabled": false,
+      "config": {
+        "url": "https://kakaoimpact.org/",
+        "allowed_hosts": [
+          "kakaoimpact.org"
+        ],
+        "validated_at": "2026-09-12",
+        "disabled_reason": "ROBOTS_UNAVAILABLE: Cannot verify robots policy",
+        "last_audit_failure": "ROBOTS_UNAVAILABLE"
+      }
+    }
+  ],
+  "khu_adapter_verification": {
+    "discovered": 12,
+    "sample_results": [
+      {
+        "id": "BMSR00040:550205",
+        "state": "FETCHED",
+        "characters": 665,
+        "title": "[창업보육센터](서울) 경희대학교 모두의 창업 2차 모집 안내"
+      },
+      {
+        "id": "BMSR00040:549926",
+        "state": "FETCHED",
+        "characters": 507,
+        "title": "[창업보육센터](국제) 경희대학교 모두의 창업 2차 모집 안내"
+      }
+    ],
+    "encoding_note": "Raw original bytes decode to valid Korean. Apparent mojibake in shell tool display was not source corruption; source success is based on parsed Unicode code points."
+  }
+}

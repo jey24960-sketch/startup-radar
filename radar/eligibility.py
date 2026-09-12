@@ -3,6 +3,24 @@ from datetime import date
 from radar.models import EligibilityResult, EligibilityStatus, TeamProfile, Requirement
 from core.clock import today
 
+REGION_ALIASES={
+    'seoul':'서울','서울특별시':'서울','서울시':'서울',
+    'busan':'부산','부산광역시':'부산','부산시':'부산',
+    'gyeonggi':'경기','gyeonggi-do':'경기','경기도':'경기',
+    'incheon':'인천','인천광역시':'인천','인천시':'인천',
+    'daejeon':'대전','대전광역시':'대전','daegu':'대구','대구광역시':'대구',
+    'gwangju':'광주','광주광역시':'광주','ulsan':'울산','울산광역시':'울산',
+    'sejong':'세종','세종특별자치시':'세종','jeju':'제주','제주특별자치도':'제주',
+    'gangwon':'강원','강원도':'강원','강원특별자치도':'강원',
+    '충청북도':'충북','충청남도':'충남','전라북도':'전북','전북특별자치도':'전북',
+    '전라남도':'전남','경상북도':'경북','경상남도':'경남'}
+
+
+def region_value(value):
+    if isinstance(value,list):return [region_value(v) for v in value]
+    if isinstance(value,str):return REGION_ALIASES.get(value.strip().casefold(),value.strip())
+    return value
+
 
 def compare(actual, operator, value):
     if operator=='EQ': return actual==value
@@ -19,7 +37,7 @@ def compare(actual, operator, value):
 def evaluate(profile: TeamProfile, requirements: list[Requirement], evidence_complete: bool,
              as_of: date | None=None) -> EligibilityResult:
     as_of=as_of or today()
-    result=EligibilityResult(status=EligibilityStatus.ELIGIBLE)
+    result=EligibilityResult(status=EligibilityStatus.ELIGIBLE,as_of=as_of)
     if not evidence_complete:
         result.unverifiable_requirements.append({'reason':'Critical notice evidence is incomplete'})
     for rule in requirements:
@@ -46,6 +64,7 @@ def evaluate(profile: TeamProfile, requirements: list[Requirement], evidence_com
             result.missing_profile_fields.append(rule.key); continue
         try:
             expected=rule.value
+            if rule.key=='region':actual=region_value(actual);expected=region_value(expected)
             if isinstance(actual,date):
                 expected=[date.fromisoformat(v) for v in expected] if isinstance(expected,list) else date.fromisoformat(expected)
             if alternatives is not None:

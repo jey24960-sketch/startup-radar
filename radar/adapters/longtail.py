@@ -1,5 +1,5 @@
 """Long-tail discovery. Source selectors/configuration live outside the pipeline."""
-from urllib.parse import urljoin,urlsplit
+from urllib.parse import urljoin,urlsplit,quote
 import re
 from bs4 import BeautifulSoup
 from defusedxml import ElementTree as ET
@@ -17,14 +17,30 @@ class HtmlAdapter(SourceAdapter):
         selector=self.config.get('link_selector')
         if not selector:raise SourceFailure('CONFIGURATION','HTML discovery requires an explicit notice link selector')
         data,_,url=self.http.get(self.config['url'])
-        soup=BeautifulSoup(data,'lxml');seen=set()
+        soup=BeautifulSoup(data,'lxml');candidates={}
         for link in soup.select(selector):
             href=link.get('href','')
-            if not href or href.startswith(('javascript:','#')):continue
+            source_id=None
+            if href.startswith('javascript:'):
+                # Configuration mirrors a verified public site's literal navigation.
+                # It never evaluates JavaScript or imports a script from the page.
+                pattern=self.config.get('javascript_link_pattern')
+                template=self.config.get('javascript_url_template')
+                match=re.fullmatch(pattern,href) if pattern and template else None
+                if not match:continue
+                fields={k:quote(v,safe='') for k,v in match.groupdict().items() if v is not None}
+                href=template.format_map(fields)
+                source_id=self.config.get('source_program_id_template','').format_map(fields) or None
+            if not href or href.startswith('#'):continue
             target=urljoin(url,href)
-            if target in seen:continue
-            seen.add(target)
-            yield Candidate(self.source['slug'],None,target,target,link.get_text(' ',strip=True),{'list_url':url},now().isoformat())
+            if urlsplit(target).scheme not in ('http','https'):continue
+            title_node=link.select_one(self.config['list_title_selector']) if self.config.get('list_title_selector') else link
+            title=title_node.get_text(' ',strip=True) if title_node else ''
+            if target in candidates:
+                if not candidates[target].title and title:candidates[target].title=title
+                continue
+            candidates[target]=Candidate(self.source['slug'],source_id,target,target,title,{'list_url':url},now().isoformat())
+        yield from candidates.values()
     def fetch_detail(self,candidate):
         data,_,url=self.http.get(candidate.official_detail_url)
         soup=BeautifulSoup(data,'lxml')
@@ -44,11 +60,16 @@ class HtmlAdapter(SourceAdapter):
             target=urljoin(url,href);name=link.get_text(' ',strip=True)
             if urlsplit(target).path.lower().endswith(DOCUMENT_EXTENSIONS) or name.lower().endswith(DOCUMENT_EXTENSIONS):
                 attachments.append((target,name or urlsplit(target).path.rsplit('/',1)[-1]))
-        return AcquiredDetail(url,html_text(str(body)),candidate.title,attachments,candidate.raw_metadata)
+        title_node=soup.select_one(self.config['detail_title_selector']) if self.config.get('detail_title_selector') else None
+        title=title_node.get_text(' ',strip=True) if title_node else candidate.title
+        text=html_text(str(body))
+        if '\ufffd' in text or '\ufffd' in title:
+            raise SourceFailure('DETAIL_ENCODING','Notice contains replacement characters; evidence text is corrupted')
+        return AcquiredDetail(url,text,title,attachments,candidate.raw_metadata)
     def fetch_documents(self,detail):
         return [fetch_document(self.http,url,name) for url,name in dict(detail.document_urls).items()]
     def normalize(self,candidate,detail,documents):
-        return Program(title=candidate.title or detail.title,organization=self.config.get('organization',self.source['name']),
+        return Program(title=detail.title or candidate.title,organization=self.config.get('organization',self.source['name']),
             official_url=detail.url,applicant_summary=None,support_summary=detail.text[:1000],
             document_hashes=[d['content_hash'] for d in documents if d.get('content_hash')],evidence_complete=False)
 

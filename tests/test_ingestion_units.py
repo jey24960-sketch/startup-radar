@@ -46,6 +46,34 @@ def test_search_without_provider_is_explicitly_disabled():
     with pytest.raises(SourceFailure,match='NOT_CONFIGURED'):list(SearchDiscoveryAdapter(source(),http('')).discover())
 
 
+def test_html_repeated_image_anchor_preserves_notice_title():
+    adapter=HtmlAdapter(source('HTML'),http('<a class="notice" href="/one"><img src="pic"></a><a class="notice" href="/one">Notice title</a>'))
+    rows=list(adapter.discover())
+    assert len(rows)==1 and rows[0].title=='Notice title'
+
+
+def test_verified_literal_navigation_mapping_never_executes_javascript():
+    config=source('HTML')
+    config['config'].update(javascript_link_pattern=r"javascript:viewNotice\('(?P<bbs>[A-Z0-9]+)',\s*'(?P<board>[0-9]+)',\s*'(?P<menu>[0-9]+)'\)",
+        javascript_url_template='/user/bbs/{bbs}/view.do?boardId={board}&menuNo={menu}',source_program_id_template='{bbs}:{board}',
+        detail_selector='article',detail_title_selector='h2')
+    h=http('''<a class="notice" href="javascript:viewNotice('BMSR00052', '553110', '15200048')">Listing text with extra summary</a>
+      <a class="notice" href="javascript:alert('unsafe')">Skip</a>
+      <a class="notice" href="javascript:viewNotice('BMSR00052', '553110', '15200048');alert(1)">Skip</a>''')
+    adapter=HtmlAdapter(config,h);rows=list(adapter.discover())
+    assert len(rows)==1 and rows[0].source_program_id=='BMSR00052:553110'
+    assert rows[0].official_detail_url=='https://example.org/user/bbs/BMSR00052/view.do?boardId=553110&menuNo=15200048'
+    h.get.return_value=(b'<article><header><h2>Exact title</h2></header><p>Body</p></article>','text/html',rows[0].official_detail_url)
+    detail=adapter.fetch_detail(rows[0])
+    assert adapter.normalize(rows[0],detail,[]).title=='Exact title'
+
+
+def test_corrupted_notice_text_is_an_explicit_failure():
+    h=http('<main>지원 조건 \ufffd\ufffd\ufffd</main>');adapter=HtmlAdapter(source('HTML'),h)
+    candidate=Candidate('fixture','1','https://example.org/1','https://example.org/1','Notice')
+    with pytest.raises(SourceFailure,match='DETAIL_ENCODING'):adapter.fetch_detail(candidate)
+
+
 def test_official_empty_vs_error(monkeypatch):
     monkeypatch.setenv('KSTARTUP_API_KEY','fixture-key')
     assert list(KStartupApiAdapter(source('KSTARTUP'),http({'data':{'data':[]},'totalCount':0})).discover())==[]

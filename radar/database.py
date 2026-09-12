@@ -53,7 +53,7 @@ class Database:
               'on conflict(slug) do update set name=excluded.name,adapter=excluded.adapter,config=excluded.config returning *',
               (slug,name,adapter,Jsonb(config))).fetchone()
 
-    def save_program(self,program:Program,source_id,source_program_id,discovery_url,raw_metadata,raw_text='',documents=None):
+    def save_program(self,program:Program,source_id,source_program_id,discovery_url,raw_metadata,raw_text='',documents=None,extraction_metadata=None):
         normal=program.model_dump(mode='json'); canonical_url=normalize_url(program.official_url)
         fingerprint=digest({'normalized':normal,'raw':raw_text})
         with self.transaction() as c:
@@ -85,10 +85,12 @@ class Database:
             if previous and previous['content_hash']==fingerprint:
                 # Dates can close a notice without a new content version.
                 c.execute('update radar.programs set status=%s,updated_at=now() where id=%s',(program_status(program),pid))
+                self._snapshot(c,pid,previous['id'],source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata)
                 return {'program_id':pid,'version_id':previous['id'],'event':None}
             version=c.execute('insert into radar.program_versions(program_id,version,content_hash,normalized,raw_text,evidence_complete) '
                 'values(%s,%s,%s,%s,%s,%s) returning *',(pid,previous['version']+1 if previous else 1,fingerprint,Jsonb(normal),raw_text,program.evidence_complete)).fetchone()
             vid=version['id']
+            self._snapshot(c,pid,vid,source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata)
             c.execute('update radar.programs set title=%s,organization=%s,program_types=%s,status=%s,application_start_at=%s,application_end_at=%s,'
                 'deadline_type=%s,official_url=%s,application_url=%s,applicant_summary=%s,support_summary=%s,benefit_summary=%s,'
                 'amount_min=%s,amount_max=%s,currency=%s,current_version_id=%s,updated_at=now() where id=%s',
@@ -116,4 +118,14 @@ class Database:
                     c.execute('insert into radar.possible_duplicates(program_id,candidate_program_id,confidence,reason) values(%s,%s,%s,%s) on conflict do nothing',
                               (pid,candidate['id'],confidence,'Similar title/organization; requires review'))
             return {'program_id':pid,'version_id':vid,'event':event if changed else None}
+
+    @staticmethod
+    def _snapshot(c,pid,vid,source_id,source_program_id,discovery_url,detail_url,raw_metadata,raw_text,extraction_metadata):
+        source=c.execute('select adapter,config from radar.sources where id=%s',(source_id,)).fetchone()
+        source_config={'adapter':source['adapter'],'config':source['config']}
+        observation={'source_program_id':source_program_id,'discovery_url':discovery_url,'official_detail_url':detail_url,
+                     'raw_metadata':raw_metadata,'source_config':source_config,'detail_hash':digest(raw_text),'extraction_metadata':extraction_metadata or {}}
+        c.execute('insert into radar.program_source_snapshots(program_id,program_version_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata,source_config,detail_hash,observation_hash,extraction_metadata) '
+                  'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict do nothing',
+                  (pid,vid,source_id,source_program_id,discovery_url,detail_url,Jsonb(raw_metadata),Jsonb(source_config),digest(raw_text),digest(observation),Jsonb(extraction_metadata or {})))
 

@@ -50,12 +50,13 @@ No production messages were sent. V2 API/dashboard, initial registry, scheduler,
 
 ## Runtime migration and web build
 
-Apply both migrations in filename order:
+Apply all three migrations in filename order:
 
 - `20260912061457_radar_v2_foundation.sql`
 - `20260912064108_radar_runtime_delivery.sql`
+- `20260912073008_source_snapshots.sql`
 
-The second adds notification batches, job requests, cadence claims, admin audit, runtime policies, Telegram selected team, and composite foreign keys. Migrations are additive; they do not migrate old JSON send history automatically. For a dedicated Supabase project, review CLI help for your installed version, link only the selected project, inspect pending migrations and apply with the Supabase CLI. Do not run test reset fixtures against hosted data. Remote migrations/advisors have not been executed in this session.
+The second adds notification batches, job requests, cadence claims, admin audit, runtime policies, Telegram selected team, and composite foreign keys. The third adds immutable, admin-readable source observations tied to program versions, including raw API metadata, source configuration, detail hash and extractor provenance. Migrations are additive; they do not migrate old JSON send history automatically. For a dedicated Supabase project, review CLI help for your installed version, link only the selected project, inspect pending migrations and apply with the Supabase CLI. Do not run test reset fixtures against hosted data. Remote migrations/advisors have not been executed in this session.
 
 ```bash
 python -m venv .venv
@@ -114,3 +115,19 @@ Without `--deliver`, delivery tasks refresh recommendations without reserving th
 ## Local dashboard preview
 
 Start `node tools/test_database.mjs`, set TEST_DATABASE_URL to its loopback URL, then run `python -m tools.preview`. It requires the ephemeral test marker, resets only that explicit fixture database, binds `127.0.0.1:8765`, seeds labeled fictional programs, and injects a fixture user outside the production entry point. External dispatch/webhook actions are blocked. Never deploy this module. Stop it before running integration tests against the same fixture database.
+
+## Native PostgreSQL test suite
+
+For real lock/concurrency tests, create an empty local PostgreSQL database named `radar_test`. Set `TEST_DATABASE_URL` to its loopback connection and `TEST_NATIVE_POSTGRES=1`, then run `python -m tools.bootstrap_test_postgres` once and `python -m pytest -q`. Bootstrap refuses hosted targets, another database name or existing auth/radar schemas. The tests require the explicit ephemeral marker and reset fixture data. Auth users are mocked; this does not validate hosted Supabase Auth.
+
+`.github/workflows/test_v2.yml` provisions PostgreSQL 17 for pull requests/manual verification, bootstraps all migrations, runs Python/native concurrency tests, PGlite RLS assertions, Worker tests and the frontend build. Locally, the native concurrency suite was exercised against PostgreSQL 18.4; the new GitHub job itself has not been dispatched.
+
+## V1/V2 parallel comparison
+
+V1 run reports now include `all_programs` before previously-sent filtering, analysis status, collection timestamp and failures. Keep the V1 and V2 collections close in time and use a separate test bot if delivery is exercised. With the V1 report available:
+
+```bash
+python -m radar.cli compare --v1 path/to/v1-report.json --team-id EXISTING_TEAM_UUID --output path/to/comparison.json
+```
+
+The command only reads V2 data, evaluates its current program/profile snapshot, and writes a local report. It does not send notifications or approve cutover. It lists exact URL/alias matches, unique title+organization matches, V1-only/V2-only items, ambiguous/fuzzy candidates, eligibility review, source failures and profile version. Missing collection timestamps, old filtered V1 reports and collection gaps over six hours are explicit limitations. The V2 catalog may include closed or older notices; raw count differences are not coverage measurements. Run a matched-period cohort repeatedly and investigate each difference before any production switch. No live matched-period V1/V2 comparison has been completed yet.

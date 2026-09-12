@@ -99,3 +99,16 @@ def test_dates_and_seoul_boundaries():
     assert days_left(p,korean_date('20260909'))==3
     p.application_start_at=None;p.application_end_at=None;p.deadline_type='ROLLING'
     assert program_status(p)=='OPEN' and days_left(p) is None
+
+
+@pytest.mark.parametrize('key,operator,value',[('founder_age','LTE',True),('founder_age','LTE','39'),
+    ('business_status','EQ','REGISTERED'),('region','EQ',123),('student_status','EQ',1),
+    ('region','GTE','서울'),('founder_age','IN',[]),('registration_date','LTE','not-a-date'),
+    ('revenue','LTE',float('nan')),('revenue','LTE',float('inf')),('region','EXISTS',1)])
+def test_incompatible_ai_values_are_schema_failures_not_hard_rejections(key,operator,value):
+    with pytest.raises(ValidationError):Requirement(key=key,operator=operator,value=value)
+
+
+def test_region_aliases_do_not_create_false_hard_failure():
+    result=evaluate(TeamProfile(region='서울특별시'),[rule('region','IN',['Seoul','경기도'])],True,date(2026,9,12))
+    assert result.status=='ELIGIBLE' and result.as_of==date(2026,9,12)

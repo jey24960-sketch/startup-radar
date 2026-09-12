@@ -91,3 +91,12 @@ Queued batches are cancelled if profile version, current notice version, relevan
 - Host allowlists require maintenance for legitimate redirects/attachments. DNS is checked before requests, but production network isolation should also prevent DNS-rebinding/private-egress risks.
 - Browse currently loads candidate rows and filters/ranks in Python. Large catalogs need database pagination/filtering, indexes and caching strategies.
 - Supabase hosted Auth/login, invitations, PostgreSQL deployment, real Telegram delivery, workflow operation and V1/V2 parallel cutover are not yet validated.
+
+
+## Historical observations and comparison checkpoint
+
+The third migration adds `program_source_snapshots`, an append-only application path with version-constrained source metadata, configuration, detail hashes and extraction model/schema/status. Admin trace returns those observations. Repeated identical observations are idempotent; later raw API metadata does not overwrite the earlier version's snapshot. Program versions retain detail text and document extraction evidence. This does not archive original document binaries or guarantee trust resolution between conflicting publishers.
+
+Eligibility 2.0.1 records the evaluation date and validates requirement values against their field/operator before evaluation. Korean province aliases normalize common Korean/English spellings. Invalid types and non-finite numbers produce extraction schema failures, not hard eligibility rejection. Alias matching does not interpret district-level restrictions or complex geographic exceptions.
+
+`radar.parallel` reads a current catalog/profile snapshot and compares it with V1's complete pre-send-filter report. It retains ambiguity, failure context and collection-window limitations, and never approves cutover or sends a message. Native PostgreSQL concurrent save/job/cadence/planner/sender tests now pass locally; hosted pooler, API semantics and actual Telegram/network crash behavior remain external validation work.

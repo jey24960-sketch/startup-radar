@@ -245,3 +245,8 @@ MIN_RELEVANCE_SCORE = 50        # AI 적합도 점수 50점 미만은 필터링
 - `MIN_RELEVANCE_SCORE`를 높여 필터링 강화
 - 수집 주기를 주 1회로 변경
 - `SOURCES`에서 불필요한 소스 제거
+
+
+### V2 verification checkpoint (2026-09-12)
+
+102 Python tests passed against native PostgreSQL 18.4, including real concurrent locks/claims/planning; four Worker tests, PGlite migration/RLS assertions and the frontend build also pass. Three additive migrations now include immutable source observations. The 16-entry source registry records four enabled sources and explicit reasons for disabled legacy sources. See [source audit](docs/LONGTAIL-SOURCE-AUDIT.json) and [parallel comparison/setup](docs/V2-SETUP.md). Hosted credentials, real delivery and matched-period V1/V2 validation are still required; V1 has not been retired.

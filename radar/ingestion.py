@@ -35,11 +35,14 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                     for doc in documents:
                         if doc['extraction_status']!='SUCCESS':failures.append({'kind':doc.get('error_kind','DOCUMENT_PARSE'),'message':doc.get('error_message'),'url':doc['original_url']})
                     program=adapter.normalize(candidate,detail,documents)
+                    extraction_metadata={'provider':'anthropic' if isinstance(extractor,RequirementExtractor) else 'injected',
+                        'model':getattr(extractor,'model',None),'schema_version':getattr(extractor,'version',None),'status':'SUCCESS'}
                     try:program=extractor.extract(program,detail,documents,source['id'])
                     except SourceFailure as error:
                         program.evidence_complete=False
+                        extraction_metadata.update(status='FAILED',error_kind=error.kind)
                         failures.append({'kind':error.kind,'message':error.message,'url':candidate.official_detail_url})
-                    db.save_program(program,source['id'],candidate.source_program_id,candidate.discovery_url,candidate.raw_metadata,detail.text,documents)
+                    db.save_program(program,source['id'],candidate.source_program_id,candidate.discovery_url,candidate.raw_metadata,detail.text,documents,extraction_metadata)
                     parsed+=1
                 except SourceFailure as error:failures.append({'kind':error.kind,'message':error.message,'url':candidate.official_detail_url})
                 except Exception as error:failures.append({'kind':'NORMALIZE_OR_PERSIST','message':type(error).__name__,'url':candidate.official_detail_url})

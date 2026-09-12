@@ -1,6 +1,7 @@
 """Strict domain schemas. None means UNKNOWN, never false."""
 from datetime import date, datetime
 from enum import StrEnum
+import math
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -112,22 +113,43 @@ class Requirement(StrictModel):
 
     @model_validator(mode='after')
     def valid_operator(self):
+        if self.operator=='EXISTS':
+            if self.value is not None and self.value is not True:raise ValueError('EXISTS means a value must be present')
+            return self
         if self.operator in ('IN','NOT_IN','RANGE') and not isinstance(self.value,list):
             raise ValueError('Operator requires an array')
-        if self.operator=='RANGE' and (len(self.value)!=2 or self.value[0]>self.value[1]):
-            raise ValueError('Invalid range')
-        if self.operator!='EXISTS' and self.value is None: raise ValueError('Missing requirement value')
+        if self.value is None:raise ValueError('Missing requirement value')
+        values=self.value if isinstance(self.value,list) else [self.value]
+        if not values:raise ValueError('Requirement values cannot be empty')
+        numeric={'founder_age','business_age_months','team_size','revenue'}
+        boolean={'student_status','has_revenue','investment_received'}
+        enums={'team_status':TeamStatus,'product_stage':ProductStage,'business_status':BusinessStatus}
+        if self.key in numeric:
+            if any(isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) or v<0 for v in values):raise ValueError('Numeric requirement must use finite nonnegative numbers')
+            if self.key!='revenue' and any(not isinstance(v,int) for v in values):raise ValueError('Age/month/team requirements must use integers')
+        elif self.key in boolean:
+            if self.operator not in ('EQ','NEQ') or type(self.value) is not bool:raise ValueError('Boolean requirement must use EQ/NEQ and true/false')
+        else:
+            if any(not isinstance(v,str) or not v.strip() for v in values):raise ValueError('Text requirement must use nonempty strings')
+            if self.key in enums:
+                if any(v not in [x.value for x in enums[self.key]] for v in values):raise ValueError('Invalid profile enum requirement')
+            if self.key=='registration_date':
+                for value in values:date.fromisoformat(value)
+            elif self.operator in ('GTE','LTE','RANGE'):raise ValueError('Ordered comparison is only valid for numeric/date requirements')
+        if self.operator=='RANGE' and (len(values)!=2 or values[0]>values[1]):raise ValueError('Invalid range')
+        if self.operator in ('EQ','NEQ','GTE','LTE') and isinstance(self.value,list):raise ValueError('Scalar comparison requires a scalar value')
         return self
 
 
 class EligibilityResult(StrictModel):
     status: EligibilityStatus
+    as_of: date | None = None
     matched_requirements: list[Requirement] = Field(default_factory=list)
     failed_requirements: list[Requirement] = Field(default_factory=list)
     missing_profile_fields: list[str] = Field(default_factory=list)
     unverifiable_requirements: list[dict] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
-    engine_version: str = 'eligibility-2.0.0'
+    engine_version: str = 'eligibility-2.0.1'
 
 
 class Program(StrictModel):

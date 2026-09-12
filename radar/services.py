@@ -80,7 +80,7 @@ def detail(db,user_id,program_id,team_id=None,preset=None,version_id=None):
 def health(db,user_id=None):
     if user_id is not None:require_admin(db,user_id)
     with db.transaction() as c:
-        sources=c.execute('select s.id,s.slug,s.name,s.adapter,s.enabled,s.last_attempted_at,s.last_successful_at,r.status,r.discovered_count,r.fetched_count,r.parsed_count,r.failures,r.latency_ms '
+        sources=c.execute("select s.id,s.slug,s.name,s.adapter,s.enabled,s.config->>'disabled_reason' as disabled_reason,s.config->>'last_audit_failure' as last_audit_failure,s.last_attempted_at,s.last_successful_at,r.status,r.discovered_count,r.fetched_count,r.parsed_count,r.failures,r.latency_ms "
             'from radar.sources s left join lateral(select * from radar.source_run_results r where r.source_id=s.id order by r.created_at desc limit 1) r on true order by s.slug').fetchall()
         runs=c.execute('select * from radar.ingestion_runs order by started_at desc limit 20').fetchall()
         jobs=c.execute('select * from radar.job_requests order by created_at desc limit 20').fetchall()
@@ -104,4 +104,5 @@ def admin_trace(db,user_id,recommendation_id):
         sources=c.execute('select ps.*,s.name from radar.program_sources ps join radar.sources s on s.id=ps.source_id where ps.program_id=%s',(version['program_id'],)).fetchall()
         docs=c.execute('select * from radar.documents where program_version_id=%s',(version['id'],)).fetchall()
         notifications=c.execute('select * from radar.notification_items where recommendation_id=%s',(recommendation_id,)).fetchall()
-    return {'recommendation':rec,'evaluation':ev,'program_version':version,'profile_version':profile,'provenance':sources,'documents':docs,'notifications':notifications}
+        snapshots=c.execute('select o.*,s.name from radar.program_source_snapshots o join radar.sources s on s.id=o.source_id where o.program_version_id=%s order by o.observed_at',(version['id'],)).fetchall()
+    return {'recommendation':rec,'evaluation':ev,'program_version':version,'profile_version':profile,'provenance':sources,'source_snapshots':snapshots,'documents':docs,'notifications':notifications}

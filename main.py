@@ -28,7 +28,8 @@ def run_full(dry_run=False):
     raw, failed_sources = crawl_all()
     analysis = analyze(raw, api_key=secrets["ANTHROPIC_API_KEY"])
     programs = filter_new_programs(analysis.programs)
-    save_results({"status": analysis.status, "programs": programs,
+    save_results({"status": analysis.status, "programs": programs,"all_programs":analysis.programs,
+                  "observed_at":now().isoformat(),"configured_source_count":len(SOURCES),
                   "failed_sources": failed_sources,
                   "analysis_failures": [vars(f) for f in analysis.failures]}, "run")
     logger.info("Analysis=%s programs=%s source_failures=%s", analysis.status, len(programs), len(failed_sources))

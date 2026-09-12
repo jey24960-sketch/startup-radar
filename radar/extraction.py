@@ -31,7 +31,7 @@ def compact(text):return re.sub(r'\s+',' ',text).strip()
 
 
 class RequirementExtractor:
-    version='requirements-2.0.0'
+    version='requirements-2.0.1'
     def __init__(self,client=None,model=None):
         self.client=client
         self.model=model or os.environ.get('RADAR_EXTRACTION_MODEL','claude-sonnet-4-5')
