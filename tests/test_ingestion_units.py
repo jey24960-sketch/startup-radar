@@ -107,6 +107,34 @@ def test_kstartup_encoded_and_decoded_keys_share_one_wire_encoding(monkeypatch,k
     assert '%252B' not in prepared.url
 
 
+@pytest.mark.parametrize('guide',[None,'forms.gle/public-form','startup.example.org/'])
+def test_live_kstartup_null_detail_field_uses_verified_portal_notice(monkeypatch,guide):
+    monkeypatch.setenv('KSTARTUP_API_KEY','fixture-key')
+    url='https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179222'
+    row={'pbanc_sn':179222,'biz_pbanc_nm':'Current notice','biz_aply_url':None,'biz_gdnc_url':guide,'detl_pg_url':url}
+    adapter=KStartupApiAdapter(source('KSTARTUP'),http({'data':[row],'totalCount':1}))
+    candidate=list(adapter.discover())[0]
+    assert candidate.official_detail_url==url
+    program=adapter.normalize(candidate,AcquiredDetail(url,'Actual notice',candidate.title),[])
+    assert program.official_url==url and program.application_url is None
+
+
+def test_kstartup_download_controls_preserve_unsupported_attachments():
+    url='https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179222'
+    metadata={'pbanc_sn':179222,'detl_pg_url':url}
+    markup='''<header>Unrelated portal content</header><div class="app_notice_details-wrap">
+      <p>Eligibility section</p><div class="board_file"><ul>
+      <li class="clear"><a class="file_bg">poster.jpg</a><div><ul><li>
+      <a name="downloadBtn" href="/afile/fileDownload/abc"><span>다운로드</span></a>
+      </li></ul></div></li></ul></div></div>'''
+    client=http(markup)
+    client.get.return_value=(markup.encode(),'text/html',url)
+    candidate=Candidate('fixture','179222',url,url,'Notice',metadata)
+    detail=KStartupApiAdapter(source('KSTARTUP'),client).fetch_detail(candidate)
+    assert detail.document_urls==[('https://www.k-startup.go.kr/afile/fileDownload/abc','poster.jpg')]
+    assert 'Eligibility section' in detail.text and 'Unrelated portal content' not in detail.text
+
+
 def test_bizinfo_documented_fields(monkeypatch):
     monkeypatch.setenv('BIZINFO_API_KEY','fixture-key')
     row={'seq':'PBLN1','title':'지원사업','link':'https://example.org/1','author':'Agency','reqstDt':'20260901 ~ 20260930'}

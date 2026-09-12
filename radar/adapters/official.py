@@ -2,7 +2,7 @@
 import json
 import os
 import re
-from urllib.parse import urljoin,unquote
+from urllib.parse import urljoin,unquote,urlsplit,parse_qs
 from radar.adapters.longtail import HtmlAdapter
 from radar.adapters.base import Candidate,SourceFailure
 from radar.dates import korean_date
@@ -22,8 +22,27 @@ def parse_period(value):
     return None,None
 
 
+def kstartup_portal_detail(row):
+    value=row.get('detl_pg_url') or ''
+    parsed=urlsplit(value)
+    query=parse_qs(parsed.query)
+    if (parsed.scheme=='https' and parsed.hostname in ('www.k-startup.go.kr','k-startup.go.kr')
+        and parsed.path=='/web/contents/bizpbanc-ongoing.do' and query.get('schM')==['view']
+        and query.get('pbancSn')==[str(row.get('pbanc_sn'))]):return value
+    return None
+
+
 class KStartupApiAdapter(HtmlAdapter):
     endpoint='https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01'
+    def fetch_detail(self,candidate):
+        if kstartup_portal_detail(candidate.raw_metadata):
+            self.config={**{'detail_selector':'.app_notice_details-wrap',
+                            'document_selector':'a[name="downloadBtn"][href^="/afile/fileDownload/"]'},**self.config}
+        return super().fetch_detail(candidate)
+    def document_name(self,link):
+        container=link.find_parent('li',class_='clear')
+        filename=container.select_one('a.file_bg') if container else None
+        return filename.get_text(' ',strip=True) if filename else super().document_name(link)
     def discover(self):
         key=os.environ.get(self.config.get('key_env','KSTARTUP_API_KEY'))
         if not key:raise SourceFailure('MISSING_CREDENTIAL','KSTARTUP_API_KEY is required')
@@ -41,7 +60,9 @@ class KStartupApiAdapter(HtmlAdapter):
             for row in rows:
                 if not isinstance(row,dict) or not row.get('biz_pbanc_nm') or not row.get('pbanc_sn'):
                     raise SourceFailure('API_SCHEMA','Required K-Startup notice fields missing')
-                url=row.get('biz_aply_url') or row.get('biz_gdnc_url')
+                # The live API uses detl_pg_url for its canonical portal notice,
+                # even when the documented biz_aply_url field is null.
+                url=kstartup_portal_detail(row) or row.get('biz_aply_url') or row.get('biz_gdnc_url')
                 if not url:raise SourceFailure('API_SCHEMA','Official notice URL missing')
                 yield Candidate(self.source['slug'],str(row['pbanc_sn']),url,url,row['biz_pbanc_nm'],row,now().isoformat())
             total=payload.get('matchCount',payload.get('totalCount'))
@@ -52,7 +73,7 @@ class KStartupApiAdapter(HtmlAdapter):
         start=korean_date(row['pbanc_rcpt_bgng_dt']) if row.get('pbanc_rcpt_bgng_dt') else None
         end=korean_date(row['pbanc_rcpt_end_dt'],True) if row.get('pbanc_rcpt_end_dt') else None
         return Program(title=row['biz_pbanc_nm'],organization=row.get('pbanc_ntrp_nm') or row.get('sprv_inst') or self.source['name'],
-            official_url=detail.url,application_url=row.get('detl_pg_url') or None,
+            official_url=detail.url,application_url=None if kstartup_portal_detail(row) else row.get('detl_pg_url') or None,
             application_start_at=start,application_end_at=end,deadline_type='FIXED_DATE' if end else 'UNKNOWN',
             application_start_precision='DATE' if start else 'UNKNOWN',application_end_precision='DATE' if end else 'UNKNOWN',
             applicant_summary=row.get('aply_trgt_ctnt') or row.get('aply_trgt'),support_summary=html_text(row.get('pbanc_ctnt','')),

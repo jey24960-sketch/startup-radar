@@ -13,6 +13,7 @@ DOCUMENT_EXTENSIONS=('.pdf','.hwp','.hwpx','.docx')
 
 class HtmlAdapter(SourceAdapter):
     def __init__(self,source,http):self.source=source;self.http=http;self.config=source['config']
+    def document_name(self,link):return link.get_text(' ',strip=True)
     def discover(self):
         selector=self.config.get('link_selector')
         if not selector:raise SourceFailure('CONFIGURATION','HTML discovery requires an explicit notice link selector')
@@ -57,8 +58,8 @@ class HtmlAdapter(SourceAdapter):
                 navigation=re.fullmatch(r"window\.location\.href\s*=\s*(['\"])(.*?)\1;?",link.get('onclick','').strip())
                 href=navigation.group(2) if navigation else None
             if not href:continue
-            target=urljoin(url,href);name=link.get_text(' ',strip=True)
-            if urlsplit(target).path.lower().endswith(DOCUMENT_EXTENSIONS) or name.lower().endswith(DOCUMENT_EXTENSIONS):
+            target=urljoin(url,href);name=self.document_name(link)
+            if document_selector or urlsplit(target).path.lower().endswith(DOCUMENT_EXTENSIONS) or name.lower().endswith(DOCUMENT_EXTENSIONS):
                 attachments.append((target,name or urlsplit(target).path.rsplit('/',1)[-1]))
         title_node=soup.select_one(self.config['detail_title_selector']) if self.config.get('detail_title_selector') else None
         title=title_node.get_text(' ',strip=True) if title_node else candidate.title
