@@ -44,8 +44,9 @@ def check(db,env,transport_factory=TelegramTransport):
             if not schedule or schedule['value'].get('enabled') is not False:raise ValueError('V2 automatic scheduling must remain disabled')
             team=c.execute('select name from startup_radar.teams where id=%s',(team_id,)).fetchone()
             pref=c.execute('select * from startup_radar.team_notification_preferences where team_id=%s',(team_id,)).fetchone()
-            if not team or not team['name'].startswith('운영 검증용 ') or not pref or any(pref[f] for f in FLAGS):
-                raise ValueError('Only an existing validation team with all notification flags off is allowed')
+            if not team or not team['name'].startswith('운영 검증용 ') or not pref or pref['enabled']:
+                raise ValueError('Only an existing validation team with master notifications off is allowed')
+            original_preferences={f:pref[f] for f in FLAGS}
             subscriptions=c.execute('select * from startup_radar.telegram_subscriptions where team_id=%s',(team_id,)).fetchall()
             if len(subscriptions)>1 or any(s['chat_id']!=target or any(s[f] for f in FLAGS) for s in subscriptions):
                 raise ValueError('Unexpected existing channel; inspection required')
@@ -60,10 +61,10 @@ def check(db,env,transport_factory=TelegramTransport):
         report['subscription_id']=str(sub)
         if env.get('GITHUB_ACTIONS')=='true':
             marker=Path('work/telegram-ledger-cleanup.json');marker.parent.mkdir(exist_ok=True)
-            marker.write_text(json.dumps({'team_id':str(team_id),'subscription_id':str(sub),'github_run_id':env.get('GITHUB_RUN_ID')}),encoding='utf-8')
+            marker.write_text(json.dumps({'team_id':str(team_id),'subscription_id':str(sub),'github_run_id':env.get('GITHUB_RUN_ID'),'original_preferences':original_preferences}),encoding='utf-8')
         try:
             with database.transaction() as c:
-                c.execute('update startup_radar.team_notification_preferences set enabled=true,digest_enabled=true where team_id=%s',(team_id,))
+                c.execute('update startup_radar.team_notification_preferences set enabled=true,digest_enabled=true,alerts_enabled=false,reminders_enabled=false where team_id=%s',(team_id,))
                 c.execute('update startup_radar.telegram_subscriptions set enabled=true,digest_enabled=true where id=%s',(sub,))
             if mode=='prepare':
                 report['planned']=plan_notifications(database,'DIGEST',subscription_id=sub)
@@ -91,8 +92,10 @@ def check(db,env,transport_factory=TelegramTransport):
         finally:
             with database.transaction() as c:
                 c.execute('update startup_radar.telegram_subscriptions set enabled=false,digest_enabled=false,alerts_enabled=false,reminders_enabled=false where id=%s',(sub,))
-                c.execute('update startup_radar.team_notification_preferences set enabled=false,digest_enabled=false,alerts_enabled=false,reminders_enabled=false where team_id=%s',(team_id,))
-            report['notification_flags_restored_off']=True
+                c.execute('update startup_radar.team_notification_preferences set enabled=%s,digest_enabled=%s,alerts_enabled=%s,reminders_enabled=%s where team_id=%s',
+                    (*[original_preferences[f] for f in FLAGS],team_id))
+            report['subscription_disabled']=True
+            report['original_preferences_restored']=original_preferences
     result=run_job(db,'DIGEST',executor=execute)
     return {**report,**result}
 
@@ -107,8 +110,11 @@ def cleanup(env):
             (UUID(saved['subscription_id']),team,target,'운영 검증용 %')).fetchone()
         if not sub:raise ValueError('Cleanup scope no longer matches')
         c.execute('update startup_radar.telegram_subscriptions set enabled=false,digest_enabled=false,alerts_enabled=false,reminders_enabled=false where id=%s',(sub['id'],))
-        c.execute('update startup_radar.team_notification_preferences set enabled=false,digest_enabled=false,alerts_enabled=false,reminders_enabled=false where team_id=%s',(team,))
-    return {'cleanup':'FLAGS_OFF'}
+        pref=saved['original_preferences']
+        if set(pref)!=set(FLAGS) or any(type(pref[f]) is not bool for f in FLAGS) or pref['enabled']:raise ValueError('Invalid saved preference snapshot')
+        c.execute('update startup_radar.team_notification_preferences set enabled=%s,digest_enabled=%s,alerts_enabled=%s,reminders_enabled=%s where team_id=%s',
+            (*[pref[f] for f in FLAGS],team))
+    return {'cleanup':'ORIGINAL_PREFERENCES_RESTORED_SUBSCRIPTION_OFF'}
 
 
 def main():

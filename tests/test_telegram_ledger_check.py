@@ -31,7 +31,7 @@ def test_real_ledger_prepare_deliver_restoration_and_no_repeat(db,delivery_state
     team=db.create_team('운영 검증용 fixture',owner,TeamProfile())
     with db.transaction() as c:
         c.execute("update startup_radar.runtime_settings set value=value || '{\"enabled\":false}'::jsonb where key='scheduling'")
-        c.execute('insert into startup_radar.team_notification_preferences(team_id,enabled,digest_enabled,alerts_enabled,reminders_enabled) values(%s,false,false,false,false)',(team['id'],))
+        c.execute('insert into startup_radar.team_notification_preferences(team_id,enabled,digest_enabled,alerts_enabled,reminders_enabled) values(%s,false,true,true,true)',(team['id'],))
     p=program();p.program_types=['EDUCATION'];p.evidence_complete=True;p.application_end_at=now()+timedelta(days=14)
     db.save_program(p,source(db),'ledger-fixture',p.official_url,{},'fixture')
     refresh_recommendations(db)
@@ -44,10 +44,11 @@ def test_real_ledger_prepare_deliver_restoration_and_no_repeat(db,delivery_state
     delivered=check(db,env(team['id'],'deliver'),factory)
     assert delivered['transport_calls']==1 and delivered['second_delivery']['delivered']==0
     assert delivered['ledger'][0]['state']==delivery_state and delivered['ledger'][0]['attempts']==1
-    assert delivered['notification_flags_restored_off'] is True
+    assert delivered['subscription_disabled'] is True
+    assert delivered['original_preferences_restored']==dict(enabled=False,digest_enabled=True,alerts_enabled=True,reminders_enabled=True)
     again=check(db,env(team['id'],'deliver'),factory)
     assert again['status']=='FAILED'
     factory.return_value.send.assert_called_once()
     with db.transaction() as c:
         assert c.execute('select enabled or digest_enabled or alerts_enabled or reminders_enabled active from startup_radar.telegram_subscriptions where team_id=%s',(team['id'],)).fetchone()['active'] is False
-        assert c.execute('select enabled or digest_enabled or alerts_enabled or reminders_enabled active from startup_radar.team_notification_preferences where team_id=%s',(team['id'],)).fetchone()['active'] is False
+        assert c.execute('select enabled,digest_enabled,alerts_enabled,reminders_enabled from startup_radar.team_notification_preferences where team_id=%s',(team['id'],)).fetchone()==delivered['original_preferences_restored']
