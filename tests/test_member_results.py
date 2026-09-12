@@ -1,4 +1,8 @@
 import os
+import json
+from pathlib import Path
+import subprocess
+import sys
 from datetime import timedelta
 from uuid import uuid4
 import psycopg
@@ -64,6 +68,26 @@ def test_profile_program_day_and_generation_changes_hide_stale_results(context):
     c['db'].save_program(updated,c['source'],'first',updated.official_url,{},'Changed deadline')
     assert detail(c)['calculation_state']=='PENDING'
     assert detail(c,version=c['saved']['version_id'])['calculation_state']=='READY'
+
+
+def test_member_cache_survives_new_worker_processes(context):
+    code = '''
+import json, os
+from datetime import datetime
+from radar.database import Database
+from radar.scheduler import run_job
+import radar.member_results as worker
+worker.now = lambda: datetime.fromisoformat(os.environ['RADAR_TEST_FIXED_NOW'])
+print(json.dumps(run_job(Database(os.environ['TEST_DATABASE_URL']), 'REFRESH')))
+'''
+    fixed_now = now().isoformat()
+    results = [json.loads(subprocess.check_output(
+        [sys.executable, '-c', code], cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, 'PYTHONHASHSEED': seed, 'RADAR_TEST_FIXED_NOW': fixed_now},
+        text=True, encoding='utf-8', timeout=60
+    )) for seed in ('1', '2', '3')]
+    assert [(r['computed'], r['reused']) for r in results] == [(7, 0), (0, 7), (0, 7)]
+    assert all(r['status'] == 'SUCCESS' and r['delivery'] == 'DISABLED' for r in results)
 
 def test_historical_facts_document_failures_and_foreign_version(context):
     c=context;updated=c['program'].model_copy(deep=True)

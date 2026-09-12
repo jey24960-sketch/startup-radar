@@ -1,19 +1,27 @@
 # StartupRadar V2 failure investigation and recovery
 
-This runbook describes implemented local behavior. Hosted Supabase/Auth, official API credentials, GitHub dispatch and real Telegram delivery still require an operating exercise. Database access below is privileged; member clients use authenticated team-scoped APIs instead. No recovery step means that a source was successfully collected or a message was delivered.
+The current deployment uses the existing GFC Supabase project `etvffzxqdgblvkfdikwl`, the private `startup_radar` schema, GFC member UI and a Python batch worker. A hosted Python HTTP API is not required. Source-to-Supabase-to-GFC operation and approved Telegram connection/digest delivery have been exercised; full role, reminder and cutover acceptance remains open. See [the current goal](GFC-OPERATING-GOAL.md), [endpoint decisions](PYTHON-API-DECISION.md), [Telegram ledger validation](TELEGRAM-LEDGER-VALIDATION.md) and [extraction limitations](EXTRACTION-SEMANTIC-REVIEW.md).
+
+Database operations below are privileged operator actions. GFC members use authenticated Supabase RPC with member/team authorization. Python `/api/...` routes mentioned below are retained optional administrator/development capabilities; do not assume they are deployed on the GFC domain or that GFC implements their recovery screens. No recovery step alone proves successful collection or delivery.
 
 ## Before enabling production
 
-Apply all migrations in filename order on the selected dedicated project. Verify authenticated users see only their own team profiles and cannot read Telegram IDs or administrative snapshots. Seed `sources.json`; distinguish enabled sources lacking credentials from disabled sources with documented route/policy limitations. Verify one real program's original notice, attachments, extracted requirements, profile version, deterministic eligibility and ranking trace.
+Inspect applied migration history on the existing shared GFC project and review only pending migrations against its current schema. Do not provision a dedicated project or replay local fixtures. Verify authenticated members see only authorized team profiles and cannot read Telegram IDs or administrative snapshots; authentication alone does not establish membership. Compare stored source configuration with `sources.json` before any selective update: blindly reseeding can overwrite approved routes and enabled states. Distinguish missing credentials from documented route/policy limitations. Verify real notices, attachments, extracted requirements, profile versions, deterministic eligibility and ranking traces.
 
-Keep V1 active while V2 collects with delivery disabled. Use `radar.cli compare` on matched collection periods and investigate both systems' unique items, duplicates, eligibility review and source failures. Test V2 delivery with a separate intended test bot/chat before switching the original webhook. Record evidence across multiple runs; a green test suite is not a cutover gate by itself.
+Preserve V1 code/workflows and rollback ability while V2 collects with delivery disabled. V1's schedule was observed `disabled_inactivity`; that does not authorize silently enabling it. Use `radar.cli compare` on matched collection periods and investigate both systems' unique items, duplicates, eligibility review and source failures. Use the user-approved existing Telegram test recipient and the documented scoped prepare/deliver validation flow. No webhook switch is needed for that test. Record evidence across multiple runs; a green test suite is not a cutover gate by itself. V2 collection and delivery schedules remain disabled until the goal's live acceptance and cutover review are satisfied.
+
+## Stored member result reuse
+
+`python -m radar.cli run --kind REFRESH` recomputes only stale/missing stored member results under the global V2 job lock. It performs no ingestion, AI call or Telegram delivery. Its result reports `computed`, `reused` and `scopes`. The cache checks program version, profile version and snapshot, Seoul evaluation day, configured ranking weights, presets and evaluator/ranking versions. A current-day unchanged rerun in a new process should report zero computed results. The job still reads cache rows and updates operational calculation state; zero recomputation does not mean zero database traffic.
+
+Profiles serialize the set-valued `assumed_fields` in sorted order. Otherwise Python hash randomization changes the JSON array order across workers and falsely invalidates identical preset snapshots and profile cache keys. Old snapshots remain readable; the first refresh may replace differently ordered preset snapshots once. User profiles and profile history are not rewritten to normalize arrays. Profile changes, new program versions, a new Seoul day or changed calculation configuration still require fresh evaluation. Historical program versions remain evaluated for explicit history views; `reused` is a result-row count, not an opportunity count.
 
 ## Source or extraction failure
 
-1. Read `/api/admin/health` and `/api/admin/failures`. Check the source attempt time, counts and typed error rather than interpreting zero parsed items as an empty program market.
+1. Open the GFC Radar administrator health view for its safe source/job projection. More detailed `/api/admin/health` and `/api/admin/failures` routes belong to the optional Python administrator API. Check the source attempt time, counts and typed error rather than interpreting zero parsed items as an empty program market.
 2. For `MISSING_CREDENTIAL` or `AI_NOT_CONFIGURED`, configure the documented environment variable. For `ROBOTS_DENIED`, `ROBOTS_UNAVAILABLE`, `CAPTCHA`, `BLOCKED` or `UNAPPROVED_HOST`, investigate the public route/policy; never bypass it or indiscriminately widen host allowlists.
 3. For document parse/size/type errors, inspect the retained filename, original URL, hash and extraction status. A scan/image or unsupported file may require manual evidence review; do not mark evidence complete because the HTML shell loaded.
-4. Once the cause is resolved, use `python -m radar.cli run --kind INGEST --source VERIFIED_SOURCE_SLUG` or the admin retry action. This refreshes stored versions and team recommendations. Omitting `--deliver` means no external notification is planned/sent by that execution.
+4. Once the cause is resolved, use `python -m radar.cli run --kind INGEST --source VERIFIED_SOURCE_SLUG` in the configured privileged batch environment, or the optional Python administrator retry action if separately available. This refreshes stored versions and team recommendations. Omitting `--deliver` means no external notification is planned/sent by that execution.
 5. Verify the new source result and recommendation trace. Partial successes remain available independently of a failed source.
 
 ## Queued, uncertain or orphaned job requests
@@ -30,7 +38,7 @@ A crashed TICK can leave a RUNNING schedule claim. Claims do not automatically r
 
 `/api/admin/notifications` lists batches and items. PENDING is queued, SENDING is durably claimed before HTTP, DELIVERED requires a receipt, FAILED is a definite rejection, and UNCERTAIN needs investigation. An HTTP timeout is not proof of no delivery.
 
-Use the existing admin recovery screen or `POST /api/admin/notifications/{batch_id}/recover` with an action and note:
+In the optional Python administrator interface, use its recovery screen or `POST /api/admin/notifications/{batch_id}/recover` with an action and note. These recovery commands are not currently a GFC member RPC feature:
 
 - `RETRY_REJECTED`: requeue a definite rejection after resolving its cause.
 - `CONFIRM_NOT_SENT`: requeue an uncertain/stale claimed batch only after an operator confirms it was not delivered.

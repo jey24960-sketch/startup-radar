@@ -3,7 +3,7 @@ from datetime import date, datetime
 from enum import StrEnum
 import math
 from typing import Any, Literal
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
 
 class StrictModel(BaseModel):
@@ -45,6 +45,12 @@ class TeamProfile(StrictModel):
     prior_support_restrictions: list[str] | None = None
     preset: int | None = Field(default=None, ge=0, le=4)
     assumed_fields: set[str] = Field(default_factory=set)
+
+    @field_serializer('assumed_fields', when_used='json')
+    def stable_assumed_fields(self, value):
+        # Hash-randomized set iteration must not invalidate persisted profiles or
+        # cache keys when a new batch process reads the same preset.
+        return sorted(value)
 
     @model_validator(mode='after')
     def validate_ranges(self):

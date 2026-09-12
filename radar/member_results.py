@@ -14,6 +14,7 @@ def refresh_member_results(db):
                          'eligibility': EligibilityResult.model_fields['engine_version'].default,
                          'ranking': Ranking.prompt_version})
     computed = 0
+    reused = 0
     with db.transaction() as c:
         c.execute("update startup_radar.member_read_state set generation=%s,state='RUNNING',started_at=now(),finished_at=null,error_kind=null where singleton", (generation,))
         scopes = c.execute('select team_id,profile,version from startup_radar.team_profiles order by team_id').fetchall()
@@ -46,6 +47,7 @@ def refresh_member_results(db):
                             'and generation=%s and evaluated_on=%s and profile_snapshot=%s and profile_version is not distinct from %s',
                             (key,row['id'],generation,at.date(),Jsonb(scope['profile']),scope['version'])).fetchone()
                         if existing:
+                            reused += 1
                             continue
                         program = Program.model_validate(row['normalized'])
                         eligibility = evaluate(profile, program.requirements, program.evidence_complete, as_of=at.date())
@@ -70,4 +72,4 @@ def refresh_member_results(db):
             c.execute("update startup_radar.member_read_state set state='FAILED',finished_at=now(),error_kind=%s where singleton", (type(error).__name__,))
             c.execute("update startup_radar.profile_calculation_requests set state='FAILED',finished_at=now(),error_kind=%s where state='RUNNING'", (type(error).__name__,))
         raise
-    return {'status': 'SUCCESS', 'computed': computed, 'scopes': len(scopes), 'delivery': 'DISABLED'}
+    return {'status': 'SUCCESS', 'computed': computed, 'reused': reused, 'scopes': len(scopes), 'delivery': 'DISABLED'}
