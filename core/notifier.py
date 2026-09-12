@@ -14,6 +14,8 @@ from urllib.parse import urljoin, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import DEADLINE_URGENT_DAYS, MAX_ITEMS_PER_REPORT, SOURCES
+from core.clock import today as business_today
+from core.results import DeliveryResult
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +111,7 @@ def _days_until(deadline_str: Optional[str]) -> Optional[int]:
         return None
     try:
         dl = date.fromisoformat(deadline_str)
-        return (dl - date.today()).days
+        return (dl - business_today()).days
     except Exception:
         return None
 
@@ -131,7 +133,7 @@ def _format_deadline(deadline_str: Optional[str]) -> str:
 
 def _next_report_date() -> str:
     """다음 화요일 또는 금요일을 반환합니다."""
-    today = date.today()
+    today = business_today()
     # weekday(): 0=월, 1=화, 4=금
     for delta in range(1, 8):
         nxt = today + timedelta(days=delta)
@@ -145,7 +147,7 @@ def _next_report_date() -> str:
 # ──────────────────────────────────────────────
 
 def _header_line() -> str:
-    today = date.today()
+    today = business_today()
     wd = _WEEKDAY_KO[today.weekday()]
     return f"*📡 StartupRadar* | {today.month}월 {today.day}일 ({wd})"
 
@@ -292,41 +294,44 @@ def _send_one(text: str, token: str, chat_id: str) -> bool:
         return False
 
 
-def send_telegram_notification(
-    programs: list[dict],
-    failed_sources: list[str],
-    total_sources: int,
-    token: str,
-    chat_id: str,
-) -> bool:
+def select_programs(programs):
+    urgent = [p for p in programs if _days_until(p.get("deadline")) is not None
+              and 0 <= _days_until(p.get("deadline")) <= DEADLINE_URGENT_DAYS]
+    normal = [p for p in programs if p not in urgent]
+    selected = urgent + normal[:MAX_ITEMS_PER_REPORT]
+    return selected, normal[MAX_ITEMS_PER_REPORT:]
+
+
+def send_telegram_notification(programs, failed_sources, total_sources, token, chat_id,
+                               analysis_failures=None, on_delivered=None) -> DeliveryResult:
+    """Record a program only after all of its message fragments were accepted.
+
+    Persist each successful program immediately via callback so later failures do
+    not erase delivery evidence. V2 outbox will replace V1's JSON callback.
     """
-    텔레그램으로 공고 알림을 발송합니다.
-
-    Args:
-        programs: 신규 공고 목록
-        failed_sources: 수집 실패한 소스명 목록
-        total_sources: 전체 수집 시도 소스 수
-        token: Telegram Bot Token
-        chat_id: Telegram Chat ID
-
-    Returns:
-        bool: 모든 메시지 발송 성공 여부
-    """
-    if programs:
-        text = _build_message_with_programs(programs, failed_sources, total_sources)
-    else:
-        text = _build_message_empty(failed_sources, total_sources)
-
-    chunks = _split_message(text)
-    logger.info(f"텔레그램 발송: {len(chunks)}개 메시지 ({len(text)}자)")
-
-    all_ok = True
-    for i, chunk in enumerate(chunks, 1):
-        ok = _send_one(chunk, token, chat_id)
-        if ok:
-            logger.info(f"메시지 {i}/{len(chunks)} 발송 성공")
+    selected, pending = select_programs(programs)
+    result = DeliveryResult(pending=pending)
+    failures = analysis_failures or []
+    header = _header_line() + f"\n수집 대상 {total_sources}개 · 추천 {len(selected)}건 · 대기 {len(pending)}건"
+    if failed_sources or failures:
+        header += f"\n⚠️ 수집 실패 {len(failed_sources)}개 / 분석 오류 {len(failures)}개. 결과가 불완전합니다."
+    elif not programs:
+        header += "\n이번 수집에서 새로운 공고가 없습니다."
+    if not _send_one(header, token, chat_id):
+        result.errors.append("HEADER_SEND_FAILED")
+        result.failed.extend(selected)
+        return result
+    for program in selected:
+        chunks = _split_message(_format_program(program))
+        delivered = True
+        for chunk in chunks:
+            if not _send_one(chunk, token, chat_id):
+                delivered = False
+                break
+        if delivered:
+            result.delivered.append(program)
+            if on_delivered:
+                on_delivered([program])
         else:
-            logger.error(f"메시지 {i}/{len(chunks)} 발송 실패")
-            all_ok = False
-
-    return all_ok
+            result.failed.append(program)
+    return result

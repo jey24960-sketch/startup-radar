@@ -10,6 +10,8 @@ import re
 import sys
 import os
 from datetime import date
+from core.clock import today as business_today
+from core.results import AnalysisResult, Failure
 
 import anthropic
 
@@ -92,144 +94,71 @@ def _build_chunks(raw_data: dict[str, str]) -> list[dict[str, str]]:
     return chunks
 
 
-def _call_claude(client: anthropic.Anthropic, chunk: dict[str, str]) -> list[dict]:
-    """
-    단일 청크를 Claude API로 분석합니다.
-    JSON 파싱 실패 시 빈 리스트를 반환합니다.
-    """
-    today = date.today().strftime("%Y-%m-%d")
-    system = _SYSTEM_PROMPT.format(
-        CLUB_PROFILE=CLUB_PROFILE.strip(),
-        TODAY=today,
-    )
+def _validate_programs(value):
+    if not isinstance(value, list):
+        raise ValueError("Expected an array")
+    for program in value:
+        if not isinstance(program, dict):
+            raise ValueError("Program must be an object")
+        for key in ("title", "organization", "source", "summary"):
+            if not isinstance(program.get(key), str):
+                raise ValueError(f"Invalid {key}")
+        score = program.get("relevance_score")
+        if isinstance(score, bool) or not isinstance(score, (int, float)) or not 0 <= score <= 100:
+            raise ValueError("Invalid relevance_score")
+        for key in ("amount", "apply_url", "deadline"):
+            if program.get(key) is not None and not isinstance(program[key], str):
+                raise ValueError(f"Invalid {key}")
+        if program.get("deadline"):
+            date.fromisoformat(program["deadline"])
+    return value
 
-    # 소스 블록 구성
-    parts = []
-    for name, text in chunk.items():
-        parts.append(f"{name}:\n{text}")
-    sources_block = "\n\n---\n\n".join(parts)
 
-    user_msg = _USER_PROMPT_TEMPLATE.format(sources_block=sources_block)
-
+def _call_claude(client, chunk) -> AnalysisResult:
+    system = _SYSTEM_PROMPT.format(CLUB_PROFILE=CLUB_PROFILE.strip(), TODAY=business_today().isoformat())
+    block = "\n\n---\n\n".join(f"{name}:\n{text}" for name, text in chunk.items())
     try:
         response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=MAX_TOKENS,
-            system=system,
-            messages=[{"role": "user", "content": user_msg}],
+            model=CLAUDE_MODEL, max_tokens=MAX_TOKENS, system=system,
+            messages=[{"role": "user", "content": _USER_PROMPT_TEMPLATE.format(sources_block=block)}],
         )
-        if not response.content:
-            logger.error("Claude 응답 content가 비어있음")
-            return []
-        raw_text = response.content[0].text.strip()
-
-        # JSON 블록 추출 (```json ... ``` 감싸인 경우 처리)
-        if raw_text.startswith("```"):
-            lines = raw_text.split("\n")
-            raw_text = "\n".join(
-                line for line in lines
-                if not line.startswith("```")
-            ).strip()
-
-        # 1차: 중첩 배열을 고려한 브라켓 카운팅으로 완전한 JSON 배열 추출
-        start = raw_text.find("[")
-        if start == -1:
-            logger.warning("청크 파싱 실패: JSON 배열을 찾을 수 없음")
-            return []
-        bracket_count = 0
-        end = start
-        for i, ch in enumerate(raw_text[start:], start):
-            if ch == "[":
-                bracket_count += 1
-            elif ch == "]":
-                bracket_count -= 1
-            if bracket_count == 0:
-                end = i
-                break
-        else:
-            # 배열이 잘린 경우 복구 시도
-            end = None
-
-        if end is not None:
-            programs = json.loads(raw_text[start:end + 1])
-        else:
-            # 2차: 응답이 중간에 잘린 경우 마지막 완전한 } 까지만 복구
-            last_brace = raw_text.rfind("}")
-            if last_brace == -1:
-                raise json.JSONDecodeError("복구 불가", raw_text, 0)
-            recovered = raw_text[start:last_brace + 1] + "]"
-            programs = json.loads(recovered)
-            logger.warning("응답 잘림 감지 — 부분 복구 후 파싱 성공")
-
-        if not isinstance(programs, list):
-            logger.warning("Claude 응답이 리스트가 아님, 빈 리스트로 처리")
-            return []
-        return programs
-
-    except json.JSONDecodeError as e:
-        logger.warning(f"청크 파싱 실패: {e}")
-        return []
-    except anthropic.APIError as e:
-        logger.error(f"Claude API 오류: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"분석 중 예외 발생: {e}")
-        return []
+        if getattr(response, "stop_reason", None) == "max_tokens":
+            return AnalysisResult(failures=[Failure("TRUNCATED", "Model output exceeded limit", list(chunk))])
+        blocks = [part.text for part in response.content if getattr(part, "type", "text") == "text"]
+        if not blocks:
+            return AnalysisResult(failures=[Failure("EMPTY_RESPONSE", "No text response", list(chunk))])
+        raw = "\n".join(blocks).strip()
+        if raw.startswith("```") and raw.endswith("```"):
+            raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        programs = _validate_programs(json.loads(raw))
+        programs = [p for p in programs if not p.get("deadline") or date.fromisoformat(p["deadline"]) >= business_today()]
+        return AnalysisResult(programs=programs, successful_chunks=1)
+    except json.JSONDecodeError:
+        return AnalysisResult(failures=[Failure("JSON", "Malformed model JSON", list(chunk))])
+    except ValueError as error:
+        return AnalysisResult(failures=[Failure("SCHEMA", str(error), list(chunk))])
+    except anthropic.APIError as error:
+        return AnalysisResult(failures=[Failure(type(error).__name__, "AI request failed", list(chunk))])
+    except Exception as error:
+        return AnalysisResult(failures=[Failure(type(error).__name__, "Unexpected analysis failure", list(chunk))])
 
 
-def analyze(raw_data: dict[str, str], api_key: str) -> tuple[list[dict], bool]:
-    """
-    raw_data를 청크로 분할해 Claude API로 분석합니다.
-
-    Args:
-        raw_data: {"소스명": "텍스트", ...}
-        api_key: Anthropic API 키
-
-    Returns:
-        programs: 관련성 60점 이상, 중복 제거, 점수 내림차순 정렬된 공고 목록
-        analysis_failed: 모든 청크 실패 시 True
-    """
+def analyze(raw_data: dict[str, str], api_key: str) -> AnalysisResult:
     if not raw_data:
-        logger.warning("raw_data가 비어있음, 분석 건너뜀")
-        return [], True
-
+        return AnalysisResult(failures=[Failure("NO_INPUT", "No acquired source text")])
     client = anthropic.Anthropic(api_key=api_key)
-    chunks = _build_chunks(raw_data)
-    logger.info(f"분석 시작: {len(raw_data)}개 소스 → {len(chunks)}개 청크")
-
-    all_programs: list[dict] = []
-    success_count = 0
-
-    for i, chunk in enumerate(chunks, 1):
-        source_names = list(chunk.keys())
-        logger.info(f"[{i}/{len(chunks)}] 청크 분석: {source_names}")
-        programs = _call_claude(client, chunk)
-        if programs is not None:
-            all_programs.extend(programs)
-            success_count += 1
-            logger.info(f"[{i}/{len(chunks)}] {len(programs)}건 추출")
-
-    analysis_failed = success_count == 0
-
-    # 중복 제거 (title + organization 기준, 높은 점수 우선)
-    seen_keys: set = set()
-    unique_programs: list[dict] = []
-    for p in sorted(all_programs, key=lambda x: x.get("relevance_score", 0), reverse=True):
-        key = f"{p.get('title', '')}|{p.get('organization', '')}".lower()
-        if key not in seen_keys:
-            seen_keys.add(key)
-            unique_programs.append(p)
-
-    # MIN_RELEVANCE_SCORE 미만 필터링
-    filtered = [
-        p for p in unique_programs
-        if p.get("relevance_score", 0) >= MIN_RELEVANCE_SCORE
-    ]
-
-    logger.info(
-        f"분석 완료: 전체 {len(all_programs)}건 → "
-        f"중복 제거 후 {len(unique_programs)}건 → "
-        f"점수 필터 후 {len(filtered)}건"
-    )
-
-    return filtered, analysis_failed
+    result = AnalysisResult()
+    for chunk in _build_chunks(raw_data):
+        outcome = _call_claude(client, chunk)
+        result.programs.extend(outcome.programs)
+        result.failures.extend(outcome.failures)
+        result.successful_chunks += outcome.successful_chunks
+    unique = {}
+    for program in sorted(result.programs, key=lambda p: p["relevance_score"], reverse=True):
+        key = (program["title"].casefold(), program["organization"].casefold())
+        if program["relevance_score"] >= MIN_RELEVANCE_SCORE:
+            unique.setdefault(key, program)
+    result.programs = list(unique.values())
+    for failure in result.failures:
+        logger.error("Analysis failure %s for %s: %s", failure.kind, failure.sources, failure.message)
+    return result

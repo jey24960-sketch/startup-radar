@@ -13,6 +13,7 @@ import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import SEEN_DB, DATA_DIR
+from core.clock import now as business_now, SEOUL
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ def filter_new_programs(programs: list[dict]) -> list[dict]:
 def mark_as_sent(programs: list[dict]):
     """알림 발송 완료 처리"""
     seen = _load_seen()
-    now = datetime.now().isoformat()
+    now = business_now().isoformat()
 
     for program in programs:
         pid = _program_hash(program)
@@ -78,7 +79,7 @@ def mark_as_sent(programs: list[dict]):
 def cleanup_expired(days: int = 90):
     """마감일이 지난 공고 DB에서 제거 (주기적 정리용)"""
     seen = _load_seen()
-    now = datetime.now()
+    now = business_now()
     cutoff = now - timedelta(days=days)
     before = len(seen)
 
@@ -87,6 +88,8 @@ def cleanup_expired(days: int = 90):
         sent_at_str = info.get("sent_at", "")
         try:
             sent_at = datetime.fromisoformat(sent_at_str)
+            if sent_at.tzinfo is None:
+                sent_at = sent_at.replace(tzinfo=SEOUL)
             if sent_at > cutoff:
                 cleaned[pid] = info
         except Exception:

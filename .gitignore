@@ -4,7 +4,6 @@
 # 수집 데이터
 data/
 logs/
-*.json
 
 # Python
 __pycache__/
@@ -12,3 +11,10 @@ __pycache__/
 .env
 .venv/
 venv/
+
+node_modules/
+.pytest_cache/
+.coverage
+work/
+.env.*
+!.env.example

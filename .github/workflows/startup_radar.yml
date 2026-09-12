@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: startup-radar-v1-ingestion
+  cancel-in-progress: false
+
 jobs:
   crawl-and-notify:
     runs-on: ubuntu-latest

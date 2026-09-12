@@ -1,0 +1,1 @@
+{"name":"startup-radar-v2","private":true,"type":"module","scripts":{"test:worker":"node --test tests/worker.test.mjs","test:db":"node tests/database.test.mjs"},"devDependencies":{"@electric-sql/pglite":"0.5.8","@electric-sql/pglite-socket":"0.2.11","supabase":"2.117.0"}}
