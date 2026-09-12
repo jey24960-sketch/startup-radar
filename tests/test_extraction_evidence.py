@@ -43,6 +43,25 @@ def test_whitespace_citation_is_not_supporting_evidence():
     assert evaluate(TeamProfile(founder_age=50),program.requirements,program.evidence_complete).status=='UNVERIFIABLE'
 
 
+def test_document_hash_in_source_slot_is_normalized_to_document_provenance():
+    quote='만 39세 이하만 지원 가능합니다.'
+    response={'requirements':[{'key':'founder_age','operator':'LTE','value':39,'certain':True,
+        'evidence':[{'source_id':'document-hash','text':quote,'method':'LLM','confidence':1}]}],
+        'program_types':['EDUCATION'],'eligibility_section_quote':quote,'evidence_complete':True}
+    client=SimpleNamespace(messages=SimpleNamespace(create=lambda **kw:SimpleNamespace(content=[SimpleNamespace(type='text',text=json.dumps(response))])))
+    p=Program(title='Fixture',organization='Fixture',official_url='https://example.org/notice')
+    result=RequirementExtractor(client).extract(p,AcquiredDetail(p.official_url,'첨부 참고',p.title),
+        [{'content_hash':'document-hash','extracted_text':quote,'extraction_status':'SUCCESS'}],'real-source')
+    evidence=result.requirements[0].evidence[0]
+    assert evidence.verified and evidence.source_id=='real-source' and evidence.document_id=='document-hash'
+
+
+def test_future_commitment_omitted_from_model_quote_still_blocks_complete_claim():
+    text='예비창업자 대상\n입주 후 3개월 이내 사업자등록이 가능한 자'
+    p=extract({'eligibility_section_quote':'예비창업자 대상'},text)
+    assert not p.evidence_complete
+
+
 @pytest.mark.parametrize('quote,value,hour',[
     ('접수 마감: 2026. 9. 30.(수) 오전 11시까지','2026-09-30T11:00:00+09:00',11),
     ('접수 마감: 2026년 9월 30일 오후 1시 30분','2026-09-30T13:30:00+09:00',13),

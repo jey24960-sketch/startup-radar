@@ -10,6 +10,7 @@ from radar.models import StrictModel,Requirement,Program,ProductStage,TeamStatus
 from radar.adapters.base import SourceFailure
 from radar.dates import korean_date
 from core.clock import SEOUL
+from radar.extraction_review import rule_review_reasons,future_commitments
 
 ProgramType=Literal['GRANT','COMPETITION','INCUBATION','ACCELERATION','INVESTMENT_LINKED','WORKSPACE',
     'GLOBAL','MARKET_ENTRY','EDUCATION','MENTORING','POLICY_LOAN','SME_FINANCING','GENERIC_RD','UNKNOWN']
@@ -79,20 +80,23 @@ def cited_datetime(value,quote,end=False,source_texts=()):
 
 
 class RequirementExtractor:
-    version='requirements-2.0.4'
+    version='requirements-2.0.5'
     def __init__(self,client=None,model=None):
         self.client=client
         self.model=model or os.environ.get('RADAR_EXTRACTION_MODEL','claude-sonnet-4-5')
     def extract(self,program:Program,detail,documents,source_id):
         # Failures must leave the caller's normalized official facts intact.
         program=program.model_copy(deep=True)
+        self.review_flags=[]
         if self.client is None:
             key=os.environ.get('ANTHROPIC_API_KEY')
             if not key:raise SourceFailure('AI_NOT_CONFIGURED','ANTHROPIC_API_KEY is required for unstructured requirements')
             self.client=anthropic.Anthropic(api_key=key)
         evidence={str(source_id):detail.text}
+        document_keys=set()
         for doc in documents:
-            if doc.get('extraction_status')=='SUCCESS':evidence[doc['content_hash']]=doc['extracted_text']
+            if doc.get('extraction_status')=='SUCCESS':
+                evidence[doc['content_hash']]=doc['extracted_text'];document_keys.add(doc['content_hash'])
         total=sum(len(text) for text in evidence.values())
         if total>120000:raise SourceFailure('AI_INPUT_LIMIT','Evidence exceeds extraction limit; manual review required')
         system=(
@@ -115,6 +119,11 @@ class RequirementExtractor:
           'An office/contact/submission address is not evidence of an applicant location restriction. '
           'Requirements are a conjunction (ALL mandatory rules). If a rule cannot be represented safely, including complex OR/exceptions, '
           'set unsupported_logic=true and evidence_complete=false. Do not turn an OR clause into multiple mandatory rules. '
+          'A business-age limit that applies only to existing businesses must not become a mandatory rule for pre-business applicants. '
+          'The profile cannot represent future promises to register a business or relocate after admission; these require unsupported_logic=true. '
+          'Tax arrears, credit status, environmental restrictions, disallowed industries and administrative sanctions are NOT prior_support_restrictions. '
+          'Free-text prior-support values are not a complete negative declaration; never certify their absence by NOT_IN against arbitrary descriptions. '
+          'A business-age limit measured on a fixed announcement date cannot be represented by the current-date business_age_months evaluator. '
           'Use evidence_complete=true only if the full eligibility section is available and all mandatory restrictions are represented. '
           'eligibility_section_quote must be one contiguous verbatim passage from one evidence source; never concatenate excerpts. '
           'Prefer structured official values, but broad applicant labels do not prove full eligibility. '
@@ -143,6 +152,8 @@ class RequirementExtractor:
                 supported=bool(compact(item.text)) and key in evidence and compact(item.text) in compact(evidence[key])
                 item.verified=supported
                 item.method='LLM'
+                if supported and key in document_keys:
+                    item.document_id=key;item.source_id=str(source_id)
             if extracted.unsupported_logic or not rule.evidence or not any(e.verified for e in rule.evidence):rule.certain=False
             # A verbatim quote is necessary but does not make an arbitrary
             # profile-presence check a representation of a legal qualification.
@@ -152,6 +163,11 @@ class RequirementExtractor:
                 quotes=[re.sub(r'\s+','',e.text).casefold() for e in rule.evidence if e.verified]
                 if any(not any(re.sub(r'\s+','',value).casefold() in quote for quote in quotes) for value in values):
                     rule.certain=False
+            for reason in rule_review_reasons(rule):
+                rule.certain=False
+                self.review_flags.append({'kind':reason,'requirement_key':rule.key,
+                    'quotes':[e.text[:500] for e in rule.evidence if e.verified]})
+        self.review_flags.extend(future_commitments(evidence))
         coverage=bool(extracted.eligibility_section_quote.strip()) and any(compact(extracted.eligibility_section_quote) in compact(t) for t in evidence.values())
         date_supported=bool(compact(extracted.date_evidence_quote or '')) and any(compact(extracted.date_evidence_quote) in compact(t) for t in evidence.values())
         def can_fill(which):return getattr(program,'application_'+which+'_at') is None or getattr(program,'application_'+which+'_precision')=='DATE'
@@ -185,7 +201,7 @@ class RequirementExtractor:
         program.product_stages=extracted.product_stages
         benefit_supported=bool(compact(extracted.benefit_evidence_quote or '')) and any(compact(extracted.benefit_evidence_quote) in compact(t) for t in evidence.values())
         if benefit_supported:program.benefit_summary=extracted.benefit_summary
-        program.evidence_complete=extracted.evidence_complete and coverage and not extracted.unsupported_logic and all(
+        program.evidence_complete=extracted.evidence_complete and coverage and not extracted.unsupported_logic and not self.review_flags and all(
             d.get('extraction_status')=='SUCCESS' for d in documents) and all(
             rule.certain for rule in program.requirements if rule.mandatory)
         try:return Program.model_validate(program.model_dump())

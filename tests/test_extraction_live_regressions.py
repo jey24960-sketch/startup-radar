@@ -41,3 +41,34 @@ def test_explicit_region_quote_still_supports_deterministic_rejection():
               '지원대상: 인천광역시 부평구 소재 사업장')
     assert p.requirements[0].certain and p.evidence_complete
     assert evaluate(TeamProfile(region='서울'),p.requirements,p.evidence_complete).status=='INELIGIBLE'
+
+
+def test_free_text_history_cannot_certify_absence_of_tax_credit_or_industry_exclusions():
+    p=extract({'key':'prior_support_restrictions','operator':'NOT_IN','value':['국세 또는 지방세 체납 사업자']},
+              '제외대상: 국세 또는 지방세 체납 사업자')
+    assert not p.evidence_complete and not p.requirements[0].certain
+    assert evaluate(TeamProfile(prior_support_restrictions=[]),p.requirements,p.evidence_complete).status=='UNVERIFIABLE'
+
+
+@pytest.mark.parametrize('quote',[
+    '예비창업자 또는 창업 7년 이내 창업기업',
+    '창업 7년 이내 창업기업 (공고일 기준)',
+])
+def test_branch_or_fixed_reference_age_cannot_become_a_current_date_global_limit(quote):
+    p=extract({'key':'business_age_months','operator':'LTE','value':84},quote)
+    for profile in (TeamProfile(business_status='PRE_BUSINESS'),TeamProfile(business_age_months=100)):
+        result=evaluate(profile,p.requirements,p.evidence_complete)
+        assert result.status=='UNVERIFIABLE' and not result.failed_requirements
+
+
+def test_future_registration_promise_not_proven_by_present_business_status():
+    p=extract({'key':'business_status','operator':'EQ','value':'PRE_BUSINESS'},
+              '예비창업자: 입주 후 3개월 이내 사업자등록이 가능한 자')
+    assert not p.evidence_complete
+    assert evaluate(TeamProfile(business_status='PRE_BUSINESS'),p.requirements,p.evidence_complete).status=='UNVERIFIABLE'
+
+
+def test_independent_age_limit_remains_usable():
+    p=extract({'key':'business_age_months','operator':'LTE','value':84},'신청일 현재 창업 7년 이내 사업자만 신청 가능')
+    assert p.evidence_complete and p.requirements[0].certain
+    assert evaluate(TeamProfile(business_age_months=100),p.requirements,p.evidence_complete).status=='INELIGIBLE'

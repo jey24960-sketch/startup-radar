@@ -59,12 +59,14 @@ def test_analysis_same_hash_skips_llm_changed_document_reanalyzes(db):
     p=program();s=source(db);detail=SimpleNamespace(text='Stable source evidence')
     class Extractor:
         version='fixture-1'; model='fixture';calls=0
+        review_flags=[{'kind':'fixture-review-required'}]
         def extract(self,program,detail,documents,source_id):
             self.calls+=1; return program
     e=Extractor();docs=[{'original_url':'https://example.org/a.hwp','content_hash':'a','extraction_status':'SUCCESS','extracted_text':'A'}]
     first={};extract_cached(db,e,p,detail,docs,s,first)
     second={};extract_cached(db,e,p,detail,docs,s,second)
     assert e.calls==1 and second['cache_hit']
+    assert first['review_flags']==second['review_flags']==e.review_flags
     docs[0]['content_hash']='b';docs[0]['extracted_text']='B'
     extract_cached(db,e,p,detail,docs,s,{})
     assert e.calls==2

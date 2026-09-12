@@ -22,7 +22,7 @@ def extract_cached(db, extractor, program, detail, documents, source_id, metadat
             metadata.update(cached['metadata'],cache_hit=True,input_hash=key)
             return Program.model_validate(cached['normalized'])
         result=extractor.extract(program,detail,documents,source_id)
-        metadata.update(cache_hit=False,input_hash=key)
+        metadata.update(cache_hit=False,input_hash=key,review_flags=getattr(extractor,'review_flags',[]))
         c.execute('insert into startup_radar.extraction_cache(input_hash,normalized,metadata) values(%s,%s,%s)',
             (key,Jsonb(result.model_dump(mode='json')),Jsonb(metadata)))
         return result
