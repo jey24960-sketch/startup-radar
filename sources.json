@@ -1,0 +1,7 @@
+[
+  {"slug":"kstartup","name":"K-Startup 공식 API","adapter":"KSTARTUP","enabled":true,"config":{"allowed_hosts":["apis.data.go.kr","www.k-startup.go.kr","k-startup.go.kr"],"key_env":"KSTARTUP_API_KEY","page_size":100,"max_pages":100}},
+  {"slug":"bizinfo","name":"기업마당 공식 API","adapter":"BIZINFO","enabled":true,"config":{"allowed_hosts":["www.bizinfo.go.kr","bizinfo.go.kr"],"key_env":"BIZINFO_API_KEY","page_size":100,"max_pages":100}},
+  {"slug":"korea-startup-rss","name":"고려대 세종창업교육센터 RSS","adapter":"RSS","enabled":false,"config":{"url":"https://startup.korea.ac.kr/rss","organization":"고려대학교 세종창업교육센터","allowed_hosts":["startup.korea.ac.kr"],"disabled_reason":"2026-09-12 live check: feed contains only institution/about pages; use verified HTML notice adapter"}},
+  {"slug":"korea-startup-html","name":"고려대 세종창업교육센터 공고","adapter":"HTML","enabled":true,"config":{"url":"https://startup.korea.ac.kr/","organization":"고려대학교 세종창업교육센터","allowed_hosts":["startup.korea.ac.kr"],"link_selector":"a[href*=\"kboard_content_redirect=\"]","detail_selector":".kboard-document-wrap","document_selector":"button.kboard-button-download","validated_at":"2026-09-12","pagination_note":"Homepage linked notices only; older unlinked archives are not exhaustively traversed"}},
+  {"slug":"search-discovery","name":"검색 기반 발견","adapter":"SEARCH","enabled":false,"config":{"allowed_hosts":[],"official_hosts":[],"queries":[],"disabled_reason":"No explicit search provider configured"}}
+]

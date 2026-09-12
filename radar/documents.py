@@ -4,6 +4,12 @@ import io
 import struct
 import zipfile
 import zlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
 from pathlib import PurePosixPath
 from bs4 import BeautifulSoup
 from defusedxml import ElementTree
@@ -105,11 +111,28 @@ def fetch_document(http,url,filename):
         data,mime,final=http.get(url)
         result.update(fetch_status='SUCCESS',detected_mime=mime,content_hash=hashlib.sha256(data).hexdigest(),fetched_at=now().isoformat())
         try:
-            kind,text=extract_document(data,filename,mime)
-            result.update(extraction_status='SUCCESS',extracted_text=text,detected_mime=kind)
+            kind,text=extract_isolated(data,filename,mime)
+            result.update(extraction_status='SUCCESS',extracted_text=text)
         except Exception as error:
             result.update(extraction_status='FAILED',error_kind='DOCUMENT_PARSE',error_message=str(error)[:300])
     except SourceFailure as error:
         result.update(fetch_status='BLOCKED' if error.kind in ('BLOCKED','ROBOTS_DENIED') else 'FAILED',
                       extraction_status='FAILED',error_kind=error.kind,error_message=error.message)
     return result
+
+
+def extract_isolated(data,filename,mime,timeout=25):
+    """Keep native/parser failures and runaway CPU outside the ingestion process."""
+    if len(data)>20_000_000:raise ValueError('File size limit')
+    with tempfile.TemporaryDirectory(prefix='radar-document-') as folder:
+        path=Path(folder)/'document.bin';path.write_bytes(data)
+        env={k:v for k,v in os.environ.items() if k in ('PATH','SYSTEMROOT','WINDIR','TEMP','TMP')}
+        env['PYTHONIOENCODING']='utf-8'
+        try:
+            result=subprocess.run([sys.executable,'-m','radar.document_worker',str(path),filename,mime],
+                cwd=Path(__file__).resolve().parent.parent,env=env,capture_output=True,text=True,encoding='utf-8',timeout=timeout)
+        except subprocess.TimeoutExpired:raise ValueError('Document parser time limit exceeded')
+        if result.returncode:raise ValueError('Document parser process failed or resource limit exceeded')
+        parsed=json.loads(result.stdout)
+        if parsed.get('error'):raise ValueError(parsed['error'])
+        return parsed['kind'],parsed['text']

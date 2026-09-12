@@ -20,4 +20,13 @@ Exact missing credential names: KSTARTUP_API_KEY (approved public-data service k
 
 Limits: current HTML discovery requires an explicit link selector and visits one configured listing page. Additional pagination needs source-specific configuration/implementation. Official API pagination is implemented with explicit partial failure at the page limit. Existing V1 supplemental URLs have not yet all been converted and live-validated. Search injection exists; deployment configuration and a concrete provider remain pending.
 
-Document extractors support HTML, text-bearing PDF, HWP v5 BodyText, HWPX XML and DOCX XML. Scanned/encrypted/unsupported or corrupt files are failures, never invented evidence. File size, archive expansion, page count and extracted text are bounded. OCR is not implemented. Extraction currently runs in-process; a resource-isolated worker with CPU/memory time limits is still needed for robust hostile-document handling.
+Document extractors support HTML, text-bearing PDF, HWP v5 BodyText, HWPX XML and DOCX XML. Scanned/encrypted/unsupported or corrupt files are failures, never invented evidence. File size, archive expansion, page count and extracted text are bounded. OCR is not implemented. Fetched documents now run in an isolated subprocess: 25-second wall limit, plus Linux CPU/address-space limits. Windows currently has no hard subprocess memory ceiling. OCR and real-corpus validation remain pending.
+
+
+## Registry and verified long-tail example
+
+`sources.json` is the initial registry. Apply intentionally with `python -m radar.cli seed-sources`; this updates registered configuration and enabled states. Use `python -m radar.cli run --kind INGEST --source SLUG` for a single source. Keys remain in process secrets. Missing K-Startup/BizInfo credentials are visible MISSING_CREDENTIAL failures.
+
+Live check on 2026-09-12: `https://startup.korea.ac.kr/rss` returned only institution/about pages. The RSS entry is therefore disabled. The homepage's observed `a[href*="kboard_content_redirect="]` links yielded 13 notices. The first detail's `.kboard-document-wrap` held 547 characters; explicit `button.kboard-button-download` controls exposed two public HWP downloads. Both were fetched and isolated text extraction succeeded (3,595 and 1,924 characters). Exact metadata is in `LIVE-SOURCE-CHECK.json`. HTML buttons are accepted only for the configured document selector and a literal window.location.href string; no JavaScript is evaluated.
+
+This example represents Korea University **Sejong** Startup Education Center, not every Korea University startup organization. The homepage feed is incomplete for historical archives. Discovery success does not imply all 13 entries are currently relevant or open. The sample did not call AI, certify eligibility or send Telegram messages.

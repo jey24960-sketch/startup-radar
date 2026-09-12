@@ -1,0 +1,31 @@
+{
+  "checked_at": "2026-09-12",
+  "source": "korea-startup-html",
+  "discovered": 13,
+  "first_title": "2026학년도 고려대학교 세종캠퍼스 KUS창업동아리 추가모집",
+  "detail_url": "https://startup.korea.ac.kr/program/%ec%b0%bd%ec%97%85%eb%a9%98%ed%86%a0%eb%a7%81/?mod=document&uid=2268",
+  "detail_chars": 547,
+  "attachments": [
+    {
+      "original_url": "https://startup.korea.ac.kr/program/%EC%B0%BD%EC%97%85%EB%A9%98%ED%86%A0%EB%A7%81/?uid=2268&action=kboard_file_download&kboard-file-download-nonce=ce84b2010f&file=file1",
+      "filename": "2026학년도-고려대학교-세종캠퍼스-KUS-창업동아리-추가모집-안내.hwp",
+      "fetch_status": "SUCCESS",
+      "extraction_status": "SUCCESS",
+      "detected_mime": "application/hangul",
+      "content_hash": "5c7b705f20b985052f973e50102c12346e7d3771dfc2fcad8a5bc1d243cb00f6",
+      "fetched_at": "2026-09-12T16:17:23.783161+09:00",
+      "extracted_chars": 3595
+    },
+    {
+      "original_url": "https://startup.korea.ac.kr/program/%EC%B0%BD%EC%97%85%EB%A9%98%ED%86%A0%EB%A7%81/?uid=2268&action=kboard_file_download&kboard-file-download-nonce=ce84b2010f&file=file2",
+      "filename": "2026학년도-고려대학교-세종캠퍼스-KUS-창업동아리-신청-양식.hwp",
+      "fetch_status": "SUCCESS",
+      "extraction_status": "SUCCESS",
+      "detected_mime": "application/hangul",
+      "content_hash": "dcab67cfe18a2fa3c2873541bed4421c7d046804cee00e1d310d40186df7793f",
+      "fetched_at": "2026-09-12T16:17:24.864090+09:00",
+      "extracted_chars": 1924
+    }
+  ],
+  "note": "Live discovery/detail/document acquisition only; no AI extraction, eligibility certification or delivery."
+}

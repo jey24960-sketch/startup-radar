@@ -1,5 +1,6 @@
 """Long-tail discovery. Source selectors/configuration live outside the pipeline."""
 from urllib.parse import urljoin,urlsplit
+import re
 from bs4 import BeautifulSoup
 from defusedxml import ElementTree as ET
 from radar.adapters.base import SourceAdapter,Candidate,AcquiredDetail,SourceFailure
@@ -31,8 +32,16 @@ class HtmlAdapter(SourceAdapter):
         body=soup.select_one(selector) if selector else soup.find('main') or soup.find('article') or soup.body or soup
         if body is None:raise SourceFailure('DETAIL_PARSE','Configured detail selector not found')
         attachments=[]
-        for link in body.select('a[href]'):
-            target=urljoin(url,link['href']);name=link.get_text(' ',strip=True)
+        document_selector=self.config.get('document_selector')
+        links=soup.select(document_selector) if document_selector else body.select('a[href]')
+        for link in links:
+            href=link.get('href')
+            if not href and document_selector:
+                # Parse only a literal public download navigation; never execute JS.
+                navigation=re.fullmatch(r"window\.location\.href\s*=\s*(['\"])(.*?)\1;?",link.get('onclick','').strip())
+                href=navigation.group(2) if navigation else None
+            if not href:continue
+            target=urljoin(url,href);name=link.get_text(' ',strip=True)
             if urlsplit(target).path.lower().endswith(DOCUMENT_EXTENSIONS) or name.lower().endswith(DOCUMENT_EXTENSIONS):
                 attachments.append((target,name or urlsplit(target).path.rsplit('/',1)[-1]))
         return AcquiredDetail(url,html_text(str(body)),candidate.title,attachments,candidate.raw_metadata)

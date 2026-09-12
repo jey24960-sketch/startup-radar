@@ -1,82 +1,72 @@
 # StartupRadar 2.0 implementation ledger
 
-Complete scope: V2-SPEC.md (the original user-provided specification, unabridged).
-Baseline audit: V1-AUDIT.md, written before implementation against c18f840.
-Branch: feature/startup-radar-v2. Remote main/deployed V1 unchanged.
+Complete approved scope: V2-SPEC.md. Baseline audit: V1-AUDIT.md. Branch: feature/startup-radar-v2. Remote main is still c18f84048ddd08adca10d44b83692a1060d957cb; fetched again 2026-09-12. Production services have not been changed. V1 remains present. **This is a checkpoint, not completed V2 acceptance or cutover.**
 
-## Verified checkpoint — 2026-09-12
+## Current local implementation
 
-- V1 analysis uses typed SUCCESS/PARTIAL_SUCCESS/FAILED results, valid empty is distinct from error; delivery records accepted programs only, leaves undisplayed tail pending; incomplete runs exit nonzero; Actions concurrency added; business dates use Asia/Seoul.
-- V1 webhook bridge validates secret, authorizes admin and stores update claims in a Durable Object. Deployment/binding/secret setup not performed. Claims avoid repeat dispatch; external-call ambiguity remains explicit.
-- PostgreSQL migration created with Supabase CLI. All 23 radar tables have RLS. Local PostgreSQL engine tests validate own-team read/update, cross-team denial, non-admin operational privacy, anonymous denial, and rejection of self-granted admin.
-- Repository tests verify profile versions, cross-source provenance, stable identity on source ID/URL changes, material deadline versions and ambiguous duplicate review relationships.
-- Domain schemas preserve independent team/product/business dimensions and UNKNOWN. Five presets implemented; preset 0 needs no optional information; presets preserve explicit data. Evidence-driven deterministic eligibility and Seoul dates tested.
-- Source interfaces, official K-Startup/BizInfo adapters (verified official contracts), RSS/Atom, HTML, browser and injected search architecture implemented. Public/live source validation and complete registry pending. Search has no concrete deployment provider yet.
-- HTML/PDF/HWP/HWPX/DOCX extraction and typed failures implemented; resource-isolated parsing still pending.
-- Schema-validated, exact-quote-checked AI extraction implemented. No production API calls made; semantic extraction quality not yet measured on real notices.
-- Source-isolated ingestion persists runs/results and keeps successful sources when another fails.
-- Deterministic ranking, evaluation trace persistence and initial PostgreSQL notification outbox implemented. Reminder duplicate planning and partial delivery tested. Telegram V2 is not production-ready yet.
+- V1 typed analysis failures, delivered-item-only accounting, nonzero incomplete run status, Seoul clock, workflow concurrency and webhook authentication/update claims.
+- Two additive PostgreSQL migrations with 27 RLS-enabled tables, profiles/program versions, source provenance, requirements, recommendation traces, outbox, message batches, runtime settings, job/cadence claims and audit.
+- Five presets, independent team/product/business dimensions, unknown values, progressive profile updates and version conflict detection.
+- Deterministic evidence-gated eligibility, dates and configurable ranking components. A failed condition cannot be overridden by AI/ranking.
+- K-Startup/BizInfo adapters, RSS/Atom, configurable HTML, optional browser and explicit injected search interfaces. sources.json wires the initial registry into the CLI.
+- Isolated document parsing (wall limit, Linux CPU/memory limits), visible failures, retained MIME/content hash/text and version-constrained evidence document links.
+- FastAPI verified Supabase user authentication, team authorization, private member API, admin health/history/failures/duplicates/retry/trace/subscription/team APIs, static dashboard, invitation-only sign-in.
+- Browser UI: five presets, team mode, filter/search, FACT/ELIGIBILITY/RECOMMENDATION details, citations including unknown-condition evidence, program history, optional profiles, progressive single-field input, member notification history, admin health/failure/retry/recovery/cadence/trace screens.
+- Telegram V2 actual status/health, selected team, persistent stage updates, stop scheduling and persisted GitHub workflow dispatch. No actual external messages have been sent.
+- Grouped weekly digest, exceptional high-fit and deadline planner; per-period/version keys, daily caps, immutable message batches, receipt mapping, current-state revalidation, explicit uncertain outcomes and audited manual recovery.
+- CLI and hourly-wakeup V2 Actions workflow; daily collection/weekly digest/daily reminders use PostgreSQL cadence. Workflow and delivery both default disabled until repository variables enable them.
 
-## Test evidence
+## Verification
 
-- `.venv/Scripts/python -m pytest -q` with explicit TEST_DATABASE_URL: 55 passed (includes PostgreSQL repository/ingestion/notification integration).
-- `node --test tests/worker.test.mjs`: 4 passed.
-- `node tests/database.test.mjs`: migrations and RLS assertions passed on a fresh PGlite PostgreSQL engine.
-- `python -m compileall -q radar core main.py`: passed.
-- `python main.py --help`: works without service credentials.
-- No actual Telegram messages, production database migrations, hosted Auth checks, web build or deployment tested.
-
-The local PGlite socket bridge encountered a protocol error after an invalid SQL parameter type during development. The SQL parameter was explicitly cast, the corrupted test server was stopped and restarted, and the full repository tests then passed. This is a local test-engine limitation, not a production reliability claim.
-
-## Milestone state
-
-1. Audit + V1 reliability: implemented/tested locally; deployment validation pending.
-2. Supabase persistent layer: schema/repository locally tested; hosted target and migration pending.
-3. Canonical schema: implemented/tested foundation; complete trace integration still being extended.
-4. Official APIs: adapters written, fixtures pass; wiring/credentials/live validation pending.
-5. Long-tail/documents: implemented/tested foundation; live source registry, parser isolation and real document corpus pending.
-6. Requirements/eligibility: core implemented/tested; real extraction quality and complex-rule validation pending.
-7. Profiles/presets: core implemented/tested; authenticated progressive web flow pending.
-8. Recommendation/Telegram V2: initial core/outbox implemented; digest grouping, stale queued-item revalidation, retry/admin recovery, cadence configuration and additional alert/update tests pending.
-9. Web/source health: persistence implemented; authenticated web/API and all required member/admin screens pending.
-10. Parallel comparison/cutover: not started. V1 retained.
+- Final Python verification: 75 passed, 1 third-party deprecation warning (Starlette/AnyIO BlockingPortal alias). Dependency check reports no broken requirements.
+- Worker tests: 4 passed.
+- Fresh migrations + team RLS/admin/anonymous denial assertions: passed with PGlite.
+- npm build: passed; self-contained bundled frontend.
+- CLI help and Python compilation: passed.
+- Browser fixture verification: initial stage 0 immediately shows two recommendations; detail separates facts/eligibility/ranking and quotes; entering fictional age 27 removes only the age missing-field requirement; admin UI visibly shows failed HWP extraction and unattempted source state.
+- Windows browser verification exposed the system .js MIME mapping as text/plain; an explicit JavaScript response type fixes module loading and is regression-tested.
+- Test collection initially imported a work/ scratch script and mutated the test bootstrap; pytest.ini now restricts collection to tests/. Duplicate bootstrap lines were removed. PGlite's default one-connection socket rejected briefly overlapping request/cleanup connections; the local harness now permits 10 multiplexed connections. This is not proof of production database concurrency.
+- Live public source: Korea University Sejong HTML yielded 13 notice links. First notice detail 547 characters; two HWP files successfully fetched and extracted at 3,595 and 1,924 characters. LIVE-SOURCE-CHECK.json preserves metadata. The old RSS contains only institution/about pages and is disabled. No AI/external Telegram call was involved in this live check.
 
 ## Acceptance criteria audit (spec section 24)
 
-1. Preset-0 domain behavior proved; immediate authenticated browser flow NOT YET implemented.
-2. Structured profile update/version repository proved; user interface pending.
-3. Same requirement gives different team outcomes in unit tests; real program UI demonstration pending.
-4. Unknown attributes -> NEEDS_INFO proved in unit tests.
-5. Registered-only requirement rejects PRE_BUSINESS proved.
-6. Evidence preserved in rule/evaluation models; user-facing display pending.
-7. PDF/HWP/HWPX failure retained in tests; admin failure screen pending.
-8. Cross-source provenance/dedup integration proved; live comparison pending.
-9. Material updates create versions integration proved.
-10. Deterministic closed-date filtering tested; complete dashboard/delivery flows pending.
-11. Official adapters implemented from primary contracts; runtime registry/credential setup and live response validation pending.
-12. RSS/HTML architecture demonstrated by fixtures; live non-API demonstration pending.
-13. Notification planner uses real stored team evaluations in tests; finished weekly digest UX and delivery validation pending.
-14. V2 runtime /status NOT YET implemented; existing V1 status remains legacy.
-15. V2 profiles persist without Git commits; runtime Telegram /stage and web integration pending.
-16. Source health database results verified; admin UI pending.
-17. Failed source/AI states explicit and partial ingestion tested; full UI reporting pending.
-18. V1 workflow concurrency + update claims + outbox unique keys tested; V2 scheduler and stale/crash recovery pending.
-19. Profile/program versions/evaluations/components/outbox are linked; complete reconstruction screen/export pending.
-20. V1 remains present and runnable; no retirement/cutover performed.
+| # | Evidence and remaining gap |
+|---|---|
+| 1 | Preset-0 domain/API/browser flow verified with fictional notices; hosted invitation/login pending. |
+| 2 | Versioned profiles and web progressive updates tested; team creation/membership API and bootstrap supplied. Full admin invitation UI pending. |
+| 3 | Two real fixture teams yield ELIGIBLE vs INELIGIBLE through the API for the same program. Real notice cohort validation pending. |
+| 4 | Unknown fields yield NEEDS_INFO; adding age removes only the corresponding missing field. |
+| 5 | PRE_BUSINESS rejects registered-only requirements in unit tests. |
+| 6 | Browser detail visibly displays quoted source evidence, including pending profile conditions. |
+| 7 | Parse failures persist and appear in admin UI; isolated parser tests and live HWP sample supplied. |
+| 8 | Multi-source exact identity/provenance integration tests pass; larger real dedup corpus pending. |
+| 9 | Material deadline/update versions and update-alert idempotence tested. |
+| 10 | Closed/date boundaries tested; stale queued deadline reminder cancels before sending. |
+| 11 | Official adapters and registry/CLI/workflow wiring supplied; exact missing credentials documented. Live API success pending. |
+| 12 | Real non-API HTML + HWP acquisition demonstrated; broader source rollout pending. |
+| 13 | Grouped weekly digest uses persisted team evaluations; confirmed/needs-info separated. Stubbed transport only. |
+| 14 | /status reflects database run/source/scheduling state in tests. Hosted webhook pending. |
+| 15 | /stage and web profile edits persist versions without Git changes; tested. |
+| 16 | Admin health/failure/history UI implemented and browser checked. |
+| 17 | Typed source/AI/document failures and partial ingestion tested; failed dispatch is visible in job history. |
+| 18 | Worker update claims, outbox keys, daily cap and recovery tests pass; V2 Actions grouping/job lock/claims implemented. Production concurrency/crash validation pending. |
+| 19 | Trace API links profile/program versions, evidence, scoring, provenance and notifications; historical raw API envelope versioning remains a gap. |
+| 20 | V1 preserved. No deployment/cutover/retirement performed. |
 
-## Immediate next work
+## Remaining work and known limitations
 
-- Complete source registry and command-line ingestion; verify a legitimate live public source without bypassing robots/challenges.
-- Tighten foreign keys for notification subscription/team and evidence-document linkage; add schema constraints/indexes and tests.
-- Revalidate queued notification eligibility/current version just before delivery, group weekly digest and expose FAILED/UNCERTAIN recovery without blind resend. Add high-fit/material-update tests and configurable frequency limits.
-- Implement authenticated FastAPI web/API, Supabase invitation/member handling, progressive profiles, program facts/eligibility/recommendation views and admin health/history/duplicates/retry.
-- Implement real Telegram V2 runtime commands and scheduling, then full acceptance/end-to-end tests and parallel-run report.
-- Finish architecture/deployment/privacy/failure documentation, live validation and handoff. Do not declare completion based on this checkpoint.
+- Select and configure the dedicated Supabase project, apply migrations/advisors, verify actual Auth invitation/login, team isolation and pooler behavior. The earlier project-selection question remains unanswered; no unrelated connected project was modified.
+- Configure official API credentials and validate real paginated responses. Expand and validate the other V1 long-tail sources. Search provider remains unconfigured; optional Playwright is not installed for deployment.
+- Measure extraction completeness/semantic accuracy on a labeled Korean notice corpus, including complex OR/exceptions, dates, tables, images and scanned PDF. No claim of certified eligibility or nationwide coverage.
+- Add complete historical raw-source snapshotting, cross-source conflict/trust resolution, normalization consistency and a binary document archival/retention policy where needed.
+- Validate production multi-process claims, crashes, timeouts and recovery. Externally exactly-once delivery is not guaranteed. Queued profile/program changes currently cancel the whole batch conservatively and may defer remaining opportunities.
+- Membership and subscription management APIs exist; polished administrator invitation/team/subscription forms are not yet complete. Some condition/history labels remain internal keys. Large-catalog browsing currently filters in Python.
+- Finish V1/V2 parallel comparison tooling and run matched-period comparisons: V1-only/V2-only, duplicates, eligibility disagreements and failed sources. Define/observe acceptable reliability before switching the actual Telegram webhook or retiring V1.
+- Complete hosted end-to-end deployment and operating runbook exercise. Build/tests alone are not acceptance.
 
-## External dependencies
+## Handoff pointers
 
-Supabase project selection requested asynchronously; no matching dedicated project identified, and no unrelated project mutated. KSTARTUP_API_KEY, BIZINFO_API_KEY and search-provider deployment configuration still required. V2 Auth, Telegram/subscription, Worker and workflow environment setup pending. Full completion remains UNPROVEN.
-
-### Repeat-run test correction
-
-A repeated integration run exposed shared fixture contamination: earlier programs/subscriptions remained in the ephemeral database and changed global notification counts. Tests now require an explicit ephemeral-test marker and reset fixture state between tests. Full suite passed again (55), followed by a repeated database subset (7). This guards against accidentally resetting an arbitrary database and makes repeat runs independent.
+ARCHITECTURE.md: module/data flow, eligibility/ranking/delivery semantics, limitations.
+V2-SETUP.md: environment, migrations, membership/bootstrap, web, Telegram, Actions and local fixture preview.
+SOURCES.md: exact official contracts, adding sources and real long-tail evidence.
+.env.example: names only, no credentials.

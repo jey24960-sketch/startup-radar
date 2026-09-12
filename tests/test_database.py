@@ -17,6 +17,8 @@ def db():
         marker=c.execute('select value from public.radar_test_marker').fetchone()
         assert marker and marker['value']=='ephemeral-test-only', 'Refusing to reset a non-test database'
         c.execute('truncate auth.users,radar.teams,radar.sources,radar.programs,radar.ingestion_runs,radar.notification_runs cascade')
+        c.execute('truncate radar.telegram_updates,radar.schedule_claims')
+        c.execute("update radar.runtime_settings set value=jsonb_set(value,'{enabled}','true') where key='scheduling'")
     return database
 
 
@@ -136,3 +138,15 @@ def test_notification_idempotency_and_partial_delivery(db):
         items=c.execute('select state,delivered_at from radar.notification_items where team_id=%s',(team['id'],)).fetchall()
         assert sum(item['delivered_at'] is not None for item in items)==1
     assert deliver_pending(db,Transport(),'REMINDER')['delivered']==0
+
+
+def test_document_evidence_links_to_same_program_version(db):
+    p=program();s=source(db)
+    p.requirements=[Requirement(key='founder_age',operator='LTE',value=39,certain=True,
+        evidence=[Evidence(document_id='fixture-document-hash',text='Age <=39',method='MANUAL',verified=True,confidence=1)])]
+    saved=db.save_program(p,s,'document-evidence',p.official_url,{},'Fixture',documents=[{
+        'original_url':'https://example.org/evidence.pdf','filename':'evidence.pdf','content_hash':'fixture-document-hash',
+        'fetch_status':'SUCCESS','extraction_status':'SUCCESS','extracted_text':'Age <=39'}])
+    with db.transaction() as c:
+        row=c.execute('select r.document_id,d.program_version_id from radar.program_requirements r join radar.documents d on d.id=r.document_id where r.program_version_id=%s',(saved['version_id'],)).fetchone()
+        assert row and row['program_version_id']==saved['version_id']

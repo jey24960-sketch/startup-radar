@@ -1,5 +1,7 @@
 """Persistent outbox with explicit delivery uncertainty and per-version keys."""
 import html
+from hashlib import sha256
+from datetime import timedelta
 from urllib.parse import urlsplit
 from psycopg.types.json import Jsonb
 import requests
@@ -18,8 +20,11 @@ class TelegramTransport:
         except requests.RequestException:return {'state':'UNCERTAIN','error':'Telegram request outcome unknown'}
         try:payload=response.json()
         except ValueError:return {'state':'UNCERTAIN','error':'Telegram returned non-JSON response'}
-        if response.status_code==200 and payload.get('ok'):
+        if not isinstance(payload,dict):return {'state':'UNCERTAIN','error':'Invalid Telegram response'}
+        if response.status_code==200 and payload.get('ok') and isinstance(payload.get('result'),dict) and payload['result'].get('message_id'):
             return {'state':'DELIVERED','receipt':{'message_id':payload['result']['message_id']}}
+        if payload.get('ok') is not False or response.status_code>=500:
+            return {'state':'UNCERTAIN','error':'Telegram delivery could not be confirmed'}
         return {'state':'FAILED','error':f'Telegram rejected request (HTTP {response.status_code})'}
 
 
@@ -42,68 +47,160 @@ def message(program,team_name,outcome,score,explanation,kind,at=None):
     return text
 
 
+DEFAULT_POLICY={'digest_limit':5,'high_fit_daily_limit':2,'high_fit_min_days':3,'high_fit_new_days':7,'delivery_batch_limit':30}
+FLAGS={'DIGEST':'digest_enabled','HIGH_FIT':'alerts_enabled','REMINDER':'reminders_enabled'}
+
+
+def policy_for(c):
+    row=c.execute("select value from radar.runtime_settings where key='notification_policy'").fetchone()
+    policy={**DEFAULT_POLICY,**(row['value'] if row else {})}
+    if any(type(v) is not int or v<0 or v>365 for v in policy.values()):raise ValueError('Invalid notification policy')
+    return policy
+
+
 def plan_notifications(db,kind,at=None):
     at=at or now()
     if at.tzinfo is None:raise ValueError('Timezone-aware notification timestamp required')
     at=at.astimezone(SEOUL)
-    if kind not in ('DIGEST','HIGH_FIT','REMINDER'):raise ValueError('Unknown notification kind')
+    if kind not in FLAGS:raise ValueError('Unknown notification kind')
     added=0
     with db.transaction() as c:
+        policy=policy_for(c)
+        # Lock subscriptions in a stable order: parallel planners cannot exceed caps.
         subscriptions=c.execute('select s.*,t.name,p.profile,p.version profile_version from radar.telegram_subscriptions s '
-            'join radar.teams t on t.id=s.team_id join radar.team_profiles p on p.team_id=s.team_id where s.enabled=true').fetchall()
+            'join radar.teams t on t.id=s.team_id join radar.team_profiles p on p.team_id=s.team_id '
+            'where s.enabled=true order by s.id for update of s').fetchall()
         for sub in subscriptions:
-            setting={'DIGEST':'digest_enabled','HIGH_FIT':'alerts_enabled','REMINDER':'reminders_enabled'}[kind]
-            if not sub[setting]:continue
-            rows=c.execute('select distinct on (v.program_id) r.*,v.id version_id,v.normalized,v.created_at version_created,e.result '
+            if not sub[FLAGS[kind]]:continue
+            week=at.strftime('%G-W%V')
+            if kind=='DIGEST':
+                # One selected set per subscription per week, including failed deliveries.
+                if c.execute("select 1 from radar.notification_items where subscription_id=%s and kind='DIGEST' and payload->>'period'=%s limit 1",(sub['id'],week)).fetchone():continue
+                capacity=policy['digest_limit']
+            elif kind=='HIGH_FIT':
+                midnight=at.replace(hour=0,minute=0,second=0,microsecond=0)
+                count=c.execute("select count(*) n from radar.notification_items where subscription_id=%s and kind='HIGH_FIT' and created_at>=%s and created_at<%s",
+                                (sub['id'],midnight,midnight+timedelta(days=1))).fetchone()['n']
+                capacity=max(0,policy['high_fit_daily_limit']-count)
+            else:capacity=policy['delivery_batch_limit']
+            rows=c.execute('select distinct on (v.program_id) r.*,v.id version_id,v.normalized,v.created_at version_created '
                 'from radar.recommendations r join radar.eligibility_evaluations e on e.id=r.evaluation_id '
                 'join radar.team_profile_versions tp on tp.id=e.profile_version_id '
                 'join radar.program_versions v on v.id=e.program_version_id join radar.programs p on p.current_version_id=v.id '
                 'where r.team_id=%s and tp.version=%s order by v.program_id,r.created_at desc',(sub['team_id'],sub['profile_version'])).fetchall()
-            rows=sorted(rows,key=lambda r:r['score'],reverse=True)
-            selected_count=0
-            for row in rows:
-                if kind=='DIGEST' and selected_count>=5:break
-                if kind=='HIGH_FIT' and selected_count>=2:break
+            selected=[]
+            for row in sorted(rows,key=lambda r:r['score'],reverse=True):
+                if len(selected)>=capacity:break
                 program=Program.model_validate(row['normalized'])
                 outcome=evaluate(TeamProfile.model_validate(sub['profile']),program.requirements,program.evidence_complete,at.date())
                 if outcome.status not in ('ELIGIBLE','NEEDS_INFO') or program_status(program,at)!='OPEN':continue
                 left=days_left(program,at)
                 if kind=='HIGH_FIT':
-                    if outcome.status!='ELIGIBLE' or row['score']<sub['high_fit_threshold'] or left is None or left<3:continue
+                    if outcome.status!='ELIGIBLE' or row['score']<sub['high_fit_threshold'] or left is None or left<policy['high_fit_min_days']:continue
                     event=c.execute('select * from radar.program_change_events where version_id=%s',(row['version_id'],)).fetchone()
-                    if not event or (at-event['created_at']).total_seconds()>7*86400:continue
+                    if not event or not 0<=(at-event['created_at']).total_seconds()<=policy['high_fit_new_days']*86400:continue
                     period='material-version'
                 elif kind=='REMINDER':
                     if left not in sub['reminder_days']:continue
                     period=f'D-{left}'
-                else:period=at.strftime('%G-W%V')
+                else:period=week
                 key=f"{kind}:{sub['id']}:{row['version_id']}:{period}"
-                payload={'text':message(program,sub['name'],outcome,row['score'],row['explanation'],kind,at)}
-                inserted=c.execute("insert into radar.notification_items(subscription_id,team_id,program_version_id,recommendation_id,dedupe_key,kind,state,payload) "
-                    "values(%s,%s,%s,%s,%s,%s,'PENDING',%s) on conflict(dedupe_key) do nothing returning id",
-                    (sub['id'],sub['team_id'],row['version_id'],row['id'],key,kind,Jsonb(payload))).fetchone()
-                added+=bool(inserted)
-                selected_count+=1
+                payload={'text':message(program,sub['name'],outcome,row['score'],row['explanation'],kind,at),
+                         'period':period,'profile_version':sub['profile_version'],'eligibility':outcome.status,'days_left':left}
+                item=c.execute("insert into radar.notification_items(subscription_id,team_id,program_version_id,recommendation_id,dedupe_key,kind,state,payload,created_at) "
+                    "values(%s,%s,%s,%s,%s,%s,'PENDING',%s,%s) on conflict(dedupe_key) do nothing returning *",
+                    (sub['id'],sub['team_id'],row['version_id'],row['id'],key,kind,Jsonb(payload),at)).fetchone()
+                if item:selected.append(item)
+            if not selected:continue
+            prefix=''
+            if kind=='DIGEST':
+                eligible=sum(i['payload']['eligibility']=='ELIGIBLE' for i in selected)
+                closing=sum(i['payload']['days_left'] is not None and i['payload']['days_left']<=7 for i in selected)
+                profile=sub['profile']
+                prefix=html.escape(f"StartupRadar Weekly · {week}\n팀: {sub['name']}\n현재 상태: {profile.get('product_stage') or '미입력'} / {profile.get('business_status') or '미입력'}\n이번 주 선정: 지원 가능 {eligible} · 추가 정보 필요 {len(selected)-eligible} · D-7 이내 {closing}\n\n")
+            # Every batch is one Telegram API message; item receipts map only to its contents.
+            chunks=[];chunk=[];size=len(prefix)
+            for item in selected:
+                length=len(item['payload']['text'])+2
+                if chunk and (kind!='DIGEST' or size+length>3900):chunks.append(chunk);chunk=[];size=0
+                chunk.append(item);size+=length
+            if chunk:chunks.append(chunk)
+            for index,chunk in enumerate(chunks):
+                text=(prefix if index==0 else '')+'\n\n'.join(i['payload']['text'] for i in chunk)
+                if len(text)>4096:raise ValueError('Notification batch too long')
+                key=sha256('|'.join(i['dedupe_key'] for i in chunk).encode()).hexdigest()
+                batch=c.execute("insert into radar.notification_batches(subscription_id,kind,dedupe_key,state,payload,created_at) values(%s,%s,%s,'PENDING',%s,%s) returning id",
+                    (sub['id'],kind,key,Jsonb({'text':text,'profile_version':sub['profile_version']}),at)).fetchone()['id']
+                c.execute('update radar.notification_items set batch_id=%s where id=any(%s)',(batch,[i['id'] for i in chunk]))
+            added+=len(selected)
     return added
 
 
-def deliver_pending(db,transport,kind,limit=30):
+def deliver_pending(db,transport,kind,limit=None,at=None):
+    at=at or now()
+    if at.tzinfo is None:raise ValueError('Timezone-aware notification timestamp required')
+    at=at.astimezone(SEOUL)
+    if kind not in FLAGS:raise ValueError('Unknown notification kind')
     with db.transaction() as c:
+        policy=policy_for(c)
+        limit=policy['delivery_batch_limit'] if limit is None else limit
         run=c.execute("insert into radar.notification_runs(kind,status) values(%s,'RUNNING') returning id",(kind,)).fetchone()['id']
-    states=[]
+    states=[];delivered_items=cancelled=0
     for _ in range(limit):
         with db.transaction() as c:
-            item=c.execute("select i.*,s.chat_id from radar.notification_items i join radar.telegram_subscriptions s on s.id=i.subscription_id "
-                "where i.kind=%s and i.state='PENDING' and s.enabled=true order by i.created_at for update of i skip locked limit 1",(kind,)).fetchone()
-            if not item:break
-            c.execute("update radar.notification_items set state='SENDING',attempts=attempts+1,run_id=%s where id=%s",(run,item['id']))
-        try:result=transport.send(item['chat_id'],item['payload']['text'])
+            batch=c.execute("select b.*,s.chat_id,s.enabled,s.digest_enabled,s.alerts_enabled,s.reminders_enabled,s.reminder_days,s.high_fit_threshold,"
+                "p.profile,p.version profile_version from radar.notification_batches b join radar.telegram_subscriptions s on s.id=b.subscription_id "
+                "join radar.team_profiles p on p.team_id=s.team_id where b.kind=%s and b.state='PENDING' order by b.created_at for update of b skip locked limit 1",(kind,)).fetchone()
+            if not batch:break
+            items=c.execute('select i.*,v.normalized,p.current_version_id,r.score from radar.notification_items i '
+                'join radar.program_versions v on v.id=i.program_version_id join radar.programs p on p.id=v.program_id '
+                'join radar.recommendations r on r.id=i.recommendation_id where i.batch_id=%s',(batch['id'],)).fetchall()
+            valid=bool(items) and batch['enabled'] and batch[FLAGS[kind]] and batch['payload']['profile_version']==batch['profile_version']
+            for item in items:
+                program=Program.model_validate(item['normalized']);left=days_left(program,at)
+                outcome=evaluate(TeamProfile.model_validate(batch['profile']),program.requirements,program.evidence_complete,at.date())
+                valid=valid and item['program_version_id']==item['current_version_id'] and program_status(program,at)=='OPEN' and outcome.status==item['payload']['eligibility']
+                if kind=='REMINDER':valid=valid and left in batch['reminder_days'] and item['payload']['period']==f'D-{left}'
+                if kind=='DIGEST':valid=valid and item['payload']['period']==at.strftime('%G-W%V')
+                if kind=='HIGH_FIT':valid=valid and outcome.status=='ELIGIBLE' and item['score']>=batch['high_fit_threshold'] and left is not None and left>=policy['high_fit_min_days'] and (at-batch['created_at']).total_seconds()<=86400
+            if not valid:
+                c.execute("update radar.notification_batches set state='CANCELLED',error='Profile, program, subscription or deadline changed before delivery' where id=%s",(batch['id'],))
+                c.execute("update radar.notification_items set state='CANCELLED',error='Batch failed current-state revalidation' where batch_id=%s",(batch['id'],))
+                cancelled+=len(items);continue
+            c.execute("update radar.notification_batches set state='SENDING',attempts=attempts+1,claimed_at=%s where id=%s",(at,batch['id']))
+            c.execute("update radar.notification_items set state='SENDING',attempts=attempts+1,run_id=%s where batch_id=%s",(run,batch['id']))
+        try:
+            result=transport.send(batch['chat_id'],batch['payload']['text'])
+            if result.get('state') not in ('DELIVERED','FAILED','UNCERTAIN') or (result.get('state')=='DELIVERED' and not result.get('receipt')):
+                result={'state':'UNCERTAIN','error':'Invalid transport receipt'}
         except Exception:result={'state':'UNCERTAIN','error':'Transport outcome unknown'}
         with db.transaction() as c:
-            c.execute('update radar.notification_items set state=%s,delivery_receipts=%s,error=%s,delivered_at=%s where id=%s',
-                (result['state'],Jsonb([result['receipt']] if result.get('receipt') else []),result.get('error'),
-                 now() if result['state']=='DELIVERED' else None,item['id']))
+            delivered_at=now() if result['state']=='DELIVERED' else None
+            c.execute('update radar.notification_batches set state=%s,receipt=%s,error=%s,delivered_at=%s where id=%s',
+                (result['state'],Jsonb(result.get('receipt')),result.get('error'),delivered_at,batch['id']))
+            c.execute('update radar.notification_items set state=%s,delivery_receipts=%s,error=%s,delivered_at=%s where batch_id=%s',
+                (result['state'],Jsonb([result['receipt']] if result.get('receipt') else []),result.get('error'),delivered_at,batch['id']))
         states.append(result['state'])
+        if result['state']=='DELIVERED':delivered_items+=len(items)
     status='SUCCESS' if all(s=='DELIVERED' for s in states) else 'PARTIAL_SUCCESS' if 'DELIVERED' in states else 'FAILED'
     with db.transaction() as c:c.execute('update radar.notification_runs set status=%s,finished_at=now() where id=%s',(status,run))
-    return {'run_id':str(run),'status':status,'delivered':states.count('DELIVERED'),'failed':len(states)-states.count('DELIVERED')}
+    return {'run_id':str(run),'status':status,'delivered':delivered_items,'failed':len(states)-states.count('DELIVERED'),'cancelled':cancelled}
+
+
+def recover_batch(db,batch_id,action,note,user_id):
+    from radar.services import require_admin
+    require_admin(db,user_id)
+    if action not in ('RETRY_REJECTED','CONFIRM_NOT_SENT','CANCEL') or not 5<=len(note)<=500:raise ValueError('Recovery action and meaningful note required')
+    with db.transaction() as c:
+        batch=c.execute('select * from radar.notification_batches where id=%s for update',(batch_id,)).fetchone()
+        if not batch:raise LookupError('Batch not found')
+        if batch['state'] in ('DELIVERED','CANCELLED','PENDING'):raise ValueError('Batch is not recoverable')
+        if batch['state']=='SENDING' and (not batch['claimed_at'] or now()-batch['claimed_at']<timedelta(minutes=20)):
+            raise ValueError('A recent in-flight send cannot be recovered')
+        if action=='RETRY_REJECTED' and batch['state']!='FAILED':raise ValueError('Uncertain delivery requires explicit no-delivery confirmation')
+        state='CANCELLED' if action=='CANCEL' else 'PENDING'
+        c.execute('update radar.notification_batches set state=%s,error=%s where id=%s',(state,note,batch_id))
+        c.execute('update radar.notification_items set state=%s,error=%s where batch_id=%s',(state,note,batch_id))
+        c.execute('insert into radar.admin_audit(actor_id,action,entity_id,detail) values(%s,%s,%s,%s)',
+                  (user_id,'NOTIFICATION_'+action,str(batch_id),Jsonb({'previous_state':batch['state'],'note':note})))
+    return {'state':state}

@@ -95,12 +95,17 @@ class Database:
                 (program.title,program.organization,program.program_types,program_status(program),program.application_start_at,program.application_end_at,
                  program.deadline_type,program.official_url,program.application_url,program.applicant_summary,program.support_summary,program.benefit_summary,
                  program.amount_min,program.amount_max,program.currency,vid,pid))
-            for rule in program.requirements:
-                c.execute('insert into radar.program_requirements(program_version_id,requirement) values(%s,%s)',(vid,Jsonb(rule.model_dump(mode='json'))))
+            document_ids={}
             for doc in documents or []:
-                c.execute('insert into radar.documents(program_version_id,original_url,filename,detected_mime,content_hash,fetch_status,extraction_status,extracted_text,error_kind,error_message,fetched_at) '
-                    'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(vid,doc['original_url'],doc['filename'],doc.get('detected_mime'),doc.get('content_hash'),
-                    doc['fetch_status'],doc['extraction_status'],doc.get('extracted_text'),doc.get('error_kind'),doc.get('error_message'),doc.get('fetched_at')))
+                saved=c.execute('insert into radar.documents(program_version_id,original_url,filename,detected_mime,content_hash,fetch_status,extraction_status,extracted_text,error_kind,error_message,fetched_at) '
+                    'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning id',(vid,doc['original_url'],doc['filename'],doc.get('detected_mime'),doc.get('content_hash'),
+                    doc['fetch_status'],doc['extraction_status'],doc.get('extracted_text'),doc.get('error_kind'),doc.get('error_message'),doc.get('fetched_at'))).fetchone()
+                if doc.get('content_hash'):document_ids[doc['content_hash']]=saved['id']
+            for rule in program.requirements:
+                # Evidence retains stable content hashes; the first referenced document
+                # also has a version-constrained relational FK for trace queries.
+                doc_id=next((document_ids[e.document_id] for e in rule.evidence if e.document_id in document_ids),None)
+                c.execute('insert into radar.program_requirements(program_version_id,document_id,requirement) values(%s,%s,%s)',(vid,doc_id,Jsonb(rule.model_dump(mode='json'))))
             changed=changed_fields(previous['normalized'],normal) if previous else list(normal)
             event='UPDATE' if previous else 'NEW'
             if changed:

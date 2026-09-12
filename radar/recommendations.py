@@ -8,6 +8,11 @@ from radar.dates import program_status,days_left
 EXCLUDED={'POLICY_LOAN','SME_FINANCING','GENERIC_RD'}
 DEFAULT_WEIGHTS={'stage':25,'profile':20,'preference':15,'benefit':10,'global':10,'runway':10,'completeness':10}
 
+def configured_weights(db):
+    with db.transaction() as c:
+        row=c.execute("select value from radar.runtime_settings where key='recommendation_weights'").fetchone()
+    return row['value'] if row else DEFAULT_WEIGHTS
+
 
 @dataclass
 class Ranking:
@@ -51,6 +56,7 @@ def rank(program,profile,eligibility,weights=None,at=None):
 
 def refresh_recommendations(db,team_id=None):
     results=[]
+    weights=configured_weights(db)
     with db.transaction() as c:
         profiles=c.execute('select v.* from radar.team_profile_versions v join radar.team_profiles p on p.team_id=v.team_id and p.version=v.version '
                            'where (%s::uuid is null or v.team_id=%s)',(team_id,team_id)).fetchall()
@@ -63,7 +69,7 @@ def refresh_recommendations(db,team_id=None):
                 ev=c.execute('insert into radar.eligibility_evaluations(team_id,profile_version_id,program_version_id,status,result,engine_version) '
                     'values(%s,%s,%s,%s,%s,%s) returning id',(profile_row['team_id'],profile_row['id'],row['id'],outcome.status,
                     Jsonb(outcome.model_dump(mode='json')),outcome.engine_version)).fetchone()['id']
-                ranking=rank(program,profile,outcome)
+                ranking=rank(program,profile,outcome,weights=weights)
                 if ranking:
                     c.execute('insert into radar.recommendations(team_id,evaluation_id,score,components,provider,model,prompt_version,schema_version,explanation) '
                         'values(%s,%s,%s,%s,%s,%s,%s,%s,%s)',(profile_row['team_id'],ev,ranking.score,Jsonb(ranking.components),ranking.provider,

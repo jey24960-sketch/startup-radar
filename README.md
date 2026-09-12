@@ -1,4 +1,4 @@
-> **StartupRadar 2.0 migration is in progress.** The complete approved requirements are in [docs/V2-SPEC.md](docs/V2-SPEC.md). See [implementation status](docs/V2-PROGRESS.md), [setup and safety bridge](docs/V2-SETUP.md), and [Adding a Source](docs/SOURCES.md). V1 is retained; V2 is not yet approved for production cutover. The legacy README below describes the V1 deployment and contains historical examples; use the audit and setup notes for differences.
+> **StartupRadar 2.0 migration is in progress.** The complete approved requirements are in [docs/V2-SPEC.md](docs/V2-SPEC.md). See [architecture and limits](docs/ARCHITECTURE.md), [implementation status](docs/V2-PROGRESS.md), [setup and safety bridge](docs/V2-SETUP.md), and [Adding a Source](docs/SOURCES.md). V1 is retained; V2 is not yet approved for production cutover. The legacy README below describes the V1 deployment and contains historical examples; use the audit and setup notes for differences.
 
 # StartupRadar 🚀
 
