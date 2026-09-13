@@ -61,7 +61,7 @@ class SafeHttp:
                 # throttling, network errors and server errors.
                 if failure.kind=='NOT_FOUND' or (failure.kind=='HTTP' and failure.http_status in (400,410)):
                     self.robots[origin]=None
-                else: raise SourceFailure('ROBOTS_UNAVAILABLE','Cannot verify robots policy',failure.retryable)
+                else: raise SourceFailure('ROBOTS_UNAVAILABLE','Cannot verify robots policy',failure.retryable and failure.kind!='RATE_LIMIT')
         parser=self.robots[origin]
         if parser and not parser.can_fetch('StartupRadar',url): raise SourceFailure('ROBOTS_DENIED','Robots policy disallows this resource')
 

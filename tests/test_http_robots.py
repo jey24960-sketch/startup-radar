@@ -38,6 +38,12 @@ def test_explicit_disallow_is_still_enforced():
     with pytest.raises(SourceFailure,match='ROBOTS_DENIED'):http.check_robots('https://example.org/api')
 
 
+def test_robots_rate_limit_is_not_retried():
+    http=client(429)
+    with pytest.raises(SourceFailure,match='ROBOTS_UNAVAILABLE'):http.get('https://example.org/api')
+    assert http.session.get.call_count==1
+
+
 def test_actual_api_http_400_is_still_a_failure():
     http=client(400)
     http.check_robots=Mock()
