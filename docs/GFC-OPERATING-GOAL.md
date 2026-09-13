@@ -1,4 +1,4 @@
-# StartupRadar 2.0 — GFC 통합 운영 완성 Goal
+# StartupRadar 2.0 — Vertical Slice First / GFC 통합 운영 완성 Goal
 
 PROJECT
 StartupRadar 2.0
@@ -25,133 +25,374 @@ This Goal replaces the previous StartupRadar 2.0 Goal as the single current
 source of truth.
 
 DO NOT restart the project.
-
 DO NOT discard completed work.
-
-DO NOT rebuild already-implemented functionality merely because this Goal is
-newly written.
+DO NOT rebuild already-implemented functionality from scratch.
 
 The current implementation checkpoint is the baseline.
 
-Preserve and continue from all already completed work unless a specific item
-below explicitly changes the architecture.
+The most important change in this Goal is PRIORITY.
 
-The purpose of this Goal is:
+The project has already spent substantial implementation time on architecture,
+database, security, UI, tests and operational foundations.
 
-1. preserve the completed StartupRadar V2 backend/database/security work,
-2. preserve the completed GFC /notice integration work,
-3. remove obsolete deployment assumptions,
-4. connect the system to real operating data and accounts,
-5. validate actual end-to-end operation,
-6. compare V1 and V2 in parallel,
-7. prepare a safe production cutover.
+The immediate objective is now:
+
+PROVE THE FIRST REAL END-TO-END VERTICAL SLICE.
+
+Until that vertical slice succeeds, scope expansion is prohibited.
+
+The first real success is:
+
+REAL K-Startup or BizInfo opportunity
+→ real external API response
+→ StartupRadar ingestion
+→ normalization
+→ Supabase persistence
+→ eligibility evaluation
+→ recommendation
+→ actual authenticated GFC member
+→ gfc-startup.com /notice
+→ real opportunity visible
+→ detail page shows official source/evidence
+
+This must happen before further platform expansion.
 
 \==================================================
 
-1. CURRENT IMPLEMENTATION BASELINE — DO NOT REDO
+1. CURRENT IMPLEMENTATION BASELINE — PRESERVE
    \==================================================
 
-The following work is already considered implemented and should be preserved,
-audited, fixed if necessary, but not independently rebuilt from scratch.
+The following capabilities are already substantially implemented and must be
+preserved.
 
 STARTUPRADAR BACKEND
 
 - multi-source ingestion architecture
-- official API / RSS / HTML source adapters
+- official API / RSS / HTML adapters
 - attachment/document processing foundation
 - normalized program model
-- program provenance
+- provenance
 - program versioning
 - deduplication
 - requirement extraction
 - deterministic eligibility engine
 - recommendation scoring
 - notification history/outbox
-- source health and ingestion state
+- source health
 - team profile/version model
 - five startup presets
-- progressive profiling model
-- eligibility evidence
-- failure typing
-- V1 reliability fixes
+- progressive profiling
+- evidence model
+- typed failures
 - PostgreSQL persistence
-- caching of unchanged analysis where already implemented
+- analysis/result caching
+- V1 reliability fixes
 
 GFC INTEGRATION
 
 - shared existing Supabase project
 - separate startup\_radar schema
-- public manual notice model
-- GFC membership-based Radar access
-- RLS policies
-- /notice frontend
+- manual GFC notice model
+- existing GFC Auth integration
+- verified-member Radar access
+- RLS
+- /notice
 - manual notice detail/admin flows
-- Radar result/detail flows
+- Radar program/detail flows
 - team selector
-- Radar settings UI
+- Radar settings
 - admin health UI where implemented
-- existing GFC authentication integration
 
-TESTING ALREADY EXISTS FOR
+TEST INFRASTRUCTURE
 
-- Python backend
-- Worker
-- PostgreSQL migrations/RLS
-- GFC Node/PGlite
-- browser/Playwright
-- production-schema regression
+- Python tests
+- Worker tests
+- PostgreSQL/PGlite migration tests
+- GFC Node tests
+- Playwright tests
+- production schema regression checks
 
-Existing tests must continue to pass.
+Do not increase test count merely for its own sake.
 
-\==================================================
-2\. FINAL PRODUCT DEFINITION
-============================
-
-StartupRadar is an internal GFC startup-support opportunity intelligence
-system.
-
-Its primary objective is:
-
-"Help a GFC founder discover startup support opportunities they can actually
-apply to, understand why they qualify, verify the evidence, and act before
-the deadline."
-
-It is NOT merely a website crawler.
-
-It is NOT a standalone SaaS product for GFC members.
-
-It is NOT a separate member-facing Python web service.
-
-The final operating experience should feel like:
-
-"GFC 웹사이트 안에서 운영진 공지와 나에게 필요한 창업지원사업을
-한 곳에서 확인한다."
+Existing tests must remain green, but real end-to-end evidence now has higher
+priority than additional synthetic coverage.
 
 \==================================================
-3\. FINAL SYSTEM ARCHITECTURE
+2\. IMMEDIATE PRIORITY — HARD GATE
+==================================
+
+STOP expanding the system until the following vertical slice passes.
+
+VERTICAL SLICE ACCEPTANCE TEST
+
+At least one REAL CURRENT opportunity from K-Startup or 기업마당 must:
+
+1. be fetched using the real issued API credential,
+2. be parsed successfully,
+3. be normalized into the StartupRadar program model,
+4. be persisted in the real shared Supabase project,
+5. retain official source/provenance,
+6. have eligibility requirements extracted where possible,
+7. be evaluated against a real controlled Radar team/profile,
+8. receive an eligibility result,
+9. receive a recommendation result,
+10. appear to an authenticated verified GFC member in the GFC /notice UI,
+11. open in the Radar program detail page,
+12. show official source URL and available evidence,
+13. remain inaccessible to an anonymous or authenticated non-member user.
+
+This must use NON-FIXTURE data.
+
+A successful Python test, mock response, seeded program, Playwright fixture or
+manual DB insert does NOT satisfy this gate.
+
+If the flow fails at any step:
+
+FOCUS ONLY ON THAT BLOCKING STEP UNTIL IT PASSES.
+
+Do not move sideways into unrelated enhancements.
+
+\==================================================
+3\. WORK THAT IS PAUSED UNTIL THE HARD GATE PASSES
+==================================================
+
+Until Section 2 succeeds, do NOT spend time on:
+
+- adding more long-tail sources
+- Telegram feature expansion
+- V1/V2 parallel comparison
+- production cutover planning
+- advanced admin dashboard work
+- advanced analytics
+- broad legacy security cleanup
+- comprehensive documentation expansion
+- additional UI polish
+- advanced global pagination
+- additional caching sophistication
+- new source-provider abstractions unless required by the vertical slice
+- unrelated refactoring
+- raising test count without a blocker-driven reason
+- premature hosting architecture work
+- full Python API redesign
+
+Only modify these areas if they directly block the real vertical slice.
+
+\==================================================
+4\. AVAILABLE RUNTIME CREDENTIALS
+=================================
+
+The user has prepared the following worker credentials/configuration.
+
+Expected in the local worker environment:
+
+DATABASE\_URL
+ANTHROPIC\_API\_KEY
+KSTARTUP\_API\_KEY
+BIZINFO\_API\_KEY
+
+Do not ask the user to paste secret values into chat.
+
+First verify only:
+
+- variable exists,
+- variable is non-empty,
+- the target service accepts it.
+
+Never print complete secret values into logs.
+
+If one credential fails:
+
+report:
+
+- variable name,
+- service,
+- safe error summary,
+- exact configuration location,
+
+without exposing the secret.
+
+Do not block use of K-Startup because BizInfo fails, or vice versa.
+
+\==================================================
+5\. FIRST REAL DATA SOURCE PRIORITY
+===================================
+
+For the first vertical slice, prioritize official structured APIs.
+
+FIRST:
+K-Startup
+
+Relevant service:
+창업진흥원\_K-Startup(사업소개,사업공고,콘텐츠 등)\_조회서비스
+
+Priority endpoint:
+
+- 지원사업 공고 정보
+- getAnnouncementInformation01
+
+Useful secondary endpoint:
+
+- 통합공고 지원사업 정보
+- getBusinessInformation01
+
+SECOND:
+기업마당 지원사업정보 API
+
+Do NOT begin with difficult university/JS/blocked sites.
+
+The objective is not source breadth yet.
+
+The objective is proving:
+
+official source
+→ real database
+→ real eligibility
+→ real GFC UI.
+
+\==================================================
+6\. FIRST VERTICAL SLICE EXECUTION ORDER
+========================================
+
+Execute in this exact order unless a technical dependency requires otherwise.
+
+STEP 1 — ENVIRONMENT
+
+Verify:
+
+DATABASE\_URL
+ANTHROPIC\_API\_KEY
+KSTARTUP\_API\_KEY
+BIZINFO\_API\_KEY
+
+Do not expose their values.
+
+STEP 2 — DATABASE CONNECTION
+
+Prove StartupRadar Python can connect to:
+
+Supabase project:
+etvffzxqdgblvkfdikwl
+
+Verify read/write access only to intended StartupRadar structures.
+
+Do not alter unrelated GFC production objects.
+
+STEP 3 — K-STARTUP REAL FETCH
+
+Perform a real K-Startup API request.
+
+Record:
+
+- HTTP result
+- response count
+- request endpoint
+- safe request metadata
+- no secret values
+
+STEP 4 — INGEST SMALL SAMPLE
+
+Do NOT immediately ingest the entire available history.
+
+Take a bounded current sample.
+
+Prefer:
+
+- currently recruiting
+- recently published
+- relevant startup support programs
+
+Run the real normalization pipeline.
+
+STEP 5 — PERSIST
+
+Write the real program(s) to Supabase using the normal V2 code path.
+
+Do not manually insert rows merely to make the UI work.
+
+STEP 6 — REQUIREMENTS / AI
+
+Use authoritative structured fields first.
+
+Use Anthropic only where unstructured content actually requires extraction.
+
+Do not invoke AI unnecessarily.
+
+STEP 7 — ELIGIBILITY
+
+Use an existing controlled validation team or create one explicitly for the
+test.
+
+Do not alter unrelated real member teams.
+
+Generate:
+
+ELIGIBLE
+NEEDS\_INFO
+INELIGIBLE
+or
+UNVERIFIABLE
+
+through the real eligibility engine.
+
+STEP 8 — RECOMMENDATION
+
+Generate and persist the real recommendation using the normal code path.
+
+STEP 9 — GFC WEB
+
+Make the real program appear in the actual member Radar feed used by /notice.
+
+The program must not be fixture data.
+
+STEP 10 — DETAIL
+
+Open the real program detail.
+
+Verify:
+
+FACT
+ELIGIBILITY
+RECOMMENDATION
+official source
+evidence
+documents where available
+
+STEP 11 — ACCESS CONTROL
+
+Verify:
+
+anonymous
+→ cannot retrieve Radar data
+
+authenticated external/non-member
+→ cannot retrieve Radar data
+
+verified member
+→ can retrieve allowed Radar data
+
+STEP 12 — REPORT
+
+Report the first real vertical slice as:
+
+PASS
+or
+BLOCKED AT STEP N.
+
+Do not describe it as complete unless all required steps pass.
+
+\==================================================
+7\. FINAL SYSTEM ARCHITECTURE
 =============================
 
-The intended architecture is:
-
-SOURCE COLLECTION
-↓
-StartupRadar Python batch worker
-↓
-normalization / documents / requirements / eligibility / recommendations
-↓
-Supabase
-↓
-gfc-startup.com
-↓
-GFC members
-
-Telegram remains a notification channel.
-
-Conceptually:
+Target architecture:
 
 GitHub Actions
 ↓
-StartupRadar Python
+StartupRadar Python batch worker
+↓
+source discovery / documents / normalization
+↓
+requirements / eligibility / recommendations
 ↓
 Supabase
 ↑
@@ -160,138 +401,90 @@ gfc-startup.com
 Telegram
 ← notification pipeline
 
-Responsibilities:
+RESPONSIBILITIES
 
-A. StartupRadar Python
+StartupRadar Python:
 
-- source discovery
-- API/RSS/HTML collection
-- document retrieval
-- PDF/HWP/HWPX/etc extraction
+- scheduled ingestion
+- external source communication
+- document processing
 - normalization
 - deduplication
 - versioning
 - requirement extraction
-- deterministic eligibility evaluation
+- eligibility batch evaluation
 - recommendation calculation
 - notification generation
-- source-health tracking
+- source health
 
-B. Supabase
+Supabase:
 
-- persistent database
-- authentication
-- authorization / RLS
-- GFC manual notices
-- programs
+- persistence
+- Auth
+- RLS
+- manual GFC notices
+- StartupRadar programs
 - documents
 - requirements
-- team profiles
+- teams/profiles
 - eligibility
 - recommendations
 - notification state
 - operational state
 
-C. gfc-startup.com
+gfc-startup.com:
 
-- user-facing UI
-- manual notice consumption
-- StartupRadar opportunity consumption
-- team selector
-- profile/settings management
-- evidence display
-- operator notice management
-- appropriate admin monitoring
+- primary user-facing interface
+- /notice
+- manual notices
+- Radar opportunity browsing
+- program detail
+- team/profile/settings
+- eligibility evidence
+- admin notice management
+- limited operational status
 
-D. Telegram
+Telegram:
 
-- weekly digest
-- exceptional high-fit opportunities
-- D-7 / D-3 reminders
-- limited operational alerts
+- secondary notification channel
 
 \==================================================
-4\. IMPORTANT ARCHITECTURE CHANGE — PYTHON API
-==============================================
+8\. PYTHON API — DO NOT MAKE THIS A PRECONDITION
+================================================
 
-A standalone hosted Python HTTP API is NOT a mandatory architecture component.
+A standalone hosted Python HTTP API is NOT a prerequisite for Section 2.
 
-There is currently no requirement to create Railway, Render, Fly.io, or any
-other always-on Python hosting merely because the current frontend code uses
-VITE\_RADAR\_API\_URL.
+Do NOT stop the vertical slice merely because VITE\_RADAR\_API\_URL has no
+production URL.
 
-Do NOT pause the Goal waiting for an existing Python API URL.
+For the first real vertical slice:
 
-Do NOT treat Python API hosting as a blocking prerequisite.
+use the minimum-change safe path that allows the real program to reach the
+actual GFC UI.
 
-Audit the currently implemented FastAPI/API layer and classify every endpoint
-into one of three groups.
+Possible mechanisms:
 
-GROUP A — DIRECT SUPABASE ACCESS IS APPROPRIATE
+A. direct Supabase access under RLS
+B. safe view/RPC
+C. existing locally/preview-connected Python API where appropriate
 
-Use Supabase JS + authenticated JWT + RLS, safe views, or safe RPC where this
-is simpler and secure.
+Do NOT perform a full API architecture refactor before the vertical slice.
 
-Candidates may include:
+Do NOT provision paid permanent hosting merely to satisfy an old assumption.
 
-- member feed reads
-- team list reads
-- team profile reads
-- program detail reads
-- recommendation reads
-- notification preference reads
-- manual notice reads/writes where already safe
+AFTER the vertical slice passes, audit each current API endpoint and classify:
 
-GROUP B — SERVER-SIDE OPERATION IS ACTUALLY REQUIRED
+DIRECT SUPABASE
+SAFE VIEW/RPC
+ASYNC JOB
+PYTHON API REQUIRED
 
-Retain a server-side mechanism only when necessary, for example:
+Only then decide whether persistent Python hosting is necessary.
 
-- privileged secret-dependent external API calls
-- long-running ingestion
-- AI analysis
-- attachment processing
-- administrative orchestration
-- jobs that cannot securely execute in the browser
-
-These should normally run from GitHub Actions / batch workers rather than
-become synchronous public HTTP endpoints.
-
-GROUP C — REAL-TIME SERVER ACTION MAY BE JUSTIFIED
-
-If some feature genuinely requires an immediate server-side response,
-for example an on-demand eligibility recalculation after a profile change,
-first evaluate:
-
-1. deterministic DB-side evaluation
-2. async job/outbox
-3. GitHub Actions dispatch
-4. Supabase Edge Function
-5. existing Python API
-
-in that order based on security, complexity, latency and cost.
-
-Do NOT preserve a standalone Python API merely because it already exists.
-
-Do NOT delete the existing API layer blindly either.
-
-Reuse backend/service logic even if the public HTTP layer becomes unnecessary.
-
-If any Python HTTP endpoint remains necessary for production, explicitly report:
-
-- endpoint
-- caller
-- reason
-- why Supabase/RPC/batch cannot replace it
-- expected traffic
-- authentication
-- required secrets
-- hosting requirement
-- estimated operational cost
-
-before treating hosting as a deployment blocker.
+Preserve reusable Python service/domain logic regardless of HTTP deployment.
 
 \==================================================
-5\. SUPABASE DECISION
+9\. SUPABASE DECISION
 =====================
 
 Do NOT create a new Supabase project.
@@ -304,20 +497,11 @@ Project ref:
 
 etvffzxqdgblvkfdikwl
 
-This project is shared with the existing GFC production website.
-
-Therefore protection of the existing GFC application has higher priority than
-StartupRadar implementation speed.
-
-\==================================================
-6\. DATABASE ISOLATION
-======================
-
-StartupRadar-specific data remains isolated under:
+StartupRadar-specific data remains under:
 
 startup\_radar
 
-Existing GFC public tables must not be repurposed.
+Existing GFC production objects must remain protected.
 
 Do not destructively modify:
 
@@ -325,200 +509,76 @@ public.profiles
 public.projects
 public.teams
 public.problems
-existing auction objects
-existing authentication objects
+auction objects
+existing Auth structures
 
-Manual GFC notices may remain in the established public GFC notice model.
-
-StartupRadar automated programs must NOT be copied into the manual notice
-table.
-
-The system should retain:
-
-manual GFC content
-and
-automated StartupRadar content
-
-as separate data domains even if they appear in one feed.
+Manual GFC notices and automatic Radar opportunities remain separate data
+domains.
 
 \==================================================
-7\. SHARED AUTHENTICATION
-=========================
+10\. GFC /NOTICE MODEL
+======================
 
-Use the existing Supabase Auth system used by gfc-startup.com.
-
-Do not create a second StartupRadar login system.
-
-However:
-
-AUTHENTICATED != VERIFIED GFC MEMBER
-
-StartupRadar access requires verified GFC membership.
-
-The existing GFC role/membership model should be reused where safe.
-
-Current intended model:
-
-anonymous
-→ PUBLIC GFC notices only
-
-authenticated external/non-member
-→ PUBLIC GFC notices only
-
-verified GFC member
-→ PUBLIC notices
-→ MEMBERS\_ONLY notices
-→ StartupRadar member functionality
-
-GFC admin/operator
-→ member functionality
-→ manual notice administration
-→ appropriate Radar administration
-
-Do not use editable user metadata as the authoritative security boundary.
-
-\==================================================
-8\. RLS IS THE SECURITY BOUNDARY
-================================
-
-Frontend hiding is not authorization.
-
-Anonymous and non-member users must be unable to retrieve StartupRadar private
-data through:
-
-- direct Supabase REST
-- browser DevTools
-- crafted client queries
-- RPC calls
-- alternate frontend routes
-
-Use RLS and database permissions.
-
-Team-private data must also remain isolated between members.
-
-A verified member does NOT automatically receive access to every team profile.
-
-Service-role credentials must never be sent to browser code.
-
-\==================================================
-9\. GFC NOTICE HUB
-==================
-
-Primary page:
+Primary information hub:
 
 /notice
 
-This is the GFC information hub.
+Two logical content types:
 
-It contains two content systems.
+A. MANUAL GFC NOTICES
 
-A. MANUAL GFC NOTICE
+- authored by GFC operators
+- PUBLIC or MEMBERS\_ONLY
 
-Written by GFC operators.
+B. STARTUPRADAR OPPORTUNITIES
 
-Examples:
+- automatically sourced
+- verified-member only
+- team/preset dependent
 
-- general notices
-- session notices
-- recruitment
-- events
-- important operational notices
+Do not duplicate Radar programs into the manual notice table.
 
-Visibility:
-
-PUBLIC
-MEMBERS\_ONLY
-
-B. STARTUPRADAR OPPORTUNITY
-
-Generated from StartupRadar data.
-
-Only verified GFC members may access the Radar opportunity system.
-
-Do NOT convert automated StartupRadar programs into manual notice rows.
+Member combined feed may visually merge both sources.
 
 \==================================================
-10\. /NOTICE USER EXPERIENCE
-============================
+11\. AUTHORIZATION
+==================
 
-Anonymous/external users:
+AUTHENTICATED != VERIFIED GFC MEMBER.
 
-- see public GFC notices
-- may see a locked explanation that StartupRadar is a GFC member benefit
-- must NOT receive actual Radar titles, counts, program data or private metadata
+Anonymous:
 
-Verified GFC members:
+- PUBLIC manual notices only
 
-tabs may include:
+Authenticated external/non-member:
 
-[전체]
-[GFC 공지]
-[StartupRadar]
+- PUBLIC manual notices only
 
-The combined feed may visually merge the two data sources.
+Verified GFC member:
 
-Example:
+- PUBLIC notices
+- MEMBERS\_ONLY notices
+- permitted StartupRadar data
 
-[공지]
-GFC 세션 일정 변경
-운영진
+GFC admin/operator:
 
-[지원사업]
-글로벌 창업 지원사업
-지원 가능
-D-12
-적합도 94
+- member capabilities
+- manual notice administration
+- authorized Radar operational views
 
-But the storage models remain independent.
+Security must be enforced by database/API authorization.
 
-\==================================================
-11\. MANUAL NOTICE ADMINISTRATION
-=================================
+Frontend hiding alone is insufficient.
 
-Authorized GFC admins/operators should be able to:
+Team-private data remains team-isolated.
 
-- create
-- edit
-- publish
-- schedule if supported
-- unpublish if supported
-- pin
-- archive
-
-manual notices.
-
-PUBLIC should remain the default visibility unless a different existing
-production convention is already established.
-
-Preserve author/audit information internally.
-
-Avoid unnecessary destructive deletion.
+Service-role secrets must never reach browser code.
 
 \==================================================
-12\. STARTUPRADAR MEMBER SETTINGS
-=================================
+12\. STARTUP STAGE MODEL
+========================
 
-StartupRadar configuration should be managed from the GFC website.
-
-Do not use Git commits or config.py as the primary user profile control plane.
-
-Users should be able to manage:
-
-- radar team
-- active team
-- startup preset
-- team status
-- product stage
-- business status
-- relevant eligibility attributes
-- preferred support types
-- notification preferences
-
-\==================================================
-13\. FIVE STARTUP PRESETS
-=========================
-
-Preserve these five user-facing presets.
+Preserve the five UX presets.
 
 0. 팀빌딩 전 · 아이디어
 1. 팀 구성 · 아이디어
@@ -526,246 +586,75 @@ Preserve these five user-facing presets.
 3. MVP
 4. 사업자등록 · 법인 보유
 
-These are UX presets only.
+These are presets, not the real internal state model.
 
-Underlying dimensions remain independent:
+Keep independent:
 
 team\_status
 product\_stage
 business\_status
 
-Do NOT collapse maturity into one irreversible enum.
+Stage 0 must work without a long profile form.
 
-\==================================================
-14\. STAGE 0 REQUIREMENT
-========================
-
-Stage 0 must work without requiring detailed personal/team information.
-
-Default known state:
+Known defaults:
 
 team\_status = PRE\_TEAM
 product\_stage = IDEA
 business\_status = PRE\_BUSINESS
 has\_revenue = false
 
-Other profile fields remain UNKNOWN.
+Everything else remains UNKNOWN until provided.
 
-UNKNOWN must never silently become false.
-
-If an opportunity requires an unknown property:
-
-→ NEEDS\_INFO
-
-not guessed eligible/ineligible.
+UNKNOWN != false.
 
 \==================================================
-15\. PROGRESSIVE PROFILING
+13\. PROGRESSIVE PROFILING
 ==========================
-
-Do not force a long onboarding form.
 
 Preferred flow:
 
-preset
-→ immediate useful opportunities
-→ identify missing eligibility information
-→ request only relevant profile fields
-→ recompute eligibility
+select preset
+→ see useful opportunities
+→ program needs missing information
+→ NEEDS\_INFO
+→ show exact missing fields
+→ optional user input
+→ re-evaluate
 
-Example:
-
-조건 확인 필요
-
-다음 정보가 필요합니다.
-
-- 대표자 연령
-- 지역
+Do not force complete personal information before showing value.
 
 \==================================================
-16\. PROGRAM SCOPE
-==================
+14\. ELIGIBILITY
+================
 
-Default useful opportunity scope:
-
-- 사업화 지원
-- 창업경진대회
-- incubation
-- acceleration
-- investment-linked programs
-- office/workspace/incubation space
-- global expansion
-- market entry
-- education
-- mentoring
-- consulting
-
-Generic policy loans and generic unrelated R&D should not dominate the default
-feed.
-
-\==================================================
-17\. DATA COLLECTION STRATEGY
-=============================
-
-Use layered discovery.
-
-Priority:
-
-1. official APIs
-2. RSS / Atom
-3. HTML sources
-4. legitimate JS-rendered public sources where necessary
-5. search discovery adapter where configured
-6. attachments/documents
-
-K-Startup and 기업마당 remain first-class backbone sources.
-
-Existing university/public/accelerator/foundation sources remain long-tail
-adapters.
-
-Do not bypass CAPTCHA, access control, anti-bot protection, or explicit site
-restrictions.
-
-A blocked source is a monitored failure.
-
-\==================================================
-18\. DOCUMENTS ARE FIRST-CLASS EVIDENCE
-=======================================
-
-Support attachments where technically practical:
-
-- HTML
-- PDF
-- HWP
-- HWPX
-- DOCX
-
-Do not assume the visible webpage contains the full eligibility rules.
-
-Store document provenance and extraction status.
-
-If parsing fails:
-
-- preserve metadata
-- preserve original link
-- mark extraction failure
-- do not invent content
-- allow UNVERIFIABLE where critical evidence is unavailable
-
-\==================================================
-19\. NORMALIZED PROGRAM MODEL
-=============================
-
-Programs should retain canonical structured information such as:
-
-- title
-- organization
-- program type
-- status
-- application period
-- deadline type
-- region
-- target
-- benefits
-- support amount
-- official URL
-- application URL
-- source IDs
-- provenance
-- current version
-
-Dates should be interpreted in Asia/Seoul.
-
-Closed opportunities should not appear as ordinary current recommendations.
-
-\==================================================
-20\. PROGRAM VERSIONING
-=======================
-
-A program is not immutable merely because title/URL remain the same.
-
-Track meaningful changes including:
-
-- deadline extension
-- eligibility change
-- benefit change
-- application URL change
-- document replacement
-- status change
-
-Preserve historical versions.
-
-\==================================================
-21\. REQUIREMENT EXTRACTION
-===========================
-
-Preferred evidence order:
-
-1. structured official API data
-2. official HTML detail
-3. official attachment
-
-Unstructured conditions may be converted into a strict requirement schema by
-AI.
-
-Requirement examples:
-
-business\_status
-business\_age\_months
-founder\_age
-region
-student\_status
-team\_size
-product\_stage
-revenue
-investment\_received
-industry
-applicant\_type
-prior\_support\_restrictions
-
-Every extracted rule should preserve evidence where possible.
-
-AI extraction must pass schema validation.
-
-No invented requirements.
-
-\==================================================
-22\. ELIGIBILITY ENGINE
-=======================
-
-Preserve internal states:
+Internal states:
 
 ELIGIBLE
 NEEDS\_INFO
 INELIGIBLE
 UNVERIFIABLE
 
-Rules:
+INELIGIBLE:
+confirmed mandatory requirement fails.
 
-INELIGIBLE
-→ confirmed mandatory requirement fails
+NEEDS\_INFO:
+required team/user attribute is unknown.
 
-NEEDS\_INFO
-→ no confirmed failure, but required user/team information is unknown
+ELIGIBLE:
+required conditions are satisfied.
 
-ELIGIBLE
-→ all required known conditions are satisfied
+UNVERIFIABLE:
+program evidence is insufficient.
 
-UNVERIFIABLE
-→ critical program evidence cannot be reliably determined
+LLM cannot override a deterministic hard failure.
 
-The user-facing UI may group UNVERIFIABLE with "조건 확인 필요", but retain the
-internal distinction.
-
-LLM output must not override deterministic hard failures.
-
-Eligibility must remain explainable.
+Every meaningful decision should retain evidence where practical.
 
 \==================================================
-23\. RECOMMENDATION ENGINE
-==========================
+15\. RECOMMENDATION
+===================
 
-Eligibility and recommendation are separate.
+Eligibility and recommendation remain separate.
 
 First:
 
@@ -773,9 +662,9 @@ Can this team apply?
 
 Then:
 
-How useful/relevant is it?
+How useful is this opportunity?
 
-Possible ranking factors:
+Possible factors:
 
 - stage fit
 - applicant fit
@@ -783,816 +672,446 @@ Possible ranking factors:
 - benefit
 - global relevance
 - deadline runway
-- source/data completeness
+- source completeness
 
-AI may generate:
+AI may help with summary/explanation.
 
-- summary
-- recommendation rationale
-- suggested next action
-- semantic relevance
+Do not regenerate recommendation text on every page request.
 
-Do not let AI override INELIGIBLE.
-
-Avoid regenerating explanations on every page request.
-
-Store and reuse results.
+Cache/store usable results.
 
 \==================================================
-24\. MULTI-TEAM SUPPORT
-=======================
+16\. DOCUMENT EVIDENCE
+======================
 
-A member may participate in multiple Radar teams.
+Documents remain first-class evidence.
 
-The active team should be selectable.
+Support where practical:
 
-Same program:
+HTML
+PDF
+HWP
+HWPX
+DOCX
 
-Team A
-→ ELIGIBLE
+For the FIRST vertical slice, however:
 
-Team B
-→ INELIGIBLE
+do not block successful real program display merely because the selected
+program has no attachment or a non-critical attachment cannot be parsed.
 
-must be supported.
+If a critical document cannot be parsed:
 
-GFC's existing public.teams and Radar teams remain conceptually separate unless
-an explicit optional mapping is needed.
+mark it honestly.
 
-Do not hard-couple them.
+Do not invent its contents.
+
+After the vertical slice passes, expand attachment validation.
 
 \==================================================
-25\. AUTOMATION MODEL
-=====================
+17\. AUTOMATION AFTER VERTICAL SLICE
+====================================
 
-Normal operation must be automatic.
+Only after Section 2 passes, move to actual automation.
 
-Recommended conceptual schedule:
+Target conceptual schedule:
 
 daily ingestion
-→ discover new/changed opportunities
-→ process documents
-→ update programs
-→ evaluate relevant teams
+→ detect new/changed opportunities
+→ process
+→ evaluate teams
 → update recommendations
 
 weekly digest
-→ send useful opportunity summary
+→ useful team opportunities
 
 deadline checks
-→ D-7 / D-3 where configured
+→ D-7 / D-3
 
-Exact cron timing should be centralized/configurable.
+Keep schedule configuration centralized.
 
-Collection frequency and notification frequency are different concerns.
-
-\==================================================
-26\. GITHUB ACTIONS
-===================
-
-GitHub Actions remains the preferred execution environment for scheduled and
-manual StartupRadar batch work unless there is a demonstrated technical reason
-otherwise.
-
-Required:
-
-- concurrency control
-- explicit failure status
-- no silent failure-as-empty-result
-- deterministic runtime configuration
-- secrets stored outside repository
-- no user profile changes through git commits
-
-V2 scheduling should remain disabled until real-data validation is completed.
+Keep V2 recurring schedule disabled until one manual real-data run is proven.
 
 \==================================================
-27\. AI COST CONTROL
-====================
+18\. COST CONTROL
+=================
 
-Do not repeatedly analyze unchanged source data.
+Avoid unnecessary AI cost.
 
-Use hashes/versioning/cache.
+Same document/content hash:
+→ reuse prior successful extraction
 
-Conceptually:
-
-same source/document content
-→ no new AI extraction call
-
-new content
+New/materially changed:
 → analyze
 
-materially changed content
-→ analyze changed version
+Eligibility:
+→ deterministic code where possible
 
-Eligibility should remain code-driven where possible.
+Page view:
+→ no unnecessary AI call
 
-Avoid LLM invocation for ordinary page loads.
-
-\==================================================
-28\. TELEGRAM ROLE
-==================
-
-Telegram is a notification channel.
-
-It is NOT the primary configuration UI.
-
-Keep:
-
-- weekly digest
-- high-fit alerts
-- deadline reminders
-- limited admin alerts
-
-Existing legacy commands may remain temporarily during V1/V2 coexistence.
-
-Do not make /stage the long-term primary team configuration path.
+Do not ingest huge historical datasets merely to prove the system works.
 
 \==================================================
-29\. SOURCE HEALTH
-==================
+19\. SOURCE EXPANSION — AFTER HARD GATE
+=======================================
 
-Admins must be able to distinguish:
+After the vertical slice passes:
 
-"No relevant programs"
+Priority:
 
-from:
+1. K-Startup robust operation
+2. 기업마당 robust operation
+3. RSS/Atom
+4. HTML sources
+5. public JS-rendered sources where legitimate
+6. search discovery if configured
+7. long-tail universities / public institutions / accelerators / foundations
 
-"Collection failed."
+Do not bypass CAPTCHA or anti-bot protections.
 
-Track at minimum:
-
-- last attempt
-- last success
-- discovered count
-- fetched count
-- parsed count
-- failures
-- reason
-- latency where useful
-
-Do NOT claim monitored source success rate equals total Korean market coverage.
+A blocked source is a tracked failure.
 
 \==================================================
-30\. CURRENT FRONTEND IMPLEMENTATION
-====================================
+20\. LIVE ACCOUNT VALIDATION — AFTER REAL PROGRAM APPEARS
+=========================================================
 
-Preserve the already implemented GFC routes where appropriate:
-
-/notice
-/notice/:id
-/notice/radar/:id
-/notice/admin/new
-/notice/admin/:id
-/radar/settings
-/radar/admin
-
-Do not create a second independent member dashboard unless required by a
-specific technical constraint.
-
-Use the existing GFC:
-
-- React/Vite stack
-- auth
-- header/footer
-- navigation
-- styling conventions
-- access model
-
-\==================================================
-31\. FRONTEND DATA ACCESS REFACTOR
-==================================
-
-The current implementation may still assume:
-
-VITE\_RADAR\_API\_URL
-→ hosted Python API
-
-Audit and reduce this dependency.
-
-For each current frontend request decide:
-
-DIRECT SUPABASE
-SAFE VIEW/RPC
-ASYNC BACKEND JOB
-PYTHON API REQUIRED
-
-Prefer the simplest architecture that preserves:
-
-- RLS
-- explainability
-- responsiveness
-- security
-- maintainability
-
-The absence of VITE\_RADAR\_API\_URL must no longer block completion of all
-possible frontend work.
-
-The public GFC notice experience must work independently of Radar backend
-availability.
-
-If Radar temporarily cannot calculate a new result, present an honest pending
-or unavailable state rather than failing the entire /notice page.
-
-\==================================================
-32\. PRODUCTION DATABASE SAFETY
-===============================
-
-The shared Supabase project is production infrastructure.
-
-Before every new DDL migration:
-
-- inspect current objects
-- inspect conflicts
-- inspect DROP/destructive ALTER
-- inspect grants
-- inspect policies
-- inspect auth impact
-- inspect GFC regression risk
-
-Prefer additive migrations.
-
-Never casually use migration repair or blanket db push across the shared
-migration ledger.
-
-Do not alter existing GFC objects unless genuinely necessary and explicitly
-justified.
-
-\==================================================
-33\. EXISTING GFC SECURITY ISSUES
-=================================
-
-Do not broaden this Goal into unrelated refactoring of all historical GFC
-security findings.
-
-However:
-
-- do not add new avoidable insecure patterns
-- do not add broad authenticated EXECUTE grants
-- avoid unnecessary SECURITY DEFINER RPCs
-- explicitly authorize privileged operations
-- fix only existing issues that directly block safe StartupRadar integration
-
-Report unrelated legacy findings separately.
-
-\==================================================
-34\. CURRENT DEPLOYMENT STATE
-=============================
-
-Treat the current state as:
-
-IMPLEMENTED IN BRANCHES
-\+
-SHARED DB MIGRATIONS APPLIED
-\+
-AUTOMATED TESTS PASSING
-\+
-NOT YET PRODUCTION CUTOVER
-
-Do not misrepresent preview/fixture/browser mock success as real operating
-end-to-end validation.
-
-Do not merge to main or enable V2 scheduling simply because local/CI tests pass.
-
-\==================================================
-35\. IMMEDIATE NEXT WORK
-========================
-
-Continue from the current checkpoint in this order.
-
-PHASE A — REMOVE FALSE HOSTING BLOCKER
-
-1. Audit all current Python API endpoints.
-2. Audit all VITE\_RADAR\_API\_URL frontend calls.
-3. classify each endpoint by Section 4.
-4. convert safe/simple member data paths to Supabase/RLS where appropriate.
-5. keep only genuinely server-required functionality.
-6. do NOT wait for a generic Python hosting project before progressing.
-
-PHASE B — REAL SOURCE CONNECTION
-
-Connect real credentials/configuration where available:
-
-- K-Startup
-- 기업마당
-- Anthropic
-- permitted long-tail sources
-
-Never expose secrets.
-
-Run actual ingestion against staging-disabled V2 state.
-
-Verify:
-
-- discovery
-- details
-- documents
-- normalization
-- requirements
-- eligibility
-- recommendations
-- source failures
-
-PHASE C — REAL ACCOUNT / BROWSER VERIFICATION
-
-Using legitimate test accounts or controlled production-safe accounts verify:
+After actual opportunity display succeeds, validate deployed roles:
 
 anonymous
 authenticated external
 verified member
 admin
 
-Test actual deployed/preview environment, not only fixture mocks.
-
 Verify:
 
 - login
 - member recognition
-- Radar denial/allow
-- notice visibility
+- manual notice visibility
+- Radar access
 - team access
 - profile update
 - team switch
 - evidence
-- admin notice operations
+- admin notice flow
 - mobile
 
-Do not change unrelated real users.
+Use controlled accounts.
 
-PHASE D — REAL DATA FLOW
+Do not alter unrelated users.
 
-Demonstrate at least one actual path:
+\==================================================
+21\. TELEGRAM — AFTER REAL WEB FLOW
+===================================
 
-real external source
-→ StartupRadar ingestion
-→ Supabase
-→ real GFC member page
-→ program detail
-→ eligibility evidence
+Telegram is notification-only.
 
-without fixture data.
+After real web flow is proven, validate:
 
-PHASE E — NOTIFICATION VALIDATION
-
-Use approved test recipients.
-
-Verify:
-
-- weekly-style digest generation
-- high-fit notification
-- D-day reminder
+- weekly-style digest
+- high-fit opportunity
+- D-7
+- D-3
 - duplicate prevention
-- partial delivery behavior
 - preference enforcement
+- partial failure behavior
 
-Do not message arbitrary production recipients.
+Use only approved test recipients.
 
-PHASE F — V1/V2 PARALLEL RUN
+Do not expand Telegram before the real /notice opportunity flow works.
 
-Run V1 and V2 for the same defined comparison window.
+\==================================================
+22\. V1/V2 PARALLEL COMPARISON — LATE PHASE
+===========================================
 
-Compare:
+Do NOT spend time on V1/V2 comparison before the V2 real vertical slice and
+basic automation work.
 
-- programs discovered
+Then compare over the same window:
+
+- discovered programs
 - V1-only
 - V2-only
-- duplicate rate
+- duplicates
 - missed opportunities
-- deadline correctness
+- deadlines
 - eligibility disagreements
-- source failures
+- failed sources
 - notification behavior
 
-Investigate disagreements.
-
-PHASE G — CUTOVER PLAN
-
-Only after evidence from real operation:
-
-report whether V2 is ready.
-
-Do not automatically cut over merely because tests pass.
+Investigate meaningful disagreements.
 
 \==================================================
-36\. PYTHON SERVER DECISION GATE
-================================
+23\. TESTING POLICY
+===================
 
-At the end of Phase A explicitly report:
+Keep existing test suites green.
 
-PYTHON API STATUS
+Add tests only when:
 
-One of:
+- fixing an actual bug,
+- implementing a required behavior,
+- preventing a discovered regression,
+- changing architecture.
 
-A. NOT REQUIRED
-All necessary member-facing behavior is handled by Supabase + batch worker.
+Do not use test count as a project success metric.
 
-B. LIMITED API REQUIRED
-Only listed endpoints require server execution.
+The current most important test is:
 
-C. FULL API STILL JUSTIFIED
-A hosted Python service remains structurally necessary.
-
-For B or C include exact reasons.
-
-Only then choose hosting.
-
-Do NOT choose Railway/Render/etc before this decision.
+REAL SOURCE
+→ REAL DB
+→ REAL ELIGIBILITY
+→ REAL GFC UI.
 
 \==================================================
-37\. REAL SOURCE CREDENTIALS
-============================
-
-Do not fabricate credentials.
-
-If a real external key is unavailable:
-
-- implement and validate everything possible
-- report exact missing secret
-- report exact place to configure it
-- do not block unrelated implementation
-
-Never ask the user to paste secret values into normal chat if they can instead
-be configured directly in the relevant runtime/secret manager.
-
-\==================================================
-38\. TEST REQUIREMENTS
+24\. PRODUCTION SAFETY
 ======================
 
-Keep all existing tests green.
+The shared Supabase project is production infrastructure.
 
-Add/update tests where architecture changes.
+Before new DDL:
 
-At minimum ensure coverage for:
+- inspect affected objects
+- check destructive changes
+- check grants
+- check RLS
+- check auth impact
+- check GFC regression
 
-ACCESS
+Prefer additive migrations.
 
-anonymous
-→ public notice yes
-→ member notice no
-→ Radar no
+Do not casually run blanket db push/migration repair.
 
-authenticated external
-→ public notice yes
-→ Radar no
-
-member
-→ member notice yes
-→ Radar yes
-
-admin
-→ notice admin yes
-
-TEAM ISOLATION
-
-member A
-→ own team allowed
-→ unauthorized team denied
-
-PRESETS
-
-Stage 0
-→ works without optional data
-
-ELIGIBILITY
-
-same program
-→ different teams
-→ different result
-
-DOCUMENT FAILURE
-
-parse fail
-→ not falsely used as eligibility evidence
-
-DATES
-
-Asia/Seoul
-rolling
-fixed
-closed
-D-7
-D-3
-
-DEDUP/VERSION
-
-same program multi-source
-URL changes
-deadline extension
-material change
-
-NOTIFICATION
-
-actual sent items only
-duplicate protection
-partial failures
-update notification
-
-FAILURES
-
-API empty != API failure
-AI failure != no programs
-document failure typed
-
-REGRESSION
-
-existing GFC:
-login
-projects
-profiles
-auction/current active functions
+Do not perform broad unrelated GFC refactors.
 
 \==================================================
-39\. LIVE VALIDATION REQUIREMENTS
-=================================
+25\. CUTOVER RULE
+=================
 
-Before declaring READY, provide evidence of:
+V1 remains available.
 
-1. actual non-fixture external source ingestion
+V2 production recurring automation remains disabled until:
 
-2. actual Supabase persistence
-
-3. actual member access through GFC web
-
-4. actual non-member denial
-
-5. actual team-specific eligibility
-
-6. actual source failure visibility
-
-7. actual program evidence/document path
-
-8. actual OAuth/member role flow
-
-9. actual notification test to approved receiver
-
-10. actual V1/V2 comparison
-
-Synthetic/fixture tests remain useful but do not satisfy these requirements
-alone.
-
-\==================================================
-40\. PRODUCTION CUTOVER CRITERIA
-================================
-
-Do not enable V2 production automation until:
-
-- real source flow works
-- auth/RLS live validation passes
-- no critical regression exists
-- notification idempotency is proven
-- V1/V2 comparison is reviewed
-- critical missing source/API failure behavior is understood
-- manual notices work on production domain
-- deployment architecture is finalized
-
-Then prepare a cutover proposal.
+- real source ingestion works
+- real /notice program display works
+- RLS live validation passes
+- source failures are visible
+- notification behavior has been tested
+- V1/V2 comparison has been reviewed
 
 Do not perform irreversible cutover without explicit approval.
 
 \==================================================
-41\. V1 RETIREMENT
-==================
+26\. PHASES AFTER THE FIRST VERTICAL SLICE
+==========================================
 
-V1 remains available until V2 cutover is approved.
+Once Section 2 passes, continue in this order.
 
-Do not delete V1 code/workflows/history during validation.
+PHASE 2
+K-Startup + BizInfo robustness
 
-After approved cutover:
+- broader current dataset
+- attachments
+- update/version behavior
+- failures
 
-- disable V1 schedule
-- preserve rollback ability
-- monitor V2
-- retire V1 only after a defined stability window
+PHASE 3
+real-role browser validation
 
-\==================================================
-42\. COST MODEL
-===============
+- external/member/admin
+- mobile
+- profile updates
 
-Track potential cost drivers.
+PHASE 4
+scheduled GitHub Actions automation
 
-AI:
+- one controlled scheduled ingestion
+- concurrency
+- failure status
 
-- Anthropic extraction/recommendation
-- avoid unchanged reanalysis
+PHASE 5
+Telegram notification validation
 
-Supabase:
+PHASE 6
+source expansion
 
-- shared DB
-- storage
-- auth
-- data growth
+PHASE 7
+V1/V2 parallel comparison
 
-GitHub Actions:
+PHASE 8
+cutover proposal
 
-- scheduled ingestion runtime
-
-Search provider:
-
-- only if configured/needed
-
-Python hosting:
-
-- only if Section 36 concludes it is necessary
-
-Telegram:
-
-- no ordinary message fee assumed, but operational limits still apply
-
-Do not create paid infrastructure unless technically justified.
+Do not reorder these into another large parallel expansion unless an actual
+dependency requires it.
 
 \==================================================
-43\. DOCUMENTATION
-==================
+27\. REPORTING DURING THE HARD-GATE PHASE
+=========================================
 
-Update documentation to describe the actual final architecture.
+Until the first vertical slice succeeds, keep reports short.
 
-Document:
+Use:
 
-- ingestion flow
-- shared Supabase model
-- startup\_radar schema
-- GFC notice model
-- member authorization
-- RLS
-- five presets
-- eligibility semantics
-- requirement evidence
-- document handling
-- source adapters
-- schedule
-- cache/version logic
-- notification flow
-- environment variables
-- adding a source
-- deployment
-- failure recovery
-- V1/V2 migration
-- Python API decision
+CURRENT BLOCKER
 
-Do not leave README describing obsolete architecture as current.
+LAST SUCCESSFUL STEP
+
+REAL DATA STATUS
+
+NEXT ACTION
+
+USER ACTION REQUIRED
+
+- only if genuinely required
+
+Do NOT generate another comprehensive architecture report every few minutes.
+
+Do NOT repeatedly report that the same secret/config is missing once the user
+has supplied/configured it.
+
+Do NOT remain in passive waiting if another independent part of the vertical
+slice can be progressed.
 
 \==================================================
-44\. REQUIRED FINAL REPORT FORMAT
-=================================
+28\. FIRST VERTICAL SLICE COMPLETION REPORT
+===========================================
 
-At every major checkpoint report clearly:
+When Section 2 succeeds, report:
 
-CURRENT PHASE
+REAL SOURCE
 
-FILES / REPOSITORIES CHANGED
+- source
+- endpoint
+- number of real records fetched
 
-COMMITS / PRS
+REAL PROGRAM
 
-DATABASE CHANGES
+- title
+- organization
+- deadline
+- official URL
+- real, not fixture
 
-SUPABASE SECURITY / RLS
+DATABASE
 
-PYTHON API STATUS
+- program ID
+- version persisted
+- requirement/evidence status
 
-LIVE SOURCE STATUS
+TEAM
 
-GFC FRONTEND STATUS
+- validation team
+- preset/profile state
 
-AUTH / ROLE LIVE VALIDATION
+ELIGIBILITY
 
-TELEGRAM STATUS
+- result
+- key reasons
 
-TEST RESULTS
+RECOMMENDATION
 
-CI RESULTS
+- score/status
+- short reason
 
-PRODUCTION REGRESSION
+GFC WEB
 
-V1/V2 PARALLEL STATUS
+- actual route
+- member visibility confirmed
 
-EXTERNAL SETUP STILL REQUIRED
+ACCESS CONTROL
 
-KNOWN LIMITATIONS
+- anonymous denied
+- non-member denied
+- member allowed
 
-NEXT STEP
+SCREENSHOT OR OTHER EVIDENCE
 
-CUTOVER STATUS
+- if available
 
-Never label the project complete unless real operational acceptance criteria
-have been met.
+BLOCKERS REMAINING
 
-\==================================================
-45\. IMPORTANT NON-GOALS
-========================
+NEXT PHASE
 
-Do NOT:
-
-- rebuild completed V2 work from zero
-- create a new Supabase project
-- create a second GFC authentication system
-- expose service-role credentials
-- merge Radar automatic items into manual notice rows
-- treat login as verified membership
-- use frontend hiding as the only access control
-- force detailed profiling before Stage 0 value
-- let AI override deterministic ineligibility
-- claim literal nationwide 100% support-program coverage
-- bypass anti-bot restrictions
-- silently swallow ingestion failures
-- store user profile configuration in Git
-- require a permanent Python HTTP API without evidence
-- provision paid hosting merely to satisfy an old architecture assumption
-- enable V2 production scheduling before live verification
-- terminate V1 before approved cutover
+Do not include secret values.
 
 \==================================================
-46\. DECISION PRIORITY
-======================
-
-If implementation details conflict, use this priority.
-
-1. Latest explicit decisions in this Goal
-2. Existing production safety
-3. Verified external/source facts
-4. Current implemented V2 architecture
-5. Previous Goal assumptions
-6. README/legacy documentation
-
-Never preserve an obsolete design assumption merely because old code already
-implements it.
-
-At the same time, prefer incremental adaptation over unnecessary rewrite.
-
-\==================================================
-47\. DEFINITION OF DONE
+29\. DEFINITION OF DONE
 =======================
 
 StartupRadar 2.0 is DONE only when:
 
-A GFC member can use gfc-startup.com to:
+a GFC member can:
 
-- view GFC notices
-- view StartupRadar opportunities
-- select/manage a Radar team
+- visit gfc-startup.com
+- read GFC notices
+- see actual StartupRadar opportunities
+- select/manage a team
 - use Stage 0 without full profiling
 - understand eligibility
 - inspect evidence
-- see useful recommendations
+- see recommendations
 
-while:
+while an external user:
 
-an external user can:
+- can read PUBLIC notices
+- cannot retrieve member-only Radar data
 
-- read PUBLIC GFC notices
-- NOT retrieve StartupRadar private data
+and the system automatically:
 
-and:
-
-the system automatically:
-
-- collects actual startup-support opportunities
-- processes official details/documents
+- collects real opportunities
+- processes authoritative information/documents
 - versions changes
 - evaluates teams
 - updates recommendations
 - tracks failures
 - sends configured notifications
 
-and:
+and operators can:
 
-operators can:
-
-- publish manual notices
-- inspect source/ingestion health
-- understand failures
+- manage manual notices
+- inspect ingestion/source health
 
 and:
 
-all of the above has been validated against:
-
-- real external sources
-- real Supabase
-- actual authenticated roles
-- actual deployed GFC UI
-- approved test notifications
-- V1/V2 parallel comparison
-
-without breaking the existing GFC production service.
+- real external sources were validated
+- real Supabase was validated
+- actual roles were validated
+- deployed GFC UI was validated
+- approved notifications were validated
+- V1/V2 comparison was reviewed
+- existing GFC production service remains intact.
 
 \==================================================
-48\. CORE PRINCIPLE
+30\. CORE PRINCIPLE
 ===================
 
-Optimize for:
+The immediate question is:
+
+"Can we get one real support opportunity all the way from an official source
+to a real GFC member's /notice screen, with real eligibility and evidence?"
+
+Until the answer is YES, do not optimize secondary systems.
+
+After the answer is YES, scale the pipeline safely.
+
+Optimize ultimately for:
 
 "Can a GFC founder reliably find an opportunity they can actually apply to,
-understand the evidence, and act on it before the deadline?"
+understand why, verify the evidence, and act before the deadline?"
 
 Not:
 
-"How many pages did we scrape?"
+"How many hours did the Goal run?"
 
 Not:
 
-"Did we successfully deploy another server?"
+"How many tests did we create?"
 
 Not:
 
-"How many features did we implement?"
+"How much infrastructure did we build?"
 
-Correctness, evidence, access control, operational reliability and actual
-founder usefulness are the priority.
+Not:
+
+"How many sources did we theoretically support?"
+
+Real usable data flow comes first.
