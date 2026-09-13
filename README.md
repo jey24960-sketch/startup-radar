@@ -1,3 +1,11 @@
+> **Current operating goal:** Phase A is complete: **A. NOT REQUIRED** for a standalone Python HTTP API. All nine required GFC Radar request paths use Supabase RPC with existing sessions and explicit member/team authorization. Python remains the ingestion, document, eligibility, recommendation and notification batch engine. Read the [controlling goal](docs/GFC-OPERATING-GOAL.md), [endpoint decisions](docs/PYTHON-API-DECISION.md), [profile commands](docs/PROFILE-COMMANDS.md) and [preferences/health contract](docs/SETTINGS-HEALTH.md). Actual source-to-member operation and approved Telegram connection/digest delivery have been verified; see the [delivery ledger](docs/TELEGRAM-LEDGER-VALIDATION.md). [Semantic review](docs/EXTRACTION-SEMANTIC-REVIEW.md) corrected unsupported eligibility certainty. The [operations guide](docs/OPERATIONS.md) covers shared-project recovery and stable member-result reuse across batch processes. A [first partial V1/V2 comparison](docs/LIVE-PARALLEL-REVIEW.md) records nearby collection times, failures and scope/profile differences. Full role, notification and cutover acceptance remains open; V2 schedules stay disabled.
+
+> **StartupRadar 2.0 migration is in progress.** The authoritative requirements are in [the GFC operating goal](docs/GFC-OPERATING-GOAL.md); [V2-SPEC.md](docs/V2-SPEC.md) is the earlier implementation baseline and is superseded where the operating goal differs. See [architecture and limits](docs/ARCHITECTURE.md), [implementation status](docs/V2-PROGRESS.md), [setup and safety bridge](docs/V2-SETUP.md), and [Adding a Source](docs/SOURCES.md). V1 is retained; V2 is not yet approved for production cutover. The legacy README below describes the V1 deployment and contains historical examples; use the audit and setup notes for differences.
+
+> **Latest: GFC /notice integration.** Member UI now belongs to the existing GFC React website. This repository provides the batch pipeline, deterministic eligibility/recommendation services and retained optional Python administrator APIs. Required GFC member requests use Supabase RPC. Shared DB integration is applied; Phase A conversion is complete; real operational verification remains in progress. Production cutover is pending. Read the [integration report, contracts, access matrix and remaining setup](docs/GFC-NOTICE-INTEGRATION.md). The standalone dashboard is disabled by default. V1's scheduled workflow was observed `disabled_inactivity`; no workflow was re-enabled by this change.
+
+> **GFC shared staging update:** project `etvffzxqdgblvkfdikwl`, isolated schema `startup_radar`. Hosted migrations and role-based RLS checks are complete; existing GFC schema/data were verified unchanged. See [current report](docs/SHARED-GFC-REPORT.md) and [web integration comparison](docs/WEB-INTEGRATION.md). Preserve existing GFC Auth settings and migration history. V1 cutover has not happened.
+
 # StartupRadar 🚀
 
 대학생 창업동아리 회장을 위한 **창업 지원금·경진대회·보조금 자동 수집 + 텔레그램 알림 시스템**
@@ -243,3 +251,12 @@ MIN_RELEVANCE_SCORE = 50        # AI 적합도 점수 50점 미만은 필터링
 - `MIN_RELEVANCE_SCORE`를 높여 필터링 강화
 - 수집 주기를 주 1회로 변경
 - `SOURCES`에서 불필요한 소스 제거
+
+
+### V2 verification checkpoint (2026-09-12)
+
+139 Python tests passed against native PostgreSQL 18.4, including real concurrent locks/claims/planning; four Worker tests, PGlite migration/RLS assertions and the frontend build also pass. Five migrations now include immutable source observations. The 16-entry source registry records four enabled sources and explicit reasons for disabled legacy sources. See [source audit](docs/LONGTAIL-SOURCE-AUDIT.json) and [parallel comparison/setup](docs/V2-SETUP.md). Hosted credentials, real delivery and matched-period V1/V2 validation are still required; V1 has not been retired.
+
+Evidence extraction 2.0.2 preserves explicit cutoff times, prevents unsupported OR clauses from producing hard rejection, and keeps official facts intact on failed extraction. See [temporal source check](docs/TEMPORAL-EVIDENCE-CHECK.json).
+
+The [completion audit](docs/COMPLETION-AUDIT.md) maps every specification section to implementation evidence and identifies the remaining hosted setup, real-service and parallel-run gates. Extraction 2.0.3 distinguishes official date-only precision from explicit cutoff times.

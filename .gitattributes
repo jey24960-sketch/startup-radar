@@ -1,0 +1,2 @@
+# Generated bundle contains upstream template literals with intentional whitespace.
+web/static/app.js linguist-generated=true whitespace=-trailing-space

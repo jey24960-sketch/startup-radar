@@ -1,0 +1,10 @@
+{
+  "observed_on": "2026-09-12",
+  "source_url": "https://startup.khu.ac.kr/startup_kor/user/bbs/BMSR00052/view.do?boardId=553110&menuNo=15200048",
+  "captured_payload_sha256": "d320fd98aa4e8f0e592d46c41e0dd80f514859f6355166e6f4df3c47c3602e84",
+  "date_quote": "2026. 9. 15.(화) 13:00",
+  "parsed_cutoff": "2026-09-15T13:00:00+09:00",
+  "at_cutoff": "OPEN",
+  "after_cutoff": "CLOSED",
+  "method": "Deterministic parser against previously acquired public detail. Timestamp supplied from visible text; no live AI extraction or eligibility claim."
+}

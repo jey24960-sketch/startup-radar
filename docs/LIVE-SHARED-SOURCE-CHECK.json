@@ -1,0 +1,45 @@
+{
+  "checked_at": "2026-09-12T20:52:26.751055+09:00",
+  "project_ref": "etvffzxqdgblvkfdikwl",
+  "schema": "startup_radar",
+  "manual_bounded_import": true,
+  "sources": [
+    {
+      "slug": "kstartup",
+      "status": "FAILED",
+      "error_kind": "MISSING_CREDENTIAL",
+      "title": null,
+      "official_url": null,
+      "documents": []
+    },
+    {
+      "slug": "bizinfo",
+      "status": "FAILED",
+      "error_kind": "MISSING_CREDENTIAL",
+      "title": null,
+      "official_url": null,
+      "documents": []
+    },
+    {
+      "slug": "korea-startup-html",
+      "status": "ACQUIRED_WITHOUT_AI",
+      "error_kind": null,
+      "title": "2026학년도 고려대학교 세종캠퍼스 KUS창업동아리 추가모집",
+      "official_url": "https://startup.korea.ac.kr/program/%ec%b0%bd%ec%97%85%eb%a9%98%ed%86%a0%eb%a7%81/?mod=document&uid=2268",
+      "documents": [
+        {
+          "filename": "2026학년도-고려대학교-세종캠퍼스-KUS-창업동아리-추가모집-안내.hwp",
+          "status": "SUCCESS",
+          "text_chars": 3595,
+          "sha256": "5c7b705f20b985052f973e50102c12346e7d3771dfc2fcad8a5bc1d243cb00f6"
+        },
+        {
+          "filename": "2026학년도-고려대학교-세종캠퍼스-KUS-창업동아리-신청-양식.hwp",
+          "status": "SUCCESS",
+          "text_chars": 1924,
+          "sha256": "dcab67cfe18a2fa3c2873541bed4421c7d046804cee00e1d310d40186df7793f"
+        }
+      ]
+    }
+  ]
+}

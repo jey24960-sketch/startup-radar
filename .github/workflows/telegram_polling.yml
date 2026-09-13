@@ -4,14 +4,127 @@ on:
   # ⚠️ 폴링 방식은 비활성화되었습니다.
   # 명령 수신은 Cloudflare Worker(webhook)가 담당합니다.
   # webhook과 폴링(getUpdates)은 동시에 쓸 수 없어 schedule 자동 실행을 제거했습니다.
-  # webhook을 사용하는 동안에는 이 워크플로를 수동으로도 실행하지 마세요.
+  # webhook 사용 중에는 polling을 실행하지 마세요. delivery_check=true는
+  # sendMessage 연결 확인만 실행하며 getUpdates/webhook 설정을 호출하지 않습니다.
   workflow_dispatch:
+    inputs:
+      delivery_check:
+        description: "승인된 기존 TELEGRAM_CHAT_ID에 연결 검증 메시지 1건 전송 (polling 없음)"
+        type: boolean
+        default: false
+        required: false
+      ledger_check:
+        description: "기존 승인 수신자·검증 팀의 주간 알림 1건: 먼저 prepare 결과 검토 후 deliver"
+        type: choice
+        options: [none, prepare, deliver]
+        default: none
+      validation_team_id:
+        description: "알림을 모두 꺼 둔 기존 운영 검증용 Radar 팀 UUID"
+        type: string
+        required: false
+      scenario_check:
+        description: "승인된 테스트 팀의 고적합·D-7·D-3 검증: prepare 검토 후 deliver"
+        type: choice
+        options: [none, prepare, deliver]
+        default: none
+      validation_program_id:
+        description: "검증에 사용할 실제 공식 공고 UUID"
+        type: string
+        required: false
 
 permissions:
   contents: read
 
 jobs:
+  delivery-check:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.delivery_check && (!inputs.ledger_check || inputs.ledger_check == 'none') && (!inputs.scenario_check || inputs.scenario_check == 'none') && github.run_attempt == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: startup-radar-telegram-delivery-check
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-v2.lock.txt
+      - name: Send one approved connection check
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m tools.telegram_delivery_check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: telegram-delivery-check-${{ github.run_id }}
+          path: work/telegram-delivery-check.json
+          retention-days: 14
+  ledger-check:
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.delivery_check && (inputs.ledger_check == 'prepare' || inputs.ledger_check == 'deliver') && (!inputs.scenario_check || inputs.scenario_check == 'none') && github.run_attempt == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    concurrency:
+      group: startup-radar-ledger-check
+      cancel-in-progress: false
+    env:
+      DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      LEDGER_CHECK_MODE: ${{ inputs.ledger_check }}
+      LEDGER_CHECK_TEAM_ID: ${{ inputs.validation_team_id }}
+      RADAR_MEMBER_NOTICE_URL: https://gfc-startup-dx0kpwb1l-jey24960-9908s-projects.vercel.app/notice
+      PGCONNECT_TIMEOUT: '15'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-v2.lock.txt
+      - run: python -m tools.telegram_ledger_check
+      - name: Restore validation notification flags after interruption
+        if: always()
+        run: python -m tools.telegram_ledger_check --cleanup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: telegram-ledger-check-${{ github.run_id }}
+          path: work/telegram-ledger-check.json
+          retention-days: 14
+  scenario-check:
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.delivery_check && (!inputs.ledger_check || inputs.ledger_check == 'none') && (inputs.scenario_check == 'prepare' || inputs.scenario_check == 'deliver') && github.run_attempt == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: startup-radar-ledger-check
+      cancel-in-progress: false
+    env:
+      DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      SCENARIO_CHECK_MODE: ${{ inputs.scenario_check }}
+      SCENARIO_CHECK_TEAM_ID: ${{ inputs.validation_team_id }}
+      SCENARIO_CHECK_PROGRAM_ID: ${{ inputs.validation_program_id }}
+      RADAR_MEMBER_NOTICE_URL: https://gfc-startup-dx0kpwb1l-jey24960-9908s-projects.vercel.app/notice
+      PGCONNECT_TIMEOUT: '15'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-v2.lock.txt
+      - run: python -m tools.telegram_scenario_check
+      - name: Restore validation notification flags
+        if: always()
+        run: python -m tools.telegram_scenario_check --cleanup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: telegram-scenario-check-${{ github.run_id }}
+          path: work/telegram-scenario-check.json
+          retention-days: 14
   poll:
+    if: ${{ !inputs.delivery_check && (!inputs.ledger_check || inputs.ledger_check == 'none') && (!inputs.scenario_check || inputs.scenario_check == 'none') }}
     runs-on: ubuntu-latest
     timeout-minutes: 4
 

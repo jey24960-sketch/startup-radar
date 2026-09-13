@@ -1,0 +1,36 @@
+{
+  "date": "2026-09-12",
+  "project_ref": "etvffzxqdgblvkfdikwl",
+  "migration": "20260912131847_gfc_radar_member_context",
+  "inventory": {
+    "before_count": 1080,
+    "after_count": 1081,
+    "changed_or_removed_count": 0,
+    "added": [
+      {
+        "kind": "function",
+        "schema_name": "public",
+        "name": "gfc_radar_me()"
+      }
+    ]
+  },
+  "security": {
+    "before_count": 3,
+    "after_count": 3,
+    "new_notices": []
+  },
+  "database_role_checks": {
+    "checks": [
+      "anonymous RPC denied",
+      "external with stray membership denied",
+      "own-team Stage 0 and UNKNOWN preserved",
+      "cross-team profile denied",
+      "GFC admin recognized without cross-team access"
+    ],
+    "status": "PASS",
+    "auth_profiles_modified": false,
+    "synthetic_rows_rolled_back": true
+  },
+  "real_browser_oauth": "NOT_YET_VERIFIED",
+  "phase": "A_IN_PROGRESS"
+}

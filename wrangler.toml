@@ -1,0 +1,11 @@
+name = "startup-radar-telegram"
+main = "cloudflare_worker.js"
+compatibility_date = "2026-09-12"
+
+[[durable_objects.bindings]]
+name = "UPDATE_GUARD"
+class_name = "TelegramUpdateGuard"
+
+[[migrations]]
+tag = "v1-update-guard"
+new_sqlite_classes = ["TelegramUpdateGuard"]

@@ -1,0 +1,100 @@
+{
+  "checks": [
+    "auth.users foreign keys",
+    "owner profile read",
+    "second team isolation",
+    "cross-team update denied",
+    "cross-team version insert denied",
+    "profile reassignment denied",
+    "admin escalation denied",
+    "nonmember denied",
+    "Telegram privacy",
+    "administrator operational access",
+    "anonymous denied",
+    "service role read/write"
+  ],
+  "status": "PASS",
+  "program": {
+    "title": "[STAGING FIXTURE] 법인 전용 지원사업",
+    "official_url": "https://example.invalid/staging/corporation-only",
+    "organization": "Synthetic test only",
+    "requirements": [
+      {
+        "key": "business_status",
+        "value": "CORPORATION",
+        "certain": true,
+        "evidence": [
+          {
+            "text": "검증용 가상 공고: 법인만 지원 가능",
+            "method": "MANUAL",
+            "verified": true,
+            "source_id": "staging-fixture",
+            "confidence": 1
+          }
+        ],
+        "operator": "EQ",
+        "mandatory": true
+      }
+    ],
+    "deadline_type": "ROLLING",
+    "program_types": [
+      "GRANT"
+    ],
+    "evidence_complete": true
+  },
+  "scenarios": [
+    {
+      "name": "[STAGING ROLLBACK] Landing",
+      "profile": {
+        "preset": 2,
+        "team_status": "TEAMED",
+        "product_stage": "LANDING",
+        "business_status": "PRE_BUSINESS"
+      },
+      "version": 1
+    },
+    {
+      "name": "[STAGING ROLLBACK] MVP CORPORATION",
+      "profile": {
+        "preset": 4,
+        "team_status": "TEAMED",
+        "product_stage": "MVP",
+        "business_status": "CORPORATION"
+      },
+      "version": 1
+    },
+    {
+      "name": "[STAGING ROLLBACK] MVP PRE_BUSINESS",
+      "profile": {
+        "preset": 3,
+        "team_status": "TEAMED",
+        "product_stage": "MVP",
+        "business_status": "PRE_BUSINESS"
+      },
+      "version": 1
+    },
+    {
+      "name": "[STAGING ROLLBACK] Stage 0",
+      "profile": {
+        "preset": 0,
+        "has_revenue": false,
+        "team_status": "PRE_TEAM",
+        "product_stage": "IDEA",
+        "business_status": "PRE_BUSINESS"
+      },
+      "version": 1
+    },
+    {
+      "name": "[STAGING ROLLBACK] Team Idea",
+      "profile": {
+        "preset": 1,
+        "team_status": "TEAMED",
+        "product_stage": "IDEA",
+        "business_status": "PRE_BUSINESS"
+      },
+      "version": 1
+    }
+  ],
+  "seed_rolled_back": true,
+  "auth_users_created": 0
+}

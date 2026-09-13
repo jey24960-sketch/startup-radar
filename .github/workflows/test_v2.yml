@@ -1,0 +1,69 @@
+name: StartupRadar V2 verification
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: radar-v2-tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ocr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-v2.lock.txt -r requirements-ocr.lock.txt
+      - run: python -m tools.prepare_ocr_models work/tessdata
+      - run: python -m pytest tests/test_ocr_review.py -q
+        env:
+          RADAR_TEST_OCR_MODELS: work/tessdata
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag startup-radar-v2:verify .
+      - run: >-
+          docker run --rm startup-radar-v2:verify python -c
+          "from radar.web import app; from radar.deployment import configuration_report;
+          assert app.title == 'StartupRadar 2.0';
+          assert configuration_report('web')['checks']['assets']['status'] == 'PRESENT'"
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: radar_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d radar_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:fixture-only-password@127.0.0.1:5432/radar_test?sslmode=disable
+      TEST_NATIVE_POSTGRES: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: pip install -r requirements-v2.lock.txt
+      - run: npm ci
+      - run: npm run build
+      - run: python -m tools.bootstrap_test_postgres
+      - run: python -m pytest -q
+      - run: npm run test:db
+      - run: npm run test:worker
+      - run: python -m compileall -q radar core main.py

@@ -44,7 +44,7 @@ const SHARE_HELP_TEXT =
   "5. TELEGRAM_ADMIN_CHAT_ID에는 관리자 개인 from.id를 넣습니다.\n\n" +
   "이렇게 하면 결과는 여러 사람이 보는 곳으로 전송되고, /run, /dry, /stop 같은 명령은 관리자만 사용할 수 있습니다.";
 
-export default {
+const legacyHandler = {
   async fetch(request, env) {
     if (request.method === "GET") {
       return new Response(HEALTH_TEXT, {
@@ -338,4 +338,56 @@ function isIdCommand(command) {
 
 function normalizeCommand(text) {
   return (text.split(/\s+/)[0] || "").toLowerCase().split("@")[0];
+}
+
+
+// V1 migration bridge. Deploy only after configuring the webhook secret and
+// UPDATE_GUARD binding; the existing deployed Worker is not modified by Git.
+export default {
+  async fetch(request, env) {
+    if (request.method === "GET") return new Response(HEALTH_TEXT);
+    if (request.method !== "POST") return new Response("Method Not Allowed", {status:405});
+    if (!env.TELEGRAM_WEBHOOK_SECRET || !env.UPDATE_GUARD) {
+      return new Response("Webhook security configuration missing", {status:503});
+    }
+    if (request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TELEGRAM_WEBHOOK_SECRET) {
+      return new Response("Forbidden", {status:403});
+    }
+    let update;
+    try { update = await request.clone().json(); }
+    catch { return new Response("Bad Request", {status:400}); }
+    if (!Number.isSafeInteger(update.update_id)) return new Response("Missing update_id", {status:400});
+    const message = getTelegramMessage(update);
+    const command = normalizeCommand((message?.text || message?.caption || "").trim());
+    if (!isIdCommand(command) && !isAdmin(message?.from?.id, parseAdminChatIds(env))) {
+      return new Response("OK");
+    }
+    const object = env.UPDATE_GUARD.get(env.UPDATE_GUARD.idFromName(String(update.update_id)));
+    return object.fetch(request);
+  },
+};
+
+export class TelegramUpdateGuard {
+  constructor(ctx, env) { this.ctx = ctx; this.env = env; }
+  async fetch(request) {
+    const claimed = await this.ctx.storage.transaction(async txn => {
+      if (await txn.get("state")) return false;
+      await txn.put("state", {status:"PROCESSING", at:Date.now()});
+      return true;
+    });
+    if (!claimed) return new Response("Already accepted");
+    // An external dispatch cannot share a transaction with Cloudflare storage.
+    // Persist the claim BEFORE dispatch. Ambiguous failures require an operator
+    // to inspect the job and issue a new command, never automatic double-dispatch.
+    try {
+      const response = await legacyHandler.fetch(request, this.env);
+      await this.ctx.storage.put("state", {status:response.ok ? "COMPLETED" : "UNCERTAIN", at:Date.now()});
+      if (!response.ok) console.error("Command outcome uncertain; inspect GitHub before issuing a new command");
+      return new Response("Accepted");
+    } catch {
+      await this.ctx.storage.put("state", {status:"UNCERTAIN", at:Date.now()});
+      console.error("Command outcome uncertain; operator review required");
+      return new Response("Accepted for review");
+    }
+  }
 }

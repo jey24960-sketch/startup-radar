@@ -1,0 +1,122 @@
+{
+  "project_ref": "etvffzxqdgblvkfdikwl",
+  "schema": "startup_radar",
+  "existing_definition_counts": {
+    "column": 426,
+    "constraint": 175,
+    "default_acl": 24,
+    "event_trigger": 7,
+    "function": 70,
+    "index": 134,
+    "policy": 32,
+    "relation": 48,
+    "schema": 4,
+    "trigger": 14,
+    "type": 114
+  },
+  "existing_definitions_unchanged": true,
+  "existing_data_fingerprints_before": [
+    {
+      "table_name": "profiles",
+      "row_count": 24,
+      "content_fingerprint": "030131fe0e42929879ce908deb206788"
+    },
+    {
+      "table_name": "projects",
+      "row_count": 5,
+      "content_fingerprint": "8c74279be7c9583a7b31b9edeb908944"
+    },
+    {
+      "table_name": "teams",
+      "row_count": 0,
+      "content_fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "table_name": "problems",
+      "row_count": 0,
+      "content_fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "table_name": "settings",
+      "row_count": 1,
+      "content_fingerprint": "4965b982515b6e37ccefbd8dd953093a"
+    },
+    {
+      "table_name": "auction_settings",
+      "row_count": 1,
+      "content_fingerprint": "c1912ce903637e307515e3e156719d37"
+    },
+    {
+      "table_name": "coin_investments",
+      "row_count": 0,
+      "content_fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  ],
+  "existing_data_fingerprints_after": [
+    {
+      "table_name": "profiles",
+      "row_count": 24,
+      "content_fingerprint": "030131fe0e42929879ce908deb206788"
+    },
+    {
+      "table_name": "projects",
+      "row_count": 5,
+      "content_fingerprint": "8c74279be7c9583a7b31b9edeb908944"
+    },
+    {
+      "table_name": "teams",
+      "row_count": 0,
+      "content_fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "table_name": "problems",
+      "row_count": 0,
+      "content_fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "table_name": "settings",
+      "row_count": 1,
+      "content_fingerprint": "4965b982515b6e37ccefbd8dd953093a"
+    },
+    {
+      "table_name": "auction_settings",
+      "row_count": 1,
+      "content_fingerprint": "c1912ce903637e307515e3e156719d37"
+    },
+    {
+      "table_name": "coin_investments",
+      "row_count": 0,
+      "content_fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  ],
+  "hosted_state": {
+    "teams": 0,
+    "admins": 0,
+    "tables": 28,
+    "indexes": 84,
+    "members": 0,
+    "fk_count": 40,
+    "policies": 31,
+    "programs": 1,
+    "documents": 2,
+    "auth_users": 24,
+    "scheduling": {
+      "enabled": false,
+      "timezone": "Asia/Seoul",
+      "digest_hour": 15,
+      "reminder_hour": 15,
+      "digest_weekday": 1,
+      "ingestion_hour": 6,
+      "ingestion_enabled": false
+    },
+    "constraints": 124,
+    "rls_disabled": 0,
+    "subscriptions": 0,
+    "unvalidated_constraints": 0,
+    "unexpected_anon_table_grants": 0
+  },
+  "hosted_rls_passed": true,
+  "staging_seed_rolled_back": true,
+  "real_browser_auth_not_verified": true,
+  "production_cutover": false
+}

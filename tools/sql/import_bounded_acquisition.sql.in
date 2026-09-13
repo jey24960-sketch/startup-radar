@@ -1,0 +1,68 @@
+-- One-time bounded staging acquisition import, never a production sync command.
+begin;
+set local lock_timeout='2s';
+set local statement_timeout='30s';
+do $import$
+declare
+ payload jsonb := __REVIEWED_JSON_PAYLOAD__::jsonb;
+ row_data jsonb;
+ document_data jsonb;
+ source_uuid uuid;
+ program_uuid uuid;
+ version_uuid uuid;
+ run_uuid uuid;
+ facts jsonb;
+ failures jsonb;
+ acquired boolean;
+begin
+ perform pg_advisory_xact_lock(782394202);
+ assert not exists(select 1 from startup_radar.programs), 'Catalog is not empty; use normal versioned ingestion';
+ assert not exists(select 1 from startup_radar.sources), 'Sources already initialized; inspect before importing';
+ assert not exists(select 1 from startup_radar.ingestion_runs), 'Run history already initialized; inspect before importing';
+ assert (select value->>'enabled'='false' from startup_radar.runtime_settings where key='scheduling'), 'Staging must stay paused';
+ insert into startup_radar.ingestion_runs(status,trigger_type,finished_at,summary)
+ values('PARTIAL_SUCCESS','shared-staging-bounded-acquisition',now(),
+   jsonb_build_object('acquisition_checked_at',payload->>'checked_at','ai_extraction','NOT_RUN_MISSING_CREDENTIAL',
+     'bounded_sample',true,'sources_checked',3,'notices_acquired',1,'hosted_application_connection_verified',false)) returning id into run_uuid;
+ for row_data in select value from jsonb_array_elements(payload->'sources') loop
+  insert into startup_radar.sources(slug,name,adapter,config,enabled,last_attempted_at)
+   values(row_data->>'slug',row_data->'source'->>'name',row_data->'source'->>'adapter',row_data->'source'->'config',
+    (row_data->'source'->>'enabled')::boolean,(payload->>'checked_at')::timestamptz) returning id into source_uuid;
+  acquired:=row_data->>'status'='ACQUIRED_WITHOUT_AI';
+  if acquired then
+   facts:=row_data->'program';
+   assert facts->>'evidence_complete'='false' and jsonb_array_length(facts->'requirements')=0, 'Import cannot certify eligibility';
+   insert into startup_radar.programs(canonical_key,title,organization,status,deadline_type,official_url,support_summary)
+    values('staging-source:'||source_uuid::text||':'||(row_data->>'content_hash'),facts->>'title',facts->>'organization',
+     'UNKNOWN','UNKNOWN',facts->>'official_url',facts->>'support_summary') returning id into program_uuid;
+   insert into startup_radar.program_versions(program_id,version,content_hash,normalized,raw_text,evidence_complete)
+    values(program_uuid,1,row_data->>'content_hash',facts,row_data->>'detail_text',false) returning id into version_uuid;
+   update startup_radar.programs set current_version_id=version_uuid where id=program_uuid;
+   insert into startup_radar.program_sources(program_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata)
+    values(program_uuid,source_uuid,row_data->'candidate'->>'source_program_id',row_data->'candidate'->>'discovery_url',
+     facts->>'official_url',row_data->'candidate'->'raw_metadata');
+   for document_data in select value from jsonb_array_elements(row_data->'documents') loop
+    insert into startup_radar.documents(program_version_id,original_url,filename,detected_mime,content_hash,fetch_status,
+     extraction_status,extracted_text,error_kind,error_message,fetched_at)
+    values(version_uuid,document_data->>'original_url',document_data->>'filename',document_data->>'detected_mime',
+     document_data->>'content_hash',document_data->>'fetch_status',document_data->>'extraction_status',document_data->>'extracted_text',
+     document_data->>'error_kind',document_data->>'error_message',(document_data->>'fetched_at')::timestamptz);
+   end loop;
+   insert into startup_radar.program_source_snapshots(program_id,program_version_id,source_id,source_program_id,discovery_url,
+    official_detail_url,raw_metadata,source_config,detail_hash,observation_hash,extraction_metadata,observed_at)
+   values(program_uuid,version_uuid,source_uuid,row_data->'candidate'->>'source_program_id',row_data->'candidate'->>'discovery_url',
+    facts->>'official_url',row_data->'candidate'->'raw_metadata',row_data->'source'->'config',row_data->>'detail_hash',row_data->>'observation_hash',
+    '{"provider":null,"status":"NOT_RUN","error_kind":"MISSING_CREDENTIAL","import_method":"bounded_staging_acquisition_check"}',
+    (payload->>'checked_at')::timestamptz);
+   insert into startup_radar.program_change_events(program_id,version_id,event_type,changed_fields)
+    values(program_uuid,version_uuid,'NEW',array['initial_acquisition']);
+   failures:='[{"kind":"MISSING_CREDENTIAL","message":"ANTHROPIC_API_KEY unavailable; requirements not extracted; eligibility remains UNVERIFIABLE"}]';
+  else
+   failures:=jsonb_build_array(jsonb_build_object('kind',row_data->>'error_kind','message',row_data->>'error_message'));
+  end if;
+  insert into startup_radar.source_run_results(run_id,source_id,status,discovered_count,fetched_count,parsed_count,failures)
+   values(run_uuid,source_uuid,case when acquired then 'PARTIAL' else 'FAILED' end,
+     case when acquired then 1 else 0 end,case when acquired then 1 else 0 end,case when acquired then 1 else 0 end,failures);
+ end loop;
+end $import$;
+commit;

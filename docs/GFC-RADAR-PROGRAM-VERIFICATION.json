@@ -1,0 +1,54 @@
+{
+  "date": "2026-09-12",
+  "phase": "A_IN_PROGRESS",
+  "migration": "20260912134624_gfc_radar_stored_program_reads",
+  "shared_project": "etvffzxqdgblvkfdikwl",
+  "inventory": {
+    "before": 1081,
+    "after": 1083,
+    "existing_objects_changed_or_removed": 0,
+    "added": [
+      {
+        "kind": "function",
+        "schema_name": "public",
+        "name": "gfc_radar_program_detail(p_program_id uuid, p_team_id uuid, p_p"
+      },
+      {
+        "kind": "function",
+        "schema_name": "public",
+        "name": "gfc_radar_programs(p_team_id uuid, p_preset integer, p_q text, "
+      }
+    ],
+    "security_advisor_unchanged": true
+  },
+  "roles": {
+    "checks": [
+      "anonymous feed/detail denied",
+      "external feed/detail denied despite stray membership",
+      "external raw results denied",
+      "uncomputed eligibility remains null pending",
+      "actual facts/version and safe documents accessible",
+      "Stage 0 without team accessible",
+      "foreign team detail denied",
+      "own stored result accessible",
+      "raw foreign team result denied",
+      "member result write denied",
+      "stale profile result hidden",
+      "admin preset allowed and private team denied"
+    ],
+    "status": "PASS",
+    "auth_profiles_modified": false,
+    "actual_program_facts_read": true,
+    "synthetic_rows_rolled_back": true
+  },
+  "local_tests": {
+    "python": 155,
+    "gfc_node": 61,
+    "gfc_browser": 10,
+    "no_api_url_browser": 1,
+    "build": "PASS"
+  },
+  "real_oauth_browser": "NOT_RUN",
+  "real_telegram_messages_sent": 0,
+  "production_cutover": "NOT_PERFORMED"
+}

@@ -1,0 +1,133 @@
+{
+  "existing_objects_checked": 1048,
+  "existing_objects_changed": [],
+  "added_objects": [
+    "column|public|gfc_notices.body",
+    "column|public|gfc_notices.category",
+    "column|public|gfc_notices.created_at",
+    "column|public|gfc_notices.created_by",
+    "column|public|gfc_notices.id",
+    "column|public|gfc_notices.is_pinned",
+    "column|public|gfc_notices.published_at",
+    "column|public|gfc_notices.revision",
+    "column|public|gfc_notices.state",
+    "column|public|gfc_notices.title",
+    "column|public|gfc_notices.updated_at",
+    "column|public|gfc_notices.visibility",
+    "constraint|public|gfc_notices.gfc_notices_body_check",
+    "constraint|public|gfc_notices.gfc_notices_category_check",
+    "constraint|public|gfc_notices.gfc_notices_check",
+    "constraint|public|gfc_notices.gfc_notices_created_by_fkey",
+    "constraint|public|gfc_notices.gfc_notices_pkey",
+    "constraint|public|gfc_notices.gfc_notices_state_check",
+    "constraint|public|gfc_notices.gfc_notices_title_check",
+    "constraint|public|gfc_notices.gfc_notices_visibility_check",
+    "function|public|gfc_notice_touch()",
+    "index|public|gfc_notices_author_idx",
+    "index|public|gfc_notices_feed_idx",
+    "index|public|gfc_notices_pkey",
+    "policy|public|gfc_notices.notice_admin_insert",
+    "policy|public|gfc_notices.notice_admin_update",
+    "policy|public|gfc_notices.notice_authenticated_read",
+    "policy|public|gfc_notices.notice_public_read",
+    "relation|public|gfc_notices",
+    "trigger|public|gfc_notices.gfc_notice_touch",
+    "type|public|_gfc_notices",
+    "type|public|gfc_notices"
+  ],
+  "data_before": [
+    {
+      "name": "profiles",
+      "n": 24,
+      "hash": "da9e7d3e0d5216233f03ca1fb2882dbe"
+    },
+    {
+      "name": "projects",
+      "n": 5,
+      "hash": "99b36e3aac1391e8713b1ae6d68ed3f4"
+    },
+    {
+      "name": "teams",
+      "n": 0,
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "name": "problems",
+      "n": 0,
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "name": "coin_investments",
+      "n": 0,
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "name": "settings",
+      "n": 1,
+      "hash": "b3b6f60d95c3ad0bf037e582567910d8"
+    },
+    {
+      "name": "auction_settings",
+      "n": 1,
+      "hash": "49fcbe6358f5764ee8d9d9f9ec1585ed"
+    }
+  ],
+  "data_after": [
+    {
+      "name": "profiles",
+      "n": 24,
+      "hash": "da9e7d3e0d5216233f03ca1fb2882dbe"
+    },
+    {
+      "name": "projects",
+      "n": 5,
+      "hash": "99b36e3aac1391e8713b1ae6d68ed3f4"
+    },
+    {
+      "name": "teams",
+      "n": 0,
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "name": "problems",
+      "n": 0,
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "name": "coin_investments",
+      "n": 0,
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "name": "settings",
+      "n": 1,
+      "hash": "b3b6f60d95c3ad0bf037e582567910d8"
+    },
+    {
+      "name": "auction_settings",
+      "n": 1,
+      "hash": "49fcbe6358f5764ee8d9d9f9ec1585ed"
+    }
+  ],
+  "comparison": "Full JSON multiset (including duplicate constraint names)",
+  "hosted_rls": {
+    "checks": [
+      "anonymous public-only notices",
+      "anonymous Radar denied",
+      "external public-only notices",
+      "external Radar titles/counts denied",
+      "stray Radar membership cannot bypass GFC role",
+      "GFC role escalation denied",
+      "member public and member notices",
+      "member reads actual Radar program",
+      "cross-team private profile read/write denied",
+      "member notice write denied",
+      "admin create/publish/pin/revision/archive",
+      "creator audit",
+      "preferences before Telegram link"
+    ],
+    "status": "PASS",
+    "auth_profiles_modified": false,
+    "synthetic_rows_rolled_back": true
+  }
+}
