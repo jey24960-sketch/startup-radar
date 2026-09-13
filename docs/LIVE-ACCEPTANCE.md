@@ -16,6 +16,10 @@ The ordinary member created a controlled Stage 0 profile using only a name and p
 
 ## Official source operation
 
+The same controlled member then confirmed all three participation conditions. Normal evaluation and the deployed UI showed ELIGIBLE, score 95. Notification planning and delivery now use those current per-program answers and recompute ranking; a queued message is cancelled when its answer snapshot changes. Unknown answers remain unknown and appear as specific questions in digest text.
+
+The manual Telegram scenario check prepares three messages for one named validation team and one official program before any delivery. D-7 and D-3 explicitly simulate the clock without changing source deadlines. It uses the ordinary planner/outbox, limits transport to reviewed texts and the existing configured recipient, rejects repeated delivery, and restores disabled preferences. Local regression checks cover answer changes and the three-scenario lifecycle; real receipts are recorded separately after dispatch.
+
 Both issued official API credentials were accepted in prior real ingestion. The new bounded BizInfo run `bb5821cc-8bb7-4460-849e-1517eee6046c` fetched and persisted five actual opportunities, including two new programs. The shared store reached 37 programs and 62 versions; member refresh computed 35 new results and reused 399. Profile fingerprints, notification item count and scheduling settings were unchanged by ingestion.
 
 This run was PARTIAL_SUCCESS: two scanned PDFs require OCR/review, one AI date lacked verbatim evidence, and the deliberate one-page limit is reported. Earlier live runs proved attachment URL splitting, successful HWP/HWPX extraction, version changes and analysis reuse. Bounded samples do not establish complete nationwide coverage.

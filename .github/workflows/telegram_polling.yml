@@ -22,13 +22,22 @@ on:
         description: "알림을 모두 꺼 둔 기존 운영 검증용 Radar 팀 UUID"
         type: string
         required: false
+      scenario_check:
+        description: "승인된 테스트 팀의 고적합·D-7·D-3 검증: prepare 검토 후 deliver"
+        type: choice
+        options: [none, prepare, deliver]
+        default: none
+      validation_program_id:
+        description: "검증에 사용할 실제 공식 공고 UUID"
+        type: string
+        required: false
 
 permissions:
   contents: read
 
 jobs:
   delivery-check:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.delivery_check && (!inputs.ledger_check || inputs.ledger_check == 'none') && github.run_attempt == '1' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.delivery_check && (!inputs.ledger_check || inputs.ledger_check == 'none') && (!inputs.scenario_check || inputs.scenario_check == 'none') && github.run_attempt == '1' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
@@ -52,7 +61,7 @@ jobs:
           path: work/telegram-delivery-check.json
           retention-days: 14
   ledger-check:
-    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.delivery_check && (inputs.ledger_check == 'prepare' || inputs.ledger_check == 'deliver') && github.run_attempt == '1' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.delivery_check && (inputs.ledger_check == 'prepare' || inputs.ledger_check == 'deliver') && (!inputs.scenario_check || inputs.scenario_check == 'none') && github.run_attempt == '1' }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     concurrency:
@@ -64,7 +73,7 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       LEDGER_CHECK_MODE: ${{ inputs.ledger_check }}
       LEDGER_CHECK_TEAM_ID: ${{ inputs.validation_team_id }}
-      RADAR_MEMBER_NOTICE_URL: https://gfc-startup-q4slh14wf-jey24960-9908s-projects.vercel.app/notice
+      RADAR_MEMBER_NOTICE_URL: https://gfc-startup-dx0kpwb1l-jey24960-9908s-projects.vercel.app/notice
       PGCONNECT_TIMEOUT: '15'
     steps:
       - uses: actions/checkout@v4
@@ -82,8 +91,40 @@ jobs:
           name: telegram-ledger-check-${{ github.run_id }}
           path: work/telegram-ledger-check.json
           retention-days: 14
+  scenario-check:
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.delivery_check && (!inputs.ledger_check || inputs.ledger_check == 'none') && (inputs.scenario_check == 'prepare' || inputs.scenario_check == 'deliver') && github.run_attempt == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: startup-radar-ledger-check
+      cancel-in-progress: false
+    env:
+      DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      SCENARIO_CHECK_MODE: ${{ inputs.scenario_check }}
+      SCENARIO_CHECK_TEAM_ID: ${{ inputs.validation_team_id }}
+      SCENARIO_CHECK_PROGRAM_ID: ${{ inputs.validation_program_id }}
+      RADAR_MEMBER_NOTICE_URL: https://gfc-startup-dx0kpwb1l-jey24960-9908s-projects.vercel.app/notice
+      PGCONNECT_TIMEOUT: '15'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-v2.lock.txt
+      - run: python -m tools.telegram_scenario_check
+      - name: Restore validation notification flags
+        if: always()
+        run: python -m tools.telegram_scenario_check --cleanup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: telegram-scenario-check-${{ github.run_id }}
+          path: work/telegram-scenario-check.json
+          retention-days: 14
   poll:
-    if: ${{ !inputs.delivery_check && (!inputs.ledger_check || inputs.ledger_check == 'none') }}
+    if: ${{ !inputs.delivery_check && (!inputs.ledger_check || inputs.ledger_check == 'none') && (!inputs.scenario_check || inputs.scenario_check == 'none') }}
     runs-on: ubuntu-latest
     timeout-minutes: 4
 

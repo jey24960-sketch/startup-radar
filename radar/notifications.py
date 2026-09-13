@@ -10,6 +10,7 @@ import requests
 from core.clock import now, SEOUL
 from radar.models import Program,TeamProfile
 from radar.eligibility import evaluate
+from radar.recommendations import configured_weights,rank
 from radar.dates import days_left,program_status
 
 FIELD_LABELS={'team_status':'팀 구성 상태','business_status':'사업자 상태','business_age_months':'사업 개월 수',
@@ -52,6 +53,9 @@ def message(program,team_name,outcome,score,explanation,kind,at=None):
            '혜택: '+(program.benefit_summary or program.support_summary or '원문 확인')[:600],
            '추천 이유: '+explain_fields(explanation)[:400]]
     if outcome.missing_profile_fields:lines.append('필요 정보: '+', '.join(FIELD_LABELS.get(field,'추가 프로필 정보') for field in outcome.missing_profile_fields))
+    for question in outcome.missing_program_questions[:4]:
+        lines.append('필요 확인: '+question.question)
+    if len(outcome.missing_program_questions)>4:lines.append('추가 참여 조건은 GFC 공고 상세에서 확인하세요.')
     for rule in outcome.matched_requirements[:4]:
         quote=next((e.text for e in rule.evidence if e.verified),None)
         if quote:lines.append('확인 조건(원문): '+quote)
@@ -77,11 +81,12 @@ def policy_for(c):
     return policy
 
 
-def plan_notifications(db,kind,at=None,*,subscription_id=None):
+def plan_notifications(db,kind,at=None,*,subscription_id=None,program_id=None):
     at=at or now()
     if at.tzinfo is None:raise ValueError('Timezone-aware notification timestamp required')
     at=at.astimezone(SEOUL)
     if kind not in FLAGS:raise ValueError('Unknown notification kind')
+    weights=configured_weights(db)
     added=0
     with db.transaction() as c:
         policy=policy_for(c)
@@ -106,17 +111,23 @@ def plan_notifications(db,kind,at=None,*,subscription_id=None):
                                 (sub['id'],midnight,midnight+timedelta(days=1))).fetchone()['n']
                 capacity=max(0,policy['high_fit_daily_limit']-count)
             else:capacity=policy['delivery_batch_limit']
-            rows=c.execute('select distinct on (v.program_id) r.*,v.id version_id,v.normalized,v.created_at version_created '
+            rows=c.execute("select distinct on (v.program_id) r.*,v.id version_id,v.normalized,v.created_at version_created,coalesce(a.responses,'{}'::jsonb) responses "
                 'from startup_radar.recommendations r join startup_radar.eligibility_evaluations e on e.id=r.evaluation_id '
                 'join startup_radar.team_profile_versions tp on tp.id=e.profile_version_id '
                 'join startup_radar.program_versions v on v.id=e.program_version_id join startup_radar.programs p on p.current_version_id=v.id '
-                'where r.team_id=%s and tp.version=%s order by v.program_id,r.created_at desc',(sub['team_id'],sub['profile_version'])).fetchall()
-            selected=[]
-            for row in sorted(rows,key=lambda r:r['score'],reverse=True):
-                if len(selected)>=capacity:break
+                'left join startup_radar.team_program_responses a on a.team_id=r.team_id and a.program_version_id=v.id '
+                'where r.team_id=%s and tp.version=%s and (%s::uuid is null or v.program_id=%s) order by v.program_id,r.created_at desc',
+                (sub['team_id'],sub['profile_version'],program_id,program_id)).fetchall()
+            current=[]
+            for row in rows:
                 program=Program.model_validate(row['normalized'])
-                outcome=evaluate(TeamProfile.model_validate(sub['profile']),program.requirements,program.evidence_complete,at.date())
-                if outcome.status not in ('ELIGIBLE','NEEDS_INFO') or program_status(program,at)!='OPEN':continue
+                outcome=evaluate(TeamProfile.model_validate(sub['profile']),program.requirements,program.evidence_complete,at.date(),program_responses=row['responses'])
+                ranking=rank(program,TeamProfile.model_validate(sub['profile']),outcome,weights=weights,at=at)
+                if ranking and program_status(program,at)=='OPEN':
+                    current.append(({**row,'score':ranking.score,'explanation':ranking.explanation},program,outcome))
+            selected=[]
+            for row,program,outcome in sorted(current,key=lambda item:item[0]['score'],reverse=True):
+                if len(selected)>=capacity:break
                 left=days_left(program,at)
                 if kind=='HIGH_FIT':
                     if outcome.status!='ELIGIBLE' or row['score']<sub['high_fit_threshold'] or left is None or left<policy['high_fit_min_days']:continue
@@ -129,7 +140,8 @@ def plan_notifications(db,kind,at=None,*,subscription_id=None):
                 else:period=week
                 key=f"{kind}:{sub['id']}:{row['version_id']}:{period}"
                 payload={'text':message(program,sub['name'],outcome,row['score'],row['explanation'],kind,at),
-                         'period':period,'profile_version':sub['profile_version'],'eligibility':outcome.status,'days_left':left}
+                         'period':period,'profile_version':sub['profile_version'],'eligibility':outcome.status,'days_left':left,
+                         'response_snapshot':row['responses'],'score':row['score']}
                 item=c.execute("insert into startup_radar.notification_items(subscription_id,team_id,program_version_id,recommendation_id,dedupe_key,kind,state,payload,created_at) "
                     "values(%s,%s,%s,%s,%s,%s,'PENDING',%s,%s) on conflict(dedupe_key) do nothing returning *",
                     (sub['id'],sub['team_id'],row['version_id'],row['id'],key,kind,Jsonb(payload),at)).fetchone()
@@ -164,6 +176,7 @@ def deliver_pending(db,transport,kind,limit=None,at=None,*,subscription_id=None)
     if at.tzinfo is None:raise ValueError('Timezone-aware notification timestamp required')
     at=at.astimezone(SEOUL)
     if kind not in FLAGS:raise ValueError('Unknown notification kind')
+    weights=configured_weights(db)
     with db.transaction() as c:
         policy=policy_for(c)
         limit=policy['delivery_batch_limit'] if limit is None else limit
@@ -178,17 +191,23 @@ def deliver_pending(db,transport,kind,limit=None,at=None,*,subscription_id=None)
                 "where b.kind=%s and b.state='PENDING' and (%s::uuid is null or s.id=%s) order by b.created_at for update of b skip locked limit 1",
                 (kind,subscription_id,subscription_id)).fetchone()
             if not batch:break
-            items=c.execute('select i.*,v.normalized,p.current_version_id,r.score from startup_radar.notification_items i '
+            items=c.execute("select i.*,v.normalized,p.current_version_id,r.score,coalesce(a.responses,'{}'::jsonb) responses from startup_radar.notification_items i "
                 'join startup_radar.program_versions v on v.id=i.program_version_id join startup_radar.programs p on p.id=v.program_id '
-                'join startup_radar.recommendations r on r.id=i.recommendation_id where i.batch_id=%s',(batch['id'],)).fetchall()
+                'join startup_radar.recommendations r on r.id=i.recommendation_id '
+                'left join startup_radar.team_program_responses a on a.team_id=i.team_id and a.program_version_id=i.program_version_id '
+                'where i.batch_id=%s',(batch['id'],)).fetchall()
             valid=bool(items) and batch['enabled'] and batch[FLAGS[kind]] and batch['payload']['profile_version']==batch['profile_version']
             for item in items:
                 program=Program.model_validate(item['normalized']);left=days_left(program,at)
-                outcome=evaluate(TeamProfile.model_validate(batch['profile']),program.requirements,program.evidence_complete,at.date())
+                profile=TeamProfile.model_validate(batch['profile'])
+                outcome=evaluate(profile,program.requirements,program.evidence_complete,at.date(),program_responses=item['responses'])
+                ranking=rank(program,profile,outcome,weights=weights,at=at)
+                valid=valid and item['responses']==item['payload'].get('response_snapshot',{}) and ranking is not None
+                if ranking:valid=valid and ranking.score==item['payload'].get('score',item['score'])
                 valid=valid and item['program_version_id']==item['current_version_id'] and program_status(program,at)=='OPEN' and outcome.status==item['payload']['eligibility']
                 if kind=='REMINDER':valid=valid and left in batch['reminder_days'] and item['payload']['period']==f'D-{left}'
                 if kind=='DIGEST':valid=valid and item['payload']['period']==at.strftime('%G-W%V')
-                if kind=='HIGH_FIT':valid=valid and outcome.status=='ELIGIBLE' and item['score']>=batch['high_fit_threshold'] and left is not None and left>=policy['high_fit_min_days'] and (at-batch['created_at']).total_seconds()<=86400
+                if kind=='HIGH_FIT':valid=valid and outcome.status=='ELIGIBLE' and ranking is not None and ranking.score>=batch['high_fit_threshold'] and left is not None and left>=policy['high_fit_min_days'] and (at-batch['created_at']).total_seconds()<=86400
             if not valid:
                 c.execute("update startup_radar.notification_batches set state='CANCELLED',error='Profile, program, subscription or deadline changed before delivery' where id=%s",(batch['id'],))
                 c.execute("update startup_radar.notification_items set state='CANCELLED',error='Batch failed current-state revalidation' where batch_id=%s",(batch['id'],))
