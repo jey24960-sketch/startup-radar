@@ -65,24 +65,35 @@ class KStartupApiAdapter(HtmlAdapter):
         # encodes params itself; decode once without treating literal '+' as space.
         key=unquote(key)
         maximum=self.config.get('max_pages',100);size=self.config.get('page_size',100)
-        for page in range(1,maximum+1):
-            data,_,_=self.http.get(self.endpoint,params={'serviceKey':key,'page':page,'perPage':size,'returnType':'json'})
-            payload=parse_json(data)
-            if 'data' not in payload:raise SourceFailure('API_SCHEMA','K-Startup data field missing (possible API error)')
-            rows=payload['data']
-            if isinstance(rows,dict):rows=rows.get('data')
-            if not isinstance(rows,list):raise SourceFailure('API_SCHEMA','K-Startup data must contain an array')
-            for row in rows:
-                if not isinstance(row,dict) or not row.get('biz_pbanc_nm') or not row.get('pbanc_sn'):
-                    raise SourceFailure('API_SCHEMA','Required K-Startup notice fields missing')
-                # The live API uses detl_pg_url for its canonical portal notice,
-                # even when the documented biz_aply_url field is null.
-                url=kstartup_portal_detail(row) or row.get('biz_aply_url') or row.get('biz_gdnc_url')
-                if not url:raise SourceFailure('API_SCHEMA','Official notice URL missing')
-                yield Candidate(self.source['slug'],str(row['pbanc_sn']),url,url,row['biz_pbanc_nm'],row,now().isoformat())
-            total=payload.get('matchCount',payload.get('totalCount'))
-            if not rows or len(rows)<size or total is not None and page*size>=int(total):return
-        raise SourceFailure('PAGE_LIMIT','Discovery stopped at configured page limit; source is partial')
+        queries=self.config.get('current_title_queries',[])
+        if not isinstance(queries,list) or len(queries)>5 or any(not isinstance(q,str) or not q.strip() or len(q)>100 for q in queries):
+            raise SourceFailure('CONFIGURATION','At most five nonempty current-title queries are allowed')
+        seen=set();limited=False
+        # Current featured notices can predate the latest page. Query the same
+        # official API, bound every query, and preserve publisher identity.
+        for query in [None,*dict.fromkeys(queries)]:
+            for page in range(1,maximum+1):
+                data,_,_=self.http.get(self.endpoint,params={**{'serviceKey':key,'page':page,'perPage':size,'returnType':'json'},**({'cond[biz_pbanc_nm::LIKE]':query,'cond[rcrt_prgs_yn::EQ]':'Y'} if query else {})})
+                payload=parse_json(data)
+                if 'data' not in payload:raise SourceFailure('API_SCHEMA','K-Startup data field missing (possible API error)')
+                rows=payload['data']
+                if isinstance(rows,dict):rows=rows.get('data')
+                if not isinstance(rows,list):raise SourceFailure('API_SCHEMA','K-Startup data must contain an array')
+                for row in rows:
+                    if not isinstance(row,dict) or not row.get('biz_pbanc_nm') or not row.get('pbanc_sn'):
+                        raise SourceFailure('API_SCHEMA','Required K-Startup notice fields missing')
+                    sid=str(row['pbanc_sn'])
+                    if sid in seen:continue
+                    seen.add(sid)
+                    # The live API uses detl_pg_url for its canonical portal notice,
+                    # even when the documented biz_aply_url field is null.
+                    url=kstartup_portal_detail(row) or row.get('biz_aply_url') or row.get('biz_gdnc_url')
+                    if not url:raise SourceFailure('API_SCHEMA','Official notice URL missing')
+                    yield Candidate(self.source['slug'],str(row['pbanc_sn']),url,url,row['biz_pbanc_nm'],row,now().isoformat())
+                total=payload.get('matchCount',payload.get('totalCount'))
+                if not rows or len(rows)<size or total is not None and page*size>=int(total):break
+            else:limited=True
+        if limited:raise SourceFailure('PAGE_LIMIT','Discovery stopped at configured page limit; source is partial')
     def normalize(self,candidate,detail,documents):
         row=candidate.raw_metadata
         start=korean_date(row['pbanc_rcpt_bgng_dt']) if row.get('pbanc_rcpt_bgng_dt') else None

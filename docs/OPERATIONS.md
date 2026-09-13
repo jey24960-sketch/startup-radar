@@ -112,3 +112,19 @@ Publisher IDs take priority over URLs. Two distinct IDs from the same source can
 Shared URLs and fuzzy similarities can create review candidates. Review confirmation currently records the decision; it does not rewrite historical program/profile/notification foreign keys. Existing wrong merges from earlier versions are not automatically split by the identity migration. Inspect original snapshots before any corrective data migration.
 
 The URL uniqueness constraint now applies only to observations without a source ID. Its upsert uses the same index predicate, following PostgreSQL's [partial unique index](https://www.postgresql.org/docs/current/indexes-partial.html) and [ON CONFLICT inference](https://www.postgresql.org/docs/current/sql-insert.html) semantics. Existing authoritative `(source_id, source_program_id)` uniqueness and all RLS policies remain enforced.
+
+## Bounded current K-Startup coverage
+
+A latest-page cap can omit still-open featured opportunities. The optional
+`current_title_queries` source setting adds up to five bounded official API
+queries using the documented title LIKE and recruitment-in-progress Y filters.
+The latest page is still collected. Publisher IDs deduplicate overlap before
+detail acquisition; every query uses the configured page size/page cap. A page
+cap remains an observable PAGE_LIMIT warning after supplemental queries run.
+API failures remain failures, never empty success. This is curated current
+coverage, not nationwide or exhaustive historical coverage.
+
+The production acceptance configuration uses 20 rows / one page per query and
+three supplemental terms: 모두의 창업 프로젝트, SVC Seoul, 베트남 테크페스트.
+The live discovery check returned 24 distinct notices, including featured
+publisher IDs 178952, 178802, 178803 and 179192.
