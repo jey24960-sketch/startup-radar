@@ -38,8 +38,31 @@ def test_explicit_disallow_is_still_enforced():
     with pytest.raises(SourceFailure,match='ROBOTS_DENIED'):http.check_robots('https://example.org/api')
 
 
+def test_robots_rate_limit_is_not_retried():
+    http=client(429)
+    with pytest.raises(SourceFailure,match='ROBOTS_UNAVAILABLE'):http.get('https://example.org/api')
+    assert http.session.get.call_count==1
+
+
 def test_actual_api_http_400_is_still_a_failure():
     http=client(400)
     http.check_robots=Mock()
     with pytest.raises(SourceFailure) as error:http.get('https://example.org/api')
     assert error.value.kind=='HTTP' and error.value.http_status==400
+
+
+def test_one_transient_retry_can_recover_without_bypassing_guards(monkeypatch):
+    monkeypatch.setattr('radar.http.time.sleep',Mock())
+    http=SafeHttp(['example.org']);expected=(b'official','text/plain','https://example.org/api')
+    http._request=Mock(side_effect=[SourceFailure('ROBOTS_UNAVAILABLE','Temporary timeout',True),expected])
+    assert http.get('https://example.org/api',{'page':1})==expected
+    assert http._request.call_count==2
+    assert all(call.args==('https://example.org/api',{'page':1}) for call in http._request.call_args_list)
+
+
+@pytest.mark.parametrize('kind,retryable,attempts',[('TIMEOUT',True,2),('HTTP',True,2),('BLOCKED',False,1),('ROBOTS_DENIED',False,1),('RATE_LIMIT',True,1)])
+def test_persistent_failure_is_bounded_and_keeps_its_type(monkeypatch,kind,retryable,attempts):
+    monkeypatch.setattr('radar.http.time.sleep',Mock())
+    http=SafeHttp(['example.org']);http._request=Mock(side_effect=SourceFailure(kind,'retained failure',retryable))
+    with pytest.raises(SourceFailure) as error:http.get('https://example.org/api')
+    assert error.value.kind==kind and http._request.call_count==attempts

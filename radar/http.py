@@ -1,6 +1,7 @@
 """Bounded, identifiable fetching. Robots/blocks are failures, never bypassed."""
 import ipaddress
 import socket
+import time
 from urllib.parse import urlsplit,urljoin
 from urllib.robotparser import RobotFileParser
 import requests
@@ -60,8 +61,15 @@ class SafeHttp:
                 # throttling, network errors and server errors.
                 if failure.kind=='NOT_FOUND' or (failure.kind=='HTTP' and failure.http_status in (400,410)):
                     self.robots[origin]=None
-                else: raise SourceFailure('ROBOTS_UNAVAILABLE','Cannot verify robots policy',failure.retryable)
+                else: raise SourceFailure('ROBOTS_UNAVAILABLE','Cannot verify robots policy',failure.retryable and failure.kind!='RATE_LIMIT')
         parser=self.robots[origin]
         if parser and not parser.can_fetch('StartupRadar',url): raise SourceFailure('ROBOTS_DENIED','Robots policy disallows this resource')
 
-    def get(self,url,params=None): return self._request(url,params)
+    def get(self,url,params=None):
+        for attempt in range(2):
+            try:return self._request(url,params)
+            except SourceFailure as error:
+                if attempt or not error.retryable or error.kind not in ('DNS','NETWORK','TIMEOUT','HTTP','ROBOTS_UNAVAILABLE'):raise
+                # Retry one transient acquisition failure. The second attempt
+                # still rechecks robots/hosts and preserves any final failure.
+                time.sleep(2)
