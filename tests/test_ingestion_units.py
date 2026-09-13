@@ -96,6 +96,24 @@ def test_pdf_valid_unicode_text_is_not_rewritten(monkeypatch):
     assert extract_document(b'%PDF-valid-text','notice.pdf','application/pdf')==('pdf',text)
 
 
+def test_html_line_endings_are_stable_without_changing_words():
+    from radar.documents import html_text
+    assert html_text('<p>조건 A\r\n조건 B\r조건 C</p>')==html_text('<p>조건 A\n조건 B\n조건 C</p>')
+
+
+def test_missing_kstartup_portal_body_retains_only_unverified_api_facts():
+    row={'pbanc_sn':179197,'biz_pbanc_nm':'Official program','pbanc_ctnt':'Official summary',
+         'detl_pg_url':'https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179197'}
+    candidate=Candidate('kstartup','179197',row['detl_pg_url'],row['detl_pg_url'],row['biz_pbanc_nm'],row)
+    a=KStartupApiAdapter(source('KSTARTUP'),http('<body><a>skip</a></body>'))
+    detail=a.fetch_detail(candidate)
+    assert detail.evidence_warning=='DETAIL_UNAVAILABLE'
+    assert detail.text=='Official summary' and not detail.document_urls
+    assert not a.normalize(candidate,detail,[]).evidence_complete
+    a.http.get=Mock(side_effect=SourceFailure('BLOCKED','Access denied'))
+    with pytest.raises(SourceFailure,match='BLOCKED'):a.fetch_detail(candidate)
+
+
 def test_kstartup_documented_fields(monkeypatch):
     monkeypatch.setenv('KSTARTUP_API_KEY','fixture-key')
     row={'pbanc_sn':123,'biz_pbanc_nm':'Official title','biz_aply_url':'https://example.org/detail','detl_pg_url':'https://example.org/apply',
