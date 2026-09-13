@@ -34,7 +34,7 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                     detail=adapter.fetch_detail(candidate);fetched+=1
                     documents=adapter.fetch_documents(detail)
                     for doc in documents:
-                        if doc['extraction_status']!='SUCCESS':failures.append({'kind':doc.get('error_kind','DOCUMENT_PARSE'),'message':doc.get('error_message'),'url':doc['original_url']})
+                        if doc['extraction_status']!='SUCCESS':failures.append({'stage':'DOCUMENT','kind':doc.get('error_kind','DOCUMENT_PARSE'),'message':doc.get('error_message'),'url':doc['original_url']})
                     program=adapter.normalize(candidate,detail,documents)
                     extraction_metadata={'provider':'anthropic' if isinstance(extractor,RequirementExtractor) else 'injected',
                         'model':getattr(extractor,'model',None),'schema_version':getattr(extractor,'version',None),'status':'SUCCESS'}
@@ -49,7 +49,7 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                     except SourceFailure as error:
                         program.evidence_complete=False
                         extraction_metadata.update(status='FAILED',error_kind=error.kind)
-                        failures.append({'kind':error.kind,'message':error.message,'url':candidate.official_detail_url})
+                        failures.append({'stage':'EXTRACTION','kind':error.kind,'message':error.message,'url':candidate.official_detail_url})
                     saved=db.save_program(program,source['id'],candidate.source_program_id,candidate.discovery_url,candidate.raw_metadata,detail.text,documents,extraction_metadata)
                     new_programs+=saved['event']=='NEW';updated_programs+=saved['event']=='UPDATE'
                     cache_hits+=bool(extraction_metadata.get('cache_hit'))

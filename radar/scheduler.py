@@ -6,6 +6,24 @@ from radar.recommendations import refresh_recommendations
 from radar.notifications import plan_notifications,deliver_pending
 
 
+def ingestion_execution_result(result):
+    """A completed safe import may retain incomplete source/evidence health.
+
+    Never convert retrieval, persistence, changed-review, or empty-source failures
+    into success. The persisted ingestion/source status is deliberately unchanged.
+    """
+    if result.get('status')!='PARTIAL_SUCCESS' or result.get('alerts',{}).get('status','SUCCESS')!='SUCCESS':return result
+    sources=result.get('sources') or []
+    def completed(source):
+        if not (source.get('discovered',0)>0 and source.get('fetched')==source['discovered']==source.get('parsed')):return False
+        return all((failure.get('kind')=='PAGE_LIMIT' or failure.get('stage') in ('DOCUMENT','EXTRACTION'))
+                   and failure.get('kind')!='SOURCE_REVIEW_CHANGED' for failure in source.get('failures',[]))
+    if not sources or not all(completed(source) for source in sources):return result
+    return {**result,'status':'SUCCESS','ingestion_status':'PARTIAL_SUCCESS',
+            'completed_with_warnings':True,
+            'message':'All discovered records persisted; source/evidence warnings remain visible and uncertain programs remain gated'}
+
+
 def due_tasks(settings,at):
     if at.tzinfo is None:raise ValueError('Timezone-aware scheduler timestamp required')
     at=at.astimezone(SEOUL)
@@ -43,7 +61,7 @@ def execute(db,kind,source_slug=None,transport=None):
             plan_notifications(db,'HIGH_FIT')
             alert=deliver_pending(db,transport,'HIGH_FIT');result['alerts']=alert
             if alert['status']!='SUCCESS':result['status']='PARTIAL_SUCCESS'
-        return result
+        return ingestion_execution_result(result)
     if kind not in ('DIGEST','REMINDER','HIGH_FIT'):raise ValueError('Unsupported task kind')
     refresh_recommendations(db)
     refresh_member_results(db)
