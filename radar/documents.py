@@ -136,6 +136,10 @@ def extract_document(data,filename,mime):
         text=data.decode('utf-8-sig',errors='strict')
         if any(ord(c)<32 and c not in '\r\n\t' for c in text):raise ValueError('Binary control characters in text attachment')
     else:text=html_text(data)
+    if '\x00' in text:
+        # Some PDF fonts decode to NUL. PostgreSQL cannot store that text, and
+        # stripping it could join or change an eligibility condition silently.
+        raise DocumentFailure('DOCUMENT_PARSE','Extracted text contains NUL characters; manual review required')
     if not text.strip():raise DocumentFailure('DOCUMENT_EMPTY','No extractable text; manual review required')
     if len(text)>MAX_TEXT:raise DocumentFailure('DOCUMENT_LIMIT','Extracted text limit; manual review required')
     return kind,text
