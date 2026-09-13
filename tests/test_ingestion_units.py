@@ -81,6 +81,21 @@ def test_official_empty_vs_error(monkeypatch):
         list(KStartupApiAdapter(source('KSTARTUP'),http({'error':'Invalid key'})).discover())
 
 
+def test_pdf_nul_text_is_retained_as_document_failure_not_database_error(monkeypatch):
+    from radar import documents
+    monkeypatch.setattr(documents,'extract_pdf',lambda data:'대상\x00제외 조건')
+    with pytest.raises(documents.DocumentFailure,match='NUL') as error:
+        extract_document(b'%PDF-corrupt-font','notice.pdf','application/pdf')
+    assert error.value.kind=='DOCUMENT_PARSE'
+
+
+def test_pdf_valid_unicode_text_is_not_rewritten(monkeypatch):
+    from radar import documents
+    text='신청 대상: 예비창업자\n조건 70% 이상'
+    monkeypatch.setattr(documents,'extract_pdf',lambda data:text)
+    assert extract_document(b'%PDF-valid-text','notice.pdf','application/pdf')==('pdf',text)
+
+
 def test_kstartup_documented_fields(monkeypatch):
     monkeypatch.setenv('KSTARTUP_API_KEY','fixture-key')
     row={'pbanc_sn':123,'biz_pbanc_nm':'Official title','biz_aply_url':'https://example.org/detail','detl_pg_url':'https://example.org/apply',
