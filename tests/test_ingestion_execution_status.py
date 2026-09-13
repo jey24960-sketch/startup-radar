@@ -21,6 +21,9 @@ def test_completed_import_retains_partial_source_health_and_warning(failure):
 @pytest.mark.parametrize('raw',[
     partial({'kind':'HTTP'}),partial({'kind':'NORMALIZE_OR_PERSIST'},parsed=4),
     partial({'stage':'EXTRACTION','kind':'SOURCE_REVIEW_CHANGED'}),
+    partial({'stage':'EXTRACTION','kind':'AuthenticationError'}),
+    partial({'stage':'EXTRACTION','kind':'PermissionDeniedError'}),
+    partial({'stage':'EXTRACTION','kind':'AI_NOT_CONFIGURED'}),
     {**partial({'kind':'PAGE_LIMIT'}),'alerts':{'status':'PARTIAL_SUCCESS','failed':1}},
     partial({'kind':'PAGE_LIMIT'},discovered=0,parsed=0),
     {'status':'FAILED','sources':[]},{'status':'PARTIAL_SUCCESS','sources':[]}])

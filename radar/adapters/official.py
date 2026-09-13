@@ -4,7 +4,7 @@ import os
 import re
 from urllib.parse import urljoin,unquote,urlsplit,parse_qs
 from radar.adapters.longtail import HtmlAdapter
-from radar.adapters.base import Candidate,SourceFailure
+from radar.adapters.base import Candidate,AcquiredDetail,SourceFailure
 from radar.dates import korean_date
 from radar.models import Program
 from radar.documents import html_text
@@ -53,7 +53,15 @@ class KStartupApiAdapter(HtmlAdapter):
         if kstartup_portal_detail(candidate.raw_metadata):
             self.config={**{'detail_selector':'.app_notice_details-wrap',
                             'document_selector':'a[name="downloadBtn"][href^="/afile/fileDownload/"]'},**self.config}
-        return super().fetch_detail(candidate)
+        try:return super().fetch_detail(candidate)
+        except SourceFailure as error:
+            if error.kind!='DETAIL_PARSE' or not kstartup_portal_detail(candidate.raw_metadata):raise
+            # The official API can retain a notice whose portal body has vanished.
+            # Preserve its structured facts, but never certify eligibility or ask
+            # AI to guess the missing body/attachments. Access failures still fail.
+            return AcquiredDetail(candidate.official_detail_url,
+                html_text(candidate.raw_metadata.get('pbanc_ctnt') or ''),candidate.title,
+                raw_metadata=candidate.raw_metadata,evidence_warning='DETAIL_UNAVAILABLE')
     def document_name(self,link):
         container=link.find_parent('li',class_='clear')
         filename=container.select_one('a.file_bg') if container else None

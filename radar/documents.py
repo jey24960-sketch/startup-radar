@@ -36,7 +36,7 @@ class DocumentFailure(ValueError):
 def html_text(data):
     soup=BeautifulSoup(data,'lxml')
     for node in soup(['script','style','nav','header','footer','noscript']):node.decompose()
-    return soup.get_text('\n',strip=True)
+    return soup.get_text('\n',strip=True).replace('\r\n','\n').replace('\r','\n')
 
 
 def extract_zip(data,kind):

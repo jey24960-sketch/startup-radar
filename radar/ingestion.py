@@ -39,6 +39,9 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                     extraction_metadata={'provider':'anthropic' if isinstance(extractor,RequirementExtractor) else 'injected',
                         'model':getattr(extractor,'model',None),'schema_version':getattr(extractor,'version',None),'status':'SUCCESS'}
                     try:
+                        if detail.evidence_warning:
+                            extraction_metadata.update(provider='structured_api',model=None)
+                            raise SourceFailure(detail.evidence_warning,'Official API facts retained; portal body unavailable, eligibility unverified')
                         from radar.program_review import resolve_review
                         try:reviewed=resolve_review(db,source['id'],program,detail,documents,candidate.raw_metadata)
                         except ValueError:

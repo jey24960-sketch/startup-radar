@@ -29,6 +29,7 @@ class AcquiredDetail:
     title: str
     document_urls: list[tuple[str,str]] = field(default_factory=list)
     raw_metadata: dict = field(default_factory=dict)
+    evidence_warning: str | None = None
 
 
 class SourceAdapter:

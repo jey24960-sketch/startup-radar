@@ -14,9 +14,12 @@ def ingestion_execution_result(result):
     """
     if result.get('status')!='PARTIAL_SUCCESS' or result.get('alerts',{}).get('status','SUCCESS')!='SUCCESS':return result
     sources=result.get('sources') or []
+    evidence_warnings={'AI_DATE_SCHEMA','AI_DATE_EVIDENCE','AI_DATE_TIME_REQUIRED','AI_INPUT_LIMIT',
+        'AI_TRUNCATED','AI_SCHEMA','AI_DATE_CONFLICT','AI_NORMALIZATION','DETAIL_UNAVAILABLE'}
     def completed(source):
         if not (source.get('discovered',0)>0 and source.get('fetched')==source['discovered']==source.get('parsed')):return False
-        return all((failure.get('kind')=='PAGE_LIMIT' or failure.get('stage') in ('DOCUMENT','EXTRACTION'))
+        return all((failure.get('kind')=='PAGE_LIMIT' or failure.get('stage')=='DOCUMENT'
+                    or failure.get('stage')=='EXTRACTION' and failure.get('kind') in evidence_warnings)
                    and failure.get('kind')!='SOURCE_REVIEW_CHANGED' for failure in source.get('failures',[]))
     if not sources or not all(completed(source) for source in sources):return result
     return {**result,'status':'SUCCESS','ingestion_status':'PARTIAL_SUCCESS',

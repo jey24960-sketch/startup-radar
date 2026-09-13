@@ -153,6 +153,23 @@ def test_source_failure_does_not_erase_success(db):
     with db.transaction() as c:
         assert c.execute('select count(*) n from startup_radar.source_run_results where run_id=%s',(run['id'],)).fetchone()['n']==2
         assert c.execute('select * from startup_radar.program_sources where source_id=%s',(ok['id'],)).fetchone()
+
+
+def test_api_only_detail_is_persisted_without_ai_or_confident_eligibility(db):
+    s=db.upsert_source('api-only-check','Official API','KSTARTUP',{})
+    class Adapter(SourceAdapter):
+        def discover(self):yield Candidate('api-only-check','retained-id','https://example.org/retained','https://example.org/retained','Retained official notice',{'official':True})
+        def fetch_detail(self,c):return AcquiredDetail(c.official_detail_url,'API summary',c.title,evidence_warning='DETAIL_UNAVAILABLE')
+        def fetch_documents(self,d):return []
+        def normalize(self,c,d,docs):return Program(title=c.title,organization='Agency',official_url=d.url,evidence_complete=True)
+    class Extractor:
+        def extract(self,*args):raise AssertionError('Missing body must not trigger an AI guess')
+    result=ingest(db,[s],adapter_factory=lambda source:Adapter(),extractor=Extractor())
+    assert result['sources'][0]['parsed']==1
+    assert result['sources'][0]['failures'][0]['kind']=='DETAIL_UNAVAILABLE'
+    with db.transaction() as c:
+        row=c.execute('select v.normalized from startup_radar.program_sources ps join startup_radar.programs p on p.id=ps.program_id join startup_radar.program_versions v on v.id=p.current_version_id where ps.source_id=%s',(s['id'],)).fetchone()
+    assert row['normalized']['evidence_complete'] is False
 from radar.models import Evidence,Requirement
 from radar.recommendations import refresh_recommendations
 from radar.notifications import plan_notifications,deliver_pending
