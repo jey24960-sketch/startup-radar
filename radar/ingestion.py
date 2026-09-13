@@ -38,7 +38,14 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                     program=adapter.normalize(candidate,detail,documents)
                     extraction_metadata={'provider':'anthropic' if isinstance(extractor,RequirementExtractor) else 'injected',
                         'model':getattr(extractor,'model',None),'schema_version':getattr(extractor,'version',None),'status':'SUCCESS'}
-                    try:program=extract_cached(db,extractor,program,detail,documents,source['id'],extraction_metadata)
+                    try:
+                        from radar.program_review import resolve_review
+                        try:reviewed=resolve_review(db,source['id'],program,detail,documents,candidate.raw_metadata)
+                        except ValueError:
+                            raise SourceFailure('SOURCE_REVIEW_CHANGED','Reviewed supporting evidence changed; inspect the current source before reusing its decision')
+                        if reviewed:
+                            program,documents,extraction_metadata=reviewed
+                        else:program=extract_cached(db,extractor,program,detail,documents,source['id'],extraction_metadata)
                     except SourceFailure as error:
                         program.evidence_complete=False
                         extraction_metadata.update(status='FAILED',error_kind=error.kind)

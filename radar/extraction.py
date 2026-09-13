@@ -80,7 +80,7 @@ def cited_datetime(value,quote,end=False,source_texts=()):
 
 
 class RequirementExtractor:
-    version='requirements-2.0.7'
+    version='requirements-2.0.8'
     def __init__(self,client=None,model=None):
         self.client=client
         self.model=model or os.environ.get('RADAR_EXTRACTION_MODEL','claude-sonnet-4-5')
@@ -111,6 +111,8 @@ class RequirementExtractor:
           'product_stage='+json.dumps([x.value for x in ProductStage])+', '
           'business_status='+json.dumps([x.value for x in BusinessStatus])+'. '
           'Other fields use nonempty strings. EQ/NEQ/GTE/LTE take a scalar; IN/NOT_IN take nonempty arrays; '
+          'program_response is reserved for reviewed program-specific questions. Do not create these automatically; '
+          'set unsupported_logic=true if participation promises or other program-specific declarations are required. '
           'RANGE takes exactly two ordered numeric/date values. Ordered operators apply only to numeric fields or registration_date. '
           'industry and prior_support_restrictions use IN/NOT_IN arrays. EXISTS means a profile value must be present, '
           'with null or true as value; it does NOT mean an applicant must satisfy an arbitrary quoted condition. '
@@ -161,6 +163,9 @@ class RequirementExtractor:
             # A verbatim quote is necessary but does not make an arbitrary
             # profile-presence check a representation of a legal qualification.
             if rule.operator=='EXISTS':rule.certain=False
+            if rule.key=='program_response':
+                rule.certain=False
+                self.review_flags.append({'kind':'PROGRAM_QUESTION_REVIEW_REQUIRED','quotes':[e.text[:500] for e in rule.evidence if e.verified]})
             if rule.key=='region' and rule.operator!='EXISTS':
                 values=rule.value if isinstance(rule.value,list) else [rule.value]
                 quotes=[re.sub(r'\s+','',e.text).casefold() for e in rule.evidence if e.verified]

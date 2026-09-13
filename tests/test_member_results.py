@@ -148,7 +148,7 @@ def test_bounded_cache_lookup_pages_and_mixed_stale_results(context, monkeypatch
     class TracedConnection:
         def __init__(self, connection):self.connection=connection
         def execute(self, sql, params=None):
-            if sql.startswith('select program_version_id from startup_radar.member_program_results'):
+            if sql.startswith('select program_version_id,response_snapshot from startup_radar.member_program_results'):
                 lookup_sizes.append(len(params[1]))
             return self.connection.execute(sql,params)
     @contextmanager

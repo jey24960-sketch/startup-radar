@@ -3,6 +3,7 @@ from datetime import date, datetime
 from enum import StrEnum
 import math
 from typing import Any, Literal
+import re
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
 
@@ -106,7 +107,7 @@ class Evidence(StrictModel):
 
 RequirementKey = Literal['team_status','business_status','business_age_months','founder_age','region',
     'student_status','university_affiliation','team_size','product_stage','revenue','has_revenue',
-    'investment_received','industry','applicant_type','registration_date','prior_support_restrictions']
+    'investment_received','industry','applicant_type','registration_date','prior_support_restrictions','program_response']
 
 
 class Requirement(StrictModel):
@@ -116,9 +117,18 @@ class Requirement(StrictModel):
     mandatory: bool = True
     certain: bool = False
     evidence: list[Evidence] = Field(default_factory=list)
+    response_id: str | None = None
+    question: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode='after')
     def valid_operator(self):
+        if self.key=='program_response':
+            if (not self.response_id or not re.fullmatch(r'[a-z][a-z0-9_]{0,63}',self.response_id)
+                or not self.question or not self.question.strip() or self.operator!='EQ' or type(self.value) is not bool):
+                raise ValueError('Program questions require a stable response ID, question and boolean EQ')
+            return self
+        if self.response_id is not None or self.question is not None:
+            raise ValueError('Response identity belongs only to program questions')
         if self.operator=='EXISTS':
             if self.value is not None and self.value is not True:raise ValueError('EXISTS means a value must be present')
             return self
@@ -155,9 +165,10 @@ class EligibilityResult(StrictModel):
     matched_requirements: list[Requirement] = Field(default_factory=list)
     failed_requirements: list[Requirement] = Field(default_factory=list)
     missing_profile_fields: list[str] = Field(default_factory=list)
+    missing_program_questions: list[Requirement] = Field(default_factory=list)
     unverifiable_requirements: list[dict] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
-    engine_version: str = 'eligibility-2.0.2'
+    engine_version: str = 'eligibility-2.1.0'
 
 
 class Program(StrictModel):
@@ -183,9 +194,14 @@ class Program(StrictModel):
     industry_tags: list[str] = Field(default_factory=list)
     global_relevance: bool=False
     document_hashes: list[str] = Field(default_factory=list)
+    document_coverage: list[dict] = Field(default_factory=list)
+    material_notes: list[str] = Field(default_factory=list)
 
     @model_validator(mode='after')
     def aware_dates(self):
+        question_ids=[r.response_id for r in self.requirements if r.key=='program_response']
+        if len(question_ids)!=len(set(question_ids)):
+            raise ValueError('Program question IDs must be unique')
         for value in (self.application_start_at,self.application_end_at):
             if value and value.tzinfo is None: raise ValueError('Program dates must include timezone')
         if self.application_start_at and self.application_end_at and self.application_start_at>self.application_end_at:

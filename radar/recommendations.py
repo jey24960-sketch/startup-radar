@@ -37,7 +37,7 @@ def rank(program,profile,eligibility,weights=None,at=None):
     known=len(eligibility.matched_requirements)
     values={
       'stage':1 if profile.product_stage and profile.product_stage in program.product_stages else 0.5 if not program.product_stages else 0,
-      'profile':known/max(1,known+len(eligibility.missing_profile_fields)) if eligibility.missing_profile_fields else 1,
+      'profile':known/max(1,known+len(eligibility.missing_profile_fields)+len(eligibility.missing_program_questions)) if eligibility.missing_profile_fields or eligibility.missing_program_questions else 1,
       'preference':1 if set(profile.preferred_program_types or []).intersection(program.program_types) else 0.5 if not profile.preferred_program_types else 0,
       'benefit':1 if program.benefit_summary or program.amount_max else 0,
       'global':1 if profile.global_expansion_interest and ('GLOBAL' in program.program_types or program.global_relevance) else 0.5 if profile.global_expansion_interest is None else 0,
@@ -50,7 +50,8 @@ def rank(program,profile,eligibility,weights=None,at=None):
     if values['stage']==1:reasons.append('제품 단계와 일치')
     if values['preference']==1:reasons.append('선호 지원 유형')
     if remaining is not None:reasons.append(f'마감까지 {remaining}일')
-    if eligibility.status=='NEEDS_INFO':reasons.append('추가 정보 필요: '+', '.join(eligibility.missing_profile_fields))
+    if eligibility.missing_profile_fields:reasons.append('추가 정보 필요: '+', '.join(eligibility.missing_profile_fields))
+    if eligibility.missing_program_questions:reasons.append(f'이 공고의 참여 조건 {len(eligibility.missing_program_questions)}개 확인 필요')
     return Ranking(score,components,' · '.join(reasons) or '확인된 지원 조건과 자료 완전성을 기준으로 추천')
 
 
@@ -65,7 +66,9 @@ def refresh_recommendations(db,team_id=None):
             profile=TeamProfile.model_validate(profile_row['profile'])
             for row in programs:
                 program=Program.model_validate(row['normalized'])
-                outcome=evaluate(profile,program.requirements,program.evidence_complete)
+                response=c.execute('select responses from startup_radar.team_program_responses where team_id=%s and program_version_id=%s',
+                    (profile_row['team_id'],row['id'])).fetchone()
+                outcome=evaluate(profile,program.requirements,program.evidence_complete,program_responses=response['responses'] if response else {})
                 ev=c.execute('insert into startup_radar.eligibility_evaluations(team_id,profile_version_id,program_version_id,status,result,engine_version) '
                     'values(%s,%s,%s,%s,%s,%s) returning id',(profile_row['team_id'],profile_row['id'],row['id'],outcome.status,
                     Jsonb(outcome.model_dump(mode='json')),outcome.engine_version)).fetchone()['id']

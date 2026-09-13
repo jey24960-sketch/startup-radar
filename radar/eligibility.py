@@ -35,7 +35,7 @@ def compare(actual, operator, value):
 
 
 def evaluate(profile: TeamProfile, requirements: list[Requirement], evidence_complete: bool,
-             as_of: date | None=None) -> EligibilityResult:
+             as_of: date | None=None, program_responses: dict | None=None) -> EligibilityResult:
     as_of=as_of or today()
     result=EligibilityResult(status=EligibilityStatus.ELIGIBLE,as_of=as_of)
     if not evidence_complete:
@@ -46,6 +46,13 @@ def evaluate(profile: TeamProfile, requirements: list[Requirement], evidence_com
         supported=rule.certain and any(e.verified and e.confidence>=0.8 and (e.source_id or e.document_id) for e in rule.evidence)
         if not supported:
             result.unverifiable_requirements.append({'requirement':rule.model_dump(mode='json'),'reason':'Unconfirmed source evidence'})
+            continue
+        if rule.key=='program_response':
+            actual=(program_responses or {}).get(rule.response_id)
+            if type(actual) is not bool:
+                result.missing_program_questions.append(rule)
+            else:
+                (result.matched_requirements if actual==rule.value else result.failed_requirements).append(rule)
             continue
         key='business_registration_date' if rule.key=='registration_date' else rule.key
         actual=getattr(profile,key)
@@ -84,5 +91,5 @@ def evaluate(profile: TeamProfile, requirements: list[Requirement], evidence_com
     result.missing_profile_fields=sorted(set(result.missing_profile_fields))
     if result.failed_requirements: result.status=EligibilityStatus.INELIGIBLE
     elif result.unverifiable_requirements: result.status=EligibilityStatus.UNVERIFIABLE
-    elif result.missing_profile_fields: result.status=EligibilityStatus.NEEDS_INFO
+    elif result.missing_profile_fields or result.missing_program_questions: result.status=EligibilityStatus.NEEDS_INFO
     return result

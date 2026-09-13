@@ -42,6 +42,9 @@ def refresh_member_results(db):
                     break
                 with db.transaction() as c:
                     page_ids = [row['id'] for row in rows]
+                    responses={r['program_version_id']:r['responses'] for r in c.execute(
+                        'select program_version_id,responses from startup_radar.team_program_responses '
+                        'where team_id=%s and program_version_id=any(%s::uuid[])',(team_id,page_ids)).fetchall()} if team_id else {}
                     cache_day = None
                     for row in rows:
                         at = now().astimezone(SEOUL)
@@ -51,23 +54,25 @@ def refresh_member_results(db):
                         if cache_day != at.date():
                             cache_day = at.date()
                             existing = {r['program_version_id'] for r in c.execute(
-                                'select program_version_id from startup_radar.member_program_results '
+                                'select program_version_id,response_snapshot from startup_radar.member_program_results '
                                 'where scope_key=%s and program_version_id=any(%s::uuid[]) '
                                 'and generation=%s and evaluated_on=%s and profile_snapshot=%s '
                                 'and profile_version is not distinct from %s',
-                                (key,page_ids,generation,cache_day,Jsonb(scope['profile']),scope['version'])).fetchall()}
+                                (key,page_ids,generation,cache_day,Jsonb(scope['profile']),scope['version'])).fetchall()
+                                if r['response_snapshot']==responses.get(r['program_version_id'],{})}
                         if row['id'] in existing:
                             reused += 1
                             continue
                         program = Program.model_validate(row['normalized'])
-                        eligibility = evaluate(profile, program.requirements, program.evidence_complete, as_of=at.date())
+                        response=responses.get(row['id'],{})
+                        eligibility = evaluate(profile, program.requirements, program.evidence_complete, as_of=at.date(), program_responses=response)
                         recommendation = rank(program, profile, eligibility, weights=weights, at=at)
-                        c.execute('insert into startup_radar.member_program_results(scope_key,program_version_id,team_id,preset,profile_version,profile_snapshot,evaluated_on,generation,eligibility,recommendation) '
-                            'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict(scope_key,program_version_id) do update set '
+                        c.execute('insert into startup_radar.member_program_results(scope_key,program_version_id,team_id,preset,profile_version,profile_snapshot,evaluated_on,generation,eligibility,recommendation,response_snapshot) '
+                            'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict(scope_key,program_version_id) do update set '
                             'profile_version=excluded.profile_version,profile_snapshot=excluded.profile_snapshot,evaluated_on=excluded.evaluated_on,generation=excluded.generation,'
-                            'eligibility=excluded.eligibility,recommendation=excluded.recommendation,computed_at=now()',
+                            'eligibility=excluded.eligibility,recommendation=excluded.recommendation,response_snapshot=excluded.response_snapshot,computed_at=now()',
                             (key,row['id'],team_id,preset,scope['version'],Jsonb(scope['profile']),at.date(),generation,
-                             Jsonb(eligibility.model_dump(mode='json')),Jsonb(asdict(recommendation)) if recommendation else None))
+                             Jsonb(eligibility.model_dump(mode='json')),Jsonb(asdict(recommendation)) if recommendation else None,Jsonb(response)))
                         computed += 1
                 cursor = rows[-1]['id']
             if team_id:

@@ -1,6 +1,6 @@
 """Transactional PostgreSQL repository; no JSON/cache primary state in V2."""
 import os
-from contextlib import contextmanager
+from contextlib import contextmanager,nullcontext
 from uuid import uuid4
 import psycopg
 from psycopg.rows import dict_row
@@ -50,12 +50,12 @@ class Database:
               'on conflict(slug) do update set name=excluded.name,adapter=excluded.adapter,config=excluded.config returning *',
               (slug,name,adapter,Jsonb(config))).fetchone()
 
-    def save_program(self,program:Program,source_id,source_program_id,discovery_url,raw_metadata,raw_text='',documents=None,extraction_metadata=None):
+    def save_program(self,program:Program,source_id,source_program_id,discovery_url,raw_metadata,raw_text='',documents=None,extraction_metadata=None,expected_version_id=None,connection=None):
         from radar.ocr import review_metadata
         extraction_metadata=review_metadata(documents,extraction_metadata)
         normal=program.model_dump(mode='json'); canonical_url=normalize_url(program.official_url)
         fingerprint=digest({'normalized':normal,'raw':raw_text})
-        with self.transaction() as c:
+        with (self.transaction() if connection is None else nullcontext(connection)) as c:
             # One transaction-scoped lock serializes canonical matching/versioning.
             # Ingestion stays concurrent outside this short database critical section.
             c.execute('select pg_advisory_xact_lock(782394201)')
@@ -98,6 +98,8 @@ class Database:
                 'values(%s,%s,%s,%s,%s,%s) on conflict(source_id,source_program_id) do update set last_seen_at=now(),discovery_url=excluded.discovery_url,official_detail_url=excluded.official_detail_url,raw_metadata=excluded.raw_metadata',
                 (pid,source_id,source_program_id,discovery_url,canonical_url,Jsonb(raw_metadata)))
             previous=c.execute('select * from startup_radar.program_versions where id=%s',(existing['current_version_id'],)).fetchone() if existing['current_version_id'] else None
+            if expected_version_id is not None and (not previous or str(previous['id'])!=str(expected_version_id)):
+                raise ValueError('Program changed while reviewing; inspect the latest evidence')
             if previous and previous['content_hash']==fingerprint:
                 # Dates can close a notice without a new content version.
                 c.execute('update startup_radar.programs set status=%s,updated_at=now() where id=%s',(program_status(program),pid))
