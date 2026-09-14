@@ -1,14 +1,14 @@
-name: StartupRadar Weekly
+name: StartupRadar Daily and Weekly
 on:
   schedule:
-    # Single production schedule: Tuesday 15:00 Asia/Seoul, existing weekly preference.
-    - cron: '0 6 * * 2'
+    # Poll independent admin-selected Seoul daily and weekly calendars.
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
     inputs:
       kind:
         description: Task kind
         type: choice
-        options: [WEEKLY, INGEST, REFRESH]
+        options: [WEEKLY, DISCOVER, INGEST, REFRESH]
         default: WEEKLY
       source_slug:
         description: Optional registered source slug
@@ -39,6 +39,11 @@ jobs:
             requirements-v2.lock.txt
             requirements-ocr.lock.txt
       - run: pip install -r requirements-v2.lock.txt
+      - name: Prepare optional public browser reader
+        if: vars.RADAR_BROWSER_ENABLED == 'true'
+        run: |
+          pip install -r requirements-browser.txt
+          python -m playwright install --with-deps chromium
       - name: Prepare verified evidence runtime
         if: inputs.kind == 'INGEST'
         run: |
@@ -58,13 +63,24 @@ jobs:
           JOB_ID: ${{ inputs.job_id }}
           REVISION_NOTE: ${{ inputs.revision_note }}
           DELIVERY_ENABLED: ${{ vars.RADAR_V2_DELIVERY_ENABLED }}
+          EVENT_NAME: ${{ github.event_name }}
           RADAR_OCR_MODEL_DIR: work/tessdata
           RADAR_OCR_CACHE_DIR: work/ocr-cache
           RADAR_EVIDENCE_IMAGE: startup-radar-evidence:${{ github.sha }}
         shell: bash
         run: |
-          if [ "$KIND" = 'WEEKLY' ]; then
+          if [ "$EVENT_NAME" = 'schedule' ]; then
             args=()
+            if [ "$DELIVERY_ENABLED" = 'true' ]; then args+=(--deliver); fi
+            python -m radar.cli calendar "${args[@]}"
+            exit $?
+          fi
+          if [ "$KIND" = 'DISCOVER' ]; then
+            python -m radar.cli discover
+            exit $?
+          fi
+          if [ "$KIND" = 'WEEKLY' ]; then
+            args=(--from-catalog)
             if [ -n "$REVISION_NOTE" ]; then args+=(--revision-note "$REVISION_NOTE"); fi
             if [ "$DELIVERY_ENABLED" = 'true' ]; then args+=(--deliver); fi
             python -m radar.cli weekly "${args[@]}"

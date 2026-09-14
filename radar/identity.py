@@ -31,7 +31,7 @@ def duplicate_confidence(left,right):
 
 MATERIAL_FIELDS=('title','organization','program_types','application_start_at','application_end_at',
  'deadline_type','application_url','applicant_summary','benefit_summary','support_summary',
- 'amount_min','amount_max','requirements','document_hashes','evidence_complete')
+ 'amount_min','amount_max','requirements','document_hashes','evidence_complete','opportunity')
 
 
 def changed_fields(old,new):

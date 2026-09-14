@@ -13,7 +13,14 @@ from radar.notifications import safe_link
 FALLBACK = '\uacf5\uc2dd \uacf5\uace0 \ud655\uc778 \ud544\uc694'
 MATERIAL = ('title','organization','support_summary','applicant_summary','application_start_at',
             'application_end_at','application_start_precision','application_end_precision',
-            'deadline_type','official_url','application_url','attachments')
+            'deadline_type','official_url','application_url','attachments','category','participation','cohort','year',
+            'fee','investment_terms','benefit_kind','cancelled','event_start_at','event_end_at')
+
+
+def material_hash(facts):
+    # Keep hashes of pre-discovery weekly snapshots stable when extra fields
+    # are absent. Schema expansion alone is not an official programme update.
+    return digest({key:facts.get(key) for index,key in enumerate(MATERIAL) if index<12 or facts.get(key) is not None})
 
 
 def weekly_detail(candidate):
@@ -49,7 +56,7 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
     start,end = week_window(at)
     sources = collection.get('sources',[])
     useful = [s for s in sources if s['status']=='SUCCESS' or s.get('parsed',0)>0]
-    complete = bool(sources) and len(sources)==2 and all(s['status']=='SUCCESS' and s.get('coverage',{}).get('pagination_complete') for s in sources)
+    complete = bool(sources) and all(s['status']=='SUCCESS' and s.get('coverage',{}).get('pagination_complete') for s in sources)
     if not useful:return {'status':'FAILED','reason':'ALL_SOURCES_FAILED','published':False}
     with db.transaction() as c:
         c.execute('select pg_advisory_xact_lock(782394203)')
@@ -62,8 +69,8 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
         items = {}
         for row in collection.get('weekly_programs',[]):
             pid = str(row['program_id']); facts = row['snapshot']
-            if row['status']=='CLOSED' or not facts.get('official_url'):continue
-            fingerprint = digest({key:facts.get(key) for key in MATERIAL})
+            if row['status'] in ('CLOSED','ROLLING') or (row['status']=='CANCELLED' and pid not in known) or facts.get('deadline_type') in ('ROLLING','UNTIL_BUDGET_EXHAUSTED') or not facts.get('official_url'):continue
+            fingerprint = material_hash(facts)
             if known.get(pid)==fingerprint:continue
             items.setdefault(pid,{**row,'material_hash':fingerprint,'change_type':'UPDATE' if pid in known else 'NEW'})
         if not items and not complete:
@@ -128,11 +135,16 @@ def announce(db, briefing_id, transport=None):
     delivered=0
     for item in ids:
         with db.transaction() as c:
+            # Serialize a correction with claiming a message. Pending messages
+            # use current editorial text; already sent messages remain untouched.
+            current=c.execute('select * from startup_radar.weekly_briefings where id=%s for update',(briefing_id,)).fetchone()
+            current_items=c.execute('select snapshot from startup_radar.weekly_briefing_items where briefing_id=%s order by display_order',(briefing_id,)).fetchall()
             row=c.execute("select a.* from startup_radar.weekly_announcements a join startup_radar.telegram_subscriptions s on s.id=a.subscription_id "
                 "left join startup_radar.team_notification_preferences p on p.team_id=s.team_id where a.id=%s and a.state='PENDING' "
                 "and s.chat_id=a.chat_id and s.enabled and s.digest_enabled and s.channel_health='HEALTHY' and coalesce(p.enabled,true) and coalesce(p.digest_enabled,true) for update of a skip locked",(item['id'],)).fetchone()
             if not row:continue
-            c.execute("update startup_radar.weekly_announcements set state='SENDING',attempted_at=now() where id=%s",(row['id'],))
+            row['payload']=announcement_text(current,current_items)
+            c.execute("update startup_radar.weekly_announcements set state='SENDING',attempted_at=now(),payload=%s where id=%s",(row['payload'],row['id']))
         try:result=transport.send(row['chat_id'],row['payload'])
         except Exception:result={'state':'UNCERTAIN'}
         state=result.get('state') if result.get('state') in ('DELIVERED','FAILED','UNCERTAIN') else 'UNCERTAIN'
@@ -146,20 +158,32 @@ def announce(db, briefing_id, transport=None):
     return {'state':'RECORDED','planned':len(ids),'delivered':delivered,'states':{row['state']:row['count'] for row in states}}
 
 
-def run_weekly(db, transport=None, at=None, publish=True, collector=None, revision_note=None):
+def run_weekly(db, transport=None, at=None, publish=True, collector=None, revision_note=None, scheduled=False, from_catalog=False):
     from radar.ingestion import ingest
     from radar.executions import claim_execution,finish_execution
+    from radar.weekly_schedule import scheduled_week
     at=at or now(); start,_=week_window(at)
+    if scheduled and (not publish or revision_note):raise ValueError('Scheduled run cannot draft or revise')
+    if scheduled and not scheduled_week(db,at):
+        return {'status':'SUCCESS','state':'NOT_DUE','executed':False}
     claim=claim_execution(db,'WEEKLY')
     if 'execution_id' not in claim:return claim
     try:
+        if scheduled and not scheduled_week(db,at,claim['execution_id']):
+            result={'status':'SUCCESS','state':'NOT_DUE','executed':False}
+            finish_execution(db,claim['execution_id'],result)
+            return result
         with db.transaction() as c:
             existing=c.execute("select id,collection_status from startup_radar.weekly_briefings where week_start=%s and status='PUBLISHED'",(start,)).fetchone()
             sources=c.execute("select * from startup_radar.sources where enabled and adapter in ('KSTARTUP','BIZINFO') order by slug").fetchall()
         if existing and not revision_note:result={'status':existing['collection_status'],'briefing_id':str(existing['id']),'published':True,'unchanged':True}
         else:
-            if {s['adapter'] for s in sources}!={'KSTARTUP','BIZINFO'}:raise ValueError('Both official sources must be configured')
-            collection=(collector or ingest)(db,sources,trigger='weekly',structured_only=True)
+            if from_catalog:
+                from radar.opportunity_store import catalog_collection
+                collection=catalog_collection(db)
+            else:
+                if {s['adapter'] for s in sources}!={'KSTARTUP','BIZINFO'}:raise ValueError('Both official sources must be configured')
+                collection=(collector or ingest)(db,sources,trigger='weekly',structured_only=True)
             result=build_briefing(db,collection,at,publish,revision_note)
             result['ingestion_run_id']=collection['id']
             result['sources']=collection['sources']

@@ -14,7 +14,42 @@ ADAPTERS={'KSTARTUP':KStartupApiAdapter,'BIZINFO':BizInfoApiAdapter,'RSS':RssAda
 
 
 def build_adapter(source):
+    if source['config'].get('opportunity_channel'):
+        from radar.adapters.opportunities import OfficialChannelAdapter
+        return OfficialChannelAdapter(source,SafeHttp(source['config'].get('allowed_hosts',[]),max_bytes=3_000_000,timeout=12))
     return ADAPTERS[source['adapter']](source,SafeHttp(source['config'].get('allowed_hosts',[])))
+
+
+def candidates_with_watchlist(db,source,adapter):
+    if not source['config'].get('opportunity_channel'):
+        yield from adapter.discover();return
+    from radar.adapters.base import Candidate
+    seen=set()
+    with db.transaction() as c:
+        rows=c.execute("select s.official_detail_url,(array_agg(p.title order by s.last_seen_at desc))[1] title,max(s.last_seen_at) checked_at "
+            "from startup_radar.program_sources s join startup_radar.programs p on p.id=s.program_id "
+            "where s.source_id=%s and p.status in ('OPEN','UPCOMING','UNKNOWN') and (p.application_end_at is null or p.application_end_at>=now()) "
+            "group by s.official_detail_url order by checked_at,s.official_detail_url limit 20",(source['id'],)).fetchall()
+        submissions=c.execute("select official_url,description from startup_radar.opportunity_submissions where state='REVIEW' order by created_at limit 100").fetchall()
+    from urllib.parse import urlsplit
+    approved=set(source['config'].get('allowed_hosts',[]))
+    # Only the same reviewed channel path; membership referrals cannot grant hosts.
+    prefix=source['config'].get('submission_path_prefix')
+    if prefix:
+        for row in submissions[:20]:
+            u=urlsplit(row['official_url'])
+            if u.hostname in approved and u.path.startswith(prefix) and row['official_url'] not in seen:
+                seen.add(row['official_url'])
+                yield Candidate(source['slug'],row['official_url'],row['official_url'],row['official_url'],row['description'],{'referral':True})
+    for row in rows:
+        url=row['official_detail_url']
+        if url in seen:continue
+        seen.add(url)
+        adapter.pagination.rechecks+=1
+        yield Candidate(source['slug'],url,url,url,row['title'],{'active_recheck':True})
+    for candidate in adapter.discover():
+        if candidate.official_detail_url not in seen:
+            seen.add(candidate.official_detail_url);yield candidate
 
 
 def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extractor=None,structured_only=False):
@@ -28,13 +63,15 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
         with db.transaction() as c:c.execute('update startup_radar.sources set last_attempted_at=now() where id=%s',(source['id'],))
         try:
             adapter=adapter_factory(source)
-            for candidate in adapter.discover():
+            for candidate in candidates_with_watchlist(db,source,adapter):
                 discovered+=1
                 try:
                     if structured_only:
                         from radar.weekly import weekly_detail
-                        if source['adapter'] not in ('KSTARTUP','BIZINFO'):raise ValueError('Weekly collection accepts official APIs only')
-                        detail=weekly_detail(candidate);documents=[]
+                        if source['adapter'] in ('KSTARTUP','BIZINFO'):detail=weekly_detail(candidate)
+                        elif source['config'].get('opportunity_channel'):detail=adapter.fetch_detail(candidate)
+                        else:raise ValueError('Structured collection requires an approved official channel')
+                        documents=[]
                     else:
                         detail=adapter.fetch_detail(candidate)
                         documents=adapter.fetch_documents(detail)
@@ -44,7 +81,10 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                             failure=doc.get('failure') or SourceFailure(doc.get('error_kind','DOCUMENT_PARSE'),doc.get('error_message') or 'Document requires review').record(url=doc['original_url'])
                             failures.append({**failure,'stage':'DOCUMENT'})
                     program=adapter.normalize(candidate,detail,documents)
-                    extraction_metadata={'provider':'structured_api_weekly' if structured_only else 'anthropic' if isinstance(extractor,RequirementExtractor) else 'injected',
+                    if trigger=='daily-discovery' and source['adapter'] in ('KSTARTUP','BIZINFO'):
+                        from radar.opportunity_store import attach_api_facts
+                        attach_api_facts(program,detail,source)
+                    extraction_metadata={'provider':('official_channel' if source['config'].get('opportunity_channel') else 'structured_api_weekly') if structured_only else 'anthropic' if isinstance(extractor,RequirementExtractor) else 'injected',
                         'model':getattr(extractor,'model',None),'schema_version':getattr(extractor,'version',None),'status':'SUCCESS'}
                     try:
                         if detail.evidence_warning:
@@ -62,6 +102,9 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                         extraction_metadata.update(status='FAILED',error_kind=error.kind)
                         failures.append(error.record(stage='EXTRACTION',url=candidate.official_detail_url))
                     saved=db.save_program(program,source['id'],candidate.source_program_id,candidate.discovery_url,candidate.raw_metadata,detail.text,documents,extraction_metadata)
+                    if program.opportunity:
+                        from radar.opportunity_store import record_opportunity
+                        record_opportunity(db,program,saved,source,detail)
                     new_programs+=saved['event']=='NEW';updated_programs+=saved['event']=='UPDATE'
                     cache_hits+=bool(extraction_metadata.get('cache_hit'))
                     parsed+=1

@@ -15,14 +15,14 @@ class SafeHttp:
         self.session.headers['User-Agent']='StartupRadar/2.0 (+public startup notice indexing)'
         self.robots={}
 
-    def validate_url(self,url):
+    def validate_url(self,url,require_allowlisted=True):
         try:
             p=urlsplit(url)
             safe=p.scheme=='https' and p.hostname and not p.username and not p.password and p.port in (None,443)
         except (ValueError,TypeError):safe=False
         if not safe:
             raise SourceFailure('UNSAFE_URL','HTTPS public URLs required')
-        if p.hostname not in self.allowed_hosts:
+        if require_allowlisted and p.hostname not in self.allowed_hosts:
             raise SourceFailure('UNAPPROVED_HOST','Host must be configured for this source')
         try: addresses=socket.getaddrinfo(p.hostname,443,type=socket.SOCK_STREAM)
         except OSError: raise SourceFailure('DNS','Source hostname could not be resolved',True)

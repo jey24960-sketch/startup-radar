@@ -1,0 +1,313 @@
+{
+  "checked_at": "2026-09-15 01:50:25.816265+09:00",
+  "scope": "LOCAL_PUBLIC_SOURCE_SAMPLE_NOT_NATIONWIDE",
+  "source_channels": [
+    {
+      "slug": "antler-residency",
+      "status": "SUCCESS",
+      "parsed": 1,
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "page_cap": 1,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage",
+        "failed_records": 0,
+        "pages_requested": 1,
+        "persisted_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "fetched_unique_records": 1,
+        "non_recruitment_excluded": 0
+      }
+    },
+    {
+      "slug": "asan-notices",
+      "status": "SUCCESS",
+      "parsed": 1,
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "page_cap": 1,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage",
+        "failed_records": 0,
+        "pages_requested": 1,
+        "persisted_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "fetched_unique_records": 1,
+        "non_recruitment_excluded": 0
+      }
+    },
+    {
+      "slug": "d2sf-campus",
+      "status": "SUCCESS",
+      "parsed": 1,
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "page_cap": 1,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage",
+        "failed_records": 0,
+        "pages_requested": 1,
+        "persisted_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "fetched_unique_records": 1,
+        "non_recruitment_excluded": 0
+      }
+    },
+    {
+      "slug": "d2sf-coffee",
+      "status": "SUCCESS",
+      "parsed": 1,
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "page_cap": 1,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage",
+        "failed_records": 0,
+        "pages_requested": 1,
+        "persisted_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "fetched_unique_records": 1,
+        "non_recruitment_excluded": 0
+      }
+    },
+    {
+      "slug": "d2sf-defense",
+      "status": "SUCCESS",
+      "parsed": 1,
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "page_cap": 1,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage",
+        "failed_records": 0,
+        "pages_requested": 1,
+        "persisted_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "fetched_unique_records": 1,
+        "non_recruitment_excluded": 0
+      }
+    },
+    {
+      "slug": "d2sf-investment",
+      "status": "SUCCESS",
+      "parsed": 1,
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "page_cap": 1,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage",
+        "failed_records": 0,
+        "pages_requested": 1,
+        "persisted_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "fetched_unique_records": 1,
+        "non_recruitment_excluded": 0
+      }
+    },
+    {
+      "slug": "d2sf-space",
+      "status": "SUCCESS",
+      "parsed": 1,
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "page_cap": 1,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage",
+        "failed_records": 0,
+        "pages_requested": 1,
+        "persisted_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "fetched_unique_records": 1,
+        "non_recruitment_excluded": 0
+      }
+    },
+    {
+      "slug": "kaist-home",
+      "status": "SUCCESS",
+      "parsed": 1,
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "page_cap": 1,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage",
+        "failed_records": 0,
+        "pages_requested": 1,
+        "persisted_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "fetched_unique_records": 1,
+        "non_recruitment_excluded": 0
+      }
+    },
+    {
+      "slug": "snu-home",
+      "status": "SUCCESS",
+      "parsed": 1,
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "page_cap": 1,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage",
+        "failed_records": 0,
+        "pages_requested": 1,
+        "persisted_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "fetched_unique_records": 1,
+        "non_recruitment_excluded": 0
+      }
+    },
+    {
+      "slug": "sparklabs-batch",
+      "status": "SUCCESS",
+      "parsed": 1,
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "page_cap": 1,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage",
+        "failed_records": 0,
+        "pages_requested": 1,
+        "persisted_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "fetched_unique_records": 1,
+        "non_recruitment_excluded": 0
+      }
+    }
+  ],
+  "records": [
+    {
+      "title": "4대 과기원 Boston Fast PoC Gateway 모집(~9/16)",
+      "url": "https://startup.kaist.ac.kr/boards/view/board_event/2191",
+      "confirmed": true,
+      "status": "OPEN",
+      "deadline": "2026-09-16T23:59:59+09:00",
+      "application_link_verified": false,
+      "review_reasons": [
+        "APPLICATION_LINK_UNKNOWN"
+      ]
+    },
+    {
+      "title": "Antler Korea founder residency",
+      "url": "https://www.antler.co/location/korea",
+      "confirmed": true,
+      "status": "ROLLING",
+      "deadline": null,
+      "application_link_verified": false,
+      "review_reasons": [
+        "APPLICATION_LINK_UNKNOWN",
+        "APPLICANT_UNKNOWN"
+      ]
+    },
+    {
+      "title": "D2SF @강남 입주",
+      "url": "https://d2startup.com/ko/apply",
+      "confirmed": true,
+      "status": "UNKNOWN",
+      "deadline": null,
+      "application_link_verified": true,
+      "review_reasons": [
+        "DEADLINE_UNKNOWN",
+        "COHORT_UNKNOWN",
+        "APPLICANT_UNKNOWN",
+        "POSSIBLE_DUPLICATE"
+      ]
+    },
+    {
+      "title": "Let's Chat!",
+      "url": "https://d2startup.com/ko/apply",
+      "confirmed": true,
+      "status": "ROLLING",
+      "deadline": null,
+      "application_link_verified": true,
+      "review_reasons": [
+        "APPLICANT_UNKNOWN",
+        "POSSIBLE_DUPLICATE"
+      ]
+    },
+    {
+      "title": "SparkLabs Batch Program",
+      "url": "https://sparklabs.co.kr/kr/program",
+      "confirmed": false,
+      "status": "UNKNOWN",
+      "deadline": null,
+      "application_link_verified": false,
+      "review_reasons": [
+        "APPLICATION_LINK_UNKNOWN",
+        "RECRUITMENT_UNCONFIRMED",
+        "DEADLINE_UNKNOWN",
+        "COHORT_UNKNOWN",
+        "APPLICANT_UNKNOWN"
+      ]
+    },
+    {
+      "title": "[모집] 2026 서울대학교 기후테크 창업 경진대회(총 상금 2,100만원) (기간: ~9/15까지)",
+      "url": "https://startup.snu.ac.kr/bbs/board.php?bo_table=sub4_1&wr_id=129",
+      "confirmed": true,
+      "status": "OPEN",
+      "deadline": "2026-09-15T23:59:59+09:00",
+      "application_link_verified": false,
+      "review_reasons": [
+        "APPLICATION_LINK_UNKNOWN"
+      ]
+    },
+    {
+      "title": "[모집] 2026 하반기 MARU 배치 스타트업 모집 (~8.28. 오후 1시)",
+      "url": "https://asan-nanum.org/notice/2026-anf-maru-open-h2/",
+      "confirmed": true,
+      "status": "CLOSED",
+      "deadline": "2026-08-28T13:00:00+09:00",
+      "application_link_verified": false,
+      "review_reasons": [
+        "APPLICATION_LINK_UNKNOWN",
+        "APPLICANT_UNKNOWN"
+      ]
+    },
+    {
+      "title": "신규 투자 검토",
+      "url": "https://d2startup.com/ko/apply",
+      "confirmed": true,
+      "status": "UNKNOWN",
+      "deadline": null,
+      "application_link_verified": true,
+      "review_reasons": [
+        "DEADLINE_UNKNOWN",
+        "COHORT_UNKNOWN",
+        "APPLICANT_UNKNOWN",
+        "POSSIBLE_DUPLICATE"
+      ]
+    },
+    {
+      "title": "제조&방산 투자 검토",
+      "url": "https://d2startup.com/ko/apply",
+      "confirmed": true,
+      "status": "UNKNOWN",
+      "deadline": null,
+      "application_link_verified": true,
+      "review_reasons": [
+        "DEADLINE_UNKNOWN",
+        "COHORT_UNKNOWN",
+        "APPLICANT_UNKNOWN",
+        "POSSIBLE_DUPLICATE"
+      ]
+    },
+    {
+      "title": "캠퍼스 기술창업 공모전",
+      "url": "https://d2startup.com/ko/apply",
+      "confirmed": true,
+      "status": "UNKNOWN",
+      "deadline": null,
+      "application_link_verified": true,
+      "review_reasons": [
+        "DEADLINE_UNKNOWN",
+        "COHORT_UNKNOWN",
+        "APPLICANT_UNKNOWN"
+      ]
+    }
+  ],
+  "sample_denominator": 9,
+  "collected_recruitments": 9,
+  "missed": 0,
+  "date_confirmed": 3,
+  "application_link_confirmed": 5,
+  "weekly_items": 6,
+  "telegram_rows": 0
+}

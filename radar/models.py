@@ -197,6 +197,7 @@ class Program(StrictModel):
     document_hashes: list[str] = Field(default_factory=list)
     document_coverage: list[dict] = Field(default_factory=list)
     material_notes: list[str] = Field(default_factory=list)
+    opportunity: dict | None = None
 
     @field_validator('program_types')
     @classmethod

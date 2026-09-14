@@ -1,6 +1,7 @@
 """Long-tail discovery. Source selectors/configuration live outside the pipeline."""
 from urllib.parse import urljoin,urlsplit,quote
 import re
+import time
 from bs4 import BeautifulSoup
 from defusedxml import ElementTree as ET
 from radar.adapters.base import SourceAdapter,Candidate,AcquiredDetail,SourceFailure
@@ -96,29 +97,59 @@ class RssAdapter(HtmlAdapter):
 class BrowserAdapter(HtmlAdapter):
     def _render(self,url):
         self.http.validate_url(url);self.http.check_robots(url)
-        try:from playwright.sync_api import sync_playwright
+        try:from playwright.sync_api import sync_playwright, TimeoutError as BrowserTimeout, Error as BrowserError
         except ImportError:raise SourceFailure('DEPENDENCY','Install Playwright and its Chromium browser')
         with sync_playwright() as playwright:
-            browser=playwright.chromium.launch(headless=True)
+            try:browser=playwright.chromium.launch(headless=True)
+            except BrowserError:raise SourceFailure('DEPENDENCY','Chromium runtime unavailable; install the optional browser runtime')
             try:
-                page=browser.new_page(user_agent='StartupRadar/2.0 public notice reader')
-                blocked=[]
+                context=browser.new_context(user_agent='StartupRadar/2.0 public notice reader',service_workers='block',accept_downloads=False)
+                page=context.new_page();blocked=[];used=0;requests=0;started=time.monotonic()
+                # All browser traffic goes through the same bounded, policy-aware
+                # HTTP client. No cookies, form submission or unrestricted redirects.
+                cache=getattr(self,'resource_cache',{})
+                context.route_web_socket('**/*',lambda socket:socket.close())
                 def route_request(route):
-                    if route.request.resource_type in ('image','font','media'):return route.abort()
+                    nonlocal used,requests
+                    if route.request.resource_type not in ('document','script','xhr','fetch'):return route.abort()
+                    if route.request.method!='GET':return route.abort()
                     try:
-                        self.http.validate_url(route.request.url);self.http.check_robots(route.request.url)
-                        route.continue_()
+                        requests+=1
+                        if requests>80 or time.monotonic()-started>40:raise SourceFailure('BROWSER_BUDGET','Render request/time budget reached')
+                        target=route.request.url
+                        self.http.validate_url(target)
+                        if target not in cache:
+                            wait=1-(time.monotonic()-getattr(self,'last_resource_request',0))
+                            if wait>0:time.sleep(wait)
+                            if time.monotonic()-started>40:raise SourceFailure('BROWSER_BUDGET','Render time budget reached')
+                            try:cache[target]=self.http.get(target)
+                            finally:self.last_resource_request=time.monotonic()
+                        data,mime,final=cache[target];used+=len(data)
+                        if used>20_000_000:raise SourceFailure('SIZE_LIMIT','Rendered page resource budget is 20 MB')
+                        # Redirected documents must retain their actual origin and
+                        # URL resolution; the destination was validated by SafeHttp.
+                        if final!=target:
+                            route.fulfill(status=302,headers={'Location':final});return
+                        route.fulfill(status=200,body=data,content_type=(mime or 'application/octet-stream')+'; charset=utf-8')
                     except SourceFailure as error:
                         blocked.append(error.kind);route.abort()
-                page.route('**/*',route_request)
+                context.route('**/*',route_request)
                 response=page.goto(url,wait_until='domcontentloaded',timeout=20000)
                 if response is None or response.status>=400:raise SourceFailure('BROWSER_BLOCKED','Rendered source did not load')
                 selector=self.config.get('ready_selector')
-                if selector:page.wait_for_selector(selector,timeout=10000)
+                if selector:page.wait_for_selector(selector,state='attached',timeout=10000)
                 text=page.content()
+                if any(kind in blocked for kind in ('BROWSER_BUDGET','SIZE_LIMIT')):
+                    raise SourceFailure('BROWSER_BUDGET','Resource limits interrupted page rendering')
+                if len(text.encode())>3_000_000:raise SourceFailure('SIZE_LIMIT','Rendered HTML exceeds 3 MB')
                 if any(term in text.lower() for term in ('g-recaptcha','h-captcha','cf-chl-','verify you are human')):
                     raise SourceFailure('CAPTCHA','Access challenge detected; no bypass attempted')
+                self.resource_cache=cache
                 return text.encode(), 'text/html', page.url
+            except BrowserTimeout:
+                reason=','.join(sorted(set(blocked))) or 'READINESS_TIMEOUT'
+                raise SourceFailure('BROWSER_INCOMPLETE','Required page content did not load: '+reason)
+            except BrowserError:raise SourceFailure('BROWSER_INCOMPLETE','Public browser page could not complete; no challenge bypass attempted')
             finally:browser.close()
     def discover(self):
         original=self.http.get
