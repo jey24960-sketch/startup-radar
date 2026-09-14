@@ -32,6 +32,10 @@ class Database:
     @contextmanager
     def transaction(self,user_id=None):
         borrowed=self._session_connection.get()
+        # A nested actor operation is a separate transaction, not a savepoint:
+        # SET LOCAL role/JWT would otherwise survive savepoint release.
+        if borrowed is not None and borrowed.info.transaction_status!=psycopg.pq.TransactionStatus.IDLE:
+            borrowed=None
         with (nullcontext(borrowed) if borrowed is not None else psycopg.connect(self.url,row_factory=dict_row,prepare_threshold=None)) as connection:
             with connection.transaction():
                 connection.execute("set local timezone='Asia/Seoul'")

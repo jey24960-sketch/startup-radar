@@ -27,6 +27,11 @@ def test_batch_reuses_connection_but_never_role_identity_or_failed_transaction(c
                 assert service.info.backend_pid==pid
                 assert service.execute("select current_user name,nullif(current_setting('request.jwt.claim.sub',true),'') identity").fetchone()['identity'] is None
                 assert service.execute('select current_user name').fetchone()['name']!='authenticated'
+                with db.transaction(c['admin']) as nested:
+                    assert nested.info.backend_pid!=pid
+                    assert nested.execute('select current_user name').fetchone()['name']=='authenticated'
+                assert service.execute('select current_user name').fetchone()['name']!='authenticated'
+                assert service.execute("select nullif(current_setting('request.jwt.claim.sub',true),'') identity").fetchone()['identity'] is None
         def another_thread():
             with db.transaction() as worker:return worker.info.backend_pid
         with ThreadPoolExecutor(max_workers=1) as pool:
