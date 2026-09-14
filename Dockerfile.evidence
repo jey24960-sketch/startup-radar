@@ -6,5 +6,5 @@ RUN pip install --no-cache-dir -r requirements-v2.lock.txt -r requirements-ocr.l
 COPY radar ./radar
 COPY core ./core
 COPY tools/prepare_ocr_models.py ./tools/prepare_ocr_models.py
-RUN python -m tools.prepare_ocr_models /opt/tessdata
+RUN python -m tools.prepare_ocr_models /opt/tessdata && chmod 0444 /opt/tessdata/kor.traineddata /opt/tessdata/eng.traineddata
 USER 65534:65534
