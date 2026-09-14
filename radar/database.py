@@ -9,6 +9,7 @@ from radar.models import TeamProfile, Program
 from radar.identity import normalize_url,normalize_text,digest,changed_fields,duplicate_confidence
 from radar.dates import program_status
 
+_CURRENT_OBSERVATION=object()
 
 class Database:
     def __init__(self,url=None):
@@ -50,7 +51,7 @@ class Database:
               'on conflict(slug) do update set name=excluded.name,adapter=excluded.adapter,config=excluded.config returning *',
               (slug,name,adapter,Jsonb(config))).fetchone()
 
-    def save_program(self,program:Program,source_id,source_program_id,discovery_url,raw_metadata,raw_text='',documents=None,extraction_metadata=None,expected_version_id=None,connection=None):
+    def save_program(self,program:Program,source_id,source_program_id,discovery_url,raw_metadata,raw_text='',documents=None,extraction_metadata=None,expected_version_id=None,connection=None,source_observed_at=_CURRENT_OBSERVATION):
         from radar.ocr import review_metadata
         from radar.quality import save_assessment
         extraction_metadata=review_metadata(documents,extraction_metadata)
@@ -106,13 +107,13 @@ class Database:
             if previous and previous['content_hash']==fingerprint:
                 # Dates can close a notice without a new content version.
                 c.execute('update startup_radar.programs set status=%s,updated_at=now() where id=%s',(program_status(program),pid))
-                self._snapshot(c,pid,previous['id'],source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata)
+                self._snapshot(c,pid,previous['id'],source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata,source_observed_at)
                 save_assessment(c,previous['id'],program,documents,extraction_metadata,raw_text)
                 return {'program_id':pid,'version_id':previous['id'],'event':None}
             version=c.execute('insert into startup_radar.program_versions(program_id,version,content_hash,normalized,raw_text,evidence_complete) '
                 'values(%s,%s,%s,%s,%s,%s) returning *',(pid,previous['version']+1 if previous else 1,fingerprint,Jsonb(normal),raw_text,program.evidence_complete)).fetchone()
             vid=version['id']
-            self._snapshot(c,pid,vid,source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata)
+            self._snapshot(c,pid,vid,source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata,source_observed_at)
             c.execute('update startup_radar.programs set title=%s,organization=%s,program_types=%s,status=%s,application_start_at=%s,application_end_at=%s,'
                 'deadline_type=%s,official_url=%s,application_url=%s,applicant_summary=%s,support_summary=%s,benefit_summary=%s,'
                 'amount_min=%s,amount_max=%s,currency=%s,current_version_id=%s,updated_at=now() where id=%s',
@@ -143,7 +144,7 @@ class Database:
             return {'program_id':pid,'version_id':vid,'event':event if changed else None}
 
     @staticmethod
-    def _snapshot(c,pid,vid,source_id,source_program_id,discovery_url,detail_url,raw_metadata,raw_text,extraction_metadata):
+    def _snapshot(c,pid,vid,source_id,source_program_id,discovery_url,detail_url,raw_metadata,raw_text,extraction_metadata,source_observed_at=_CURRENT_OBSERVATION):
         source=c.execute('select adapter,config from startup_radar.sources where id=%s',(source_id,)).fetchone()
         source_config={'adapter':source['adapter'],'config':source['config']}
         observation={'source_program_id':source_program_id,'discovery_url':discovery_url,'official_detail_url':detail_url,
@@ -151,3 +152,8 @@ class Database:
         c.execute('insert into startup_radar.program_source_snapshots(program_id,program_version_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata,source_config,detail_hash,observation_hash,extraction_metadata) '
                   'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict do nothing',
                   (pid,vid,source_id,source_program_id,discovery_url,detail_url,Jsonb(raw_metadata),Jsonb(source_config),digest(raw_text),digest(observation),Jsonb(extraction_metadata or {})))
+        # Deduplication does not suppress a real re-observation. Conversely,
+        # reviewing stored evidence inherits its clock instead of claiming a fetch.
+        current=source_observed_at is _CURRENT_OBSERVATION
+        c.execute('update startup_radar.program_versions set last_observed_at=greatest(last_observed_at,case when %s then now() else %s::timestamptz end) where id=%s',
+                  (current,None if current else source_observed_at,vid))

@@ -173,7 +173,8 @@ def apply_review(db,program_id,expected_version_id,decision):
         # The reviewed version and reusable decision commit or roll back together.
         with database.transaction() as c:
             saved=database.save_program(program,snapshot['source_id'],snapshot['source_program_id'],snapshot['discovery_url'],
-                snapshot['raw_metadata'],version['raw_text'],all_docs,metadata,expected_version_id=expected_version_id,connection=c)
+                snapshot['raw_metadata'],version['raw_text'],all_docs,metadata,expected_version_id=expected_version_id,connection=c,
+                source_observed_at=version['last_observed_at'])
             row=c.execute('insert into startup_radar.program_reviews(input_hash,source_id,program_id,base_version_id,decision,reviewer_kind,reviewer_label) '
                 'values(%s,%s,%s,%s,%s,%s,%s) returning id',(decision.primary_input_hash,snapshot['source_id'],program_id,
                 expected_version_id,Jsonb(decision.model_dump(mode='json')),decision.reviewer_kind,decision.reviewer_label)).fetchone()
@@ -206,7 +207,8 @@ def revoke_review(db,review_id,expected_version_id,note):
             saved=database.save_program(program,snapshot['source_id'],snapshot['source_program_id'],snapshot['discovery_url'],
                 snapshot['raw_metadata'],version['raw_text'],docs,{'provider':'source_review','status':'REVOKED','review_note':note,
                 'supplemental_urls':snapshot['extraction_metadata'].get('supplemental_urls',[]),
-                'review_flags':[{'kind':'REVIEW_REVOKED','quotes':[]}]},expected_version_id=expected_version_id,connection=c)
+                'review_flags':[{'kind':'REVIEW_REVOKED','quotes':[]}]},expected_version_id=expected_version_id,connection=c,
+                source_observed_at=version['last_observed_at'])
         return {'status':'SUCCESS','version_id':str(saved['version_id']),'review_id':str(review_id),
                 'calculation':'PENDING_REFRESH','delivery':'DISABLED'}
     return run_job(db,'INGEST',executor=execute)

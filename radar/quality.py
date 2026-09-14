@@ -70,7 +70,7 @@ def assess(program,documents,metadata,last_seen_at,at=None,raw_text=''):
 
 
 def save_assessment(c,version_id,program,documents,metadata,raw_text):
-    observed=c.execute('select max(ps.last_seen_at) at from startup_radar.program_sources ps join startup_radar.program_versions v on v.program_id=ps.program_id where v.id=%s',(version_id,)).fetchone()['at']
+    observed=c.execute('select last_observed_at at from startup_radar.program_versions where id=%s',(version_id,)).fetchone()['at']
     value=assess(program,documents or [],metadata,observed,raw_text=raw_text)
     c.execute('insert into startup_radar.program_quality(program_version_id,state,reasons,metrics,policy_version) values(%s,%s,%s,%s,%s) '
         'on conflict(program_version_id) do update set state=excluded.state,reasons=excluded.reasons,metrics=excluded.metrics,policy_version=excluded.policy_version,assessed_at=now()',
@@ -100,14 +100,14 @@ def refresh_quality(db):
 def quality_report(db,limit=100):
     at=now()
     with db.transaction() as c:
-        rows=c.execute("select p.id,p.title,v.normalized,q.state,q.reasons,q.metrics,q.assessed_at, "
+        rows=c.execute("select p.id,p.title,v.normalized,q.state,q.reasons,q.metrics,q.assessed_at,startup_radar.quality_projection(v.id) live_quality, "
             "coalesce((select max((m.recommendation->>'score')::numeric) from startup_radar.member_program_results m where m.program_version_id=v.id),0) relevance, "
             "array(select s.slug from startup_radar.program_sources ps join startup_radar.sources s on s.id=ps.source_id where ps.program_id=p.id) sources "
             'from startup_radar.programs p join startup_radar.program_versions v on v.id=p.current_version_id left join startup_radar.program_quality q on q.program_version_id=v.id').fetchall()
     counts=Counter();active_counts=Counter();pareto=Counter();source_counts={};queue=[];documents=Counter();backlog=Counter()
     for row in rows:
         p=Program.model_validate(row['normalized']);status=program_status(p,at);active=status in ('OPEN','UPCOMING');left=days_left(p,at)
-        state=row['state'] or 'UNVERIFIABLE';reasons=row['reasons'] or ([] if state=='ACTIONABLE' else ['OTHER_REVIEW_REQUIRED'])
+        state=row['live_quality']['state'];reasons=row['live_quality']['reasons']
         counts[state]+=1;counts[status]+=1;counts['evidence_complete']+=p.evidence_complete
         if active:active_counts[state]+=1;active_counts['evidence_complete']+=p.evidence_complete
         pareto.update(reasons)

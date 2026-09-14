@@ -47,12 +47,17 @@ def test_review_rejects_changed_or_unaccounted_evidence(mutation):
 
 
 @pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Explicit ephemeral database required')
-def test_review_registry_reuse_drift_and_withdrawal(db):
+@pytest.mark.parametrize('source_clock',['old','unknown'])
+def test_review_registry_reuse_drift_and_withdrawal(db,source_clock):
     source_id=source(db);detail,docs,decision=case(str(source_id))
     original=Program.model_validate(decision['reviewed_program']);original.evidence_complete=False;original.requirements=[]
     saved=db.save_program(original,source_id,'review-case',detail.url,{},detail.text,docs)
+    with db.transaction() as c:
+        observed=c.execute("update startup_radar.program_versions set last_observed_at=case when %s then null else now()-interval '50 hours' end where id=%s returning last_observed_at",
+            (source_clock=='unknown',saved['version_id'])).fetchone()['last_observed_at']
     applied=apply_review(db,saved['program_id'],saved['version_id'],decision)
     assert applied['status']=='SUCCESS' and applied['version_id']!=str(saved['version_id'])
+    assert source_packet(db,saved['program_id'])[0]['last_observed_at']==observed
     reused=resolve_review(db,source_id,original,detail,docs,{})
     assert reused[0].evidence_complete and reused[2]['provider']=='source_review'
     changed=AcquiredDetail(detail.url,detail.text+' changed',detail.title)
@@ -61,6 +66,7 @@ def test_review_registry_reuse_drift_and_withdrawal(db):
     assert revoked['status']=='SUCCESS'
     assert resolve_review(db,source_id,original,detail,docs,{}) is None
     version,_,preserved=source_packet(db,saved['program_id'])
+    assert version['last_observed_at']==observed
     assert not version['normalized']['evidence_complete'] and len(preserved)==2
     assert all(not r['certain'] for r in version['normalized']['requirements'])
 

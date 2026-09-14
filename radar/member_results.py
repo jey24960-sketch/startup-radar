@@ -81,10 +81,10 @@ def refresh_member_results(db):
                               "from startup_radar.team_profiles p where r.team_id=%s and r.profile_version=%s and p.team_id=r.team_id and r.state='RUNNING'",
                               (Jsonb(scope['profile']),team_id,scope['version']))
         with db.transaction() as c:
-            c.execute("update startup_radar.member_read_state set state='SUCCESS',finished_at=now() where singleton")
+            c.execute("update startup_radar.member_read_state set state='SUCCESS',finished_at=now(),last_successful_refresh_at=now() where singleton")
     except Exception as error:
         with db.transaction() as c:
-            c.execute("update startup_radar.member_read_state set state='FAILED',finished_at=now(),error_kind=%s where singleton", (type(error).__name__,))
+            c.execute("update startup_radar.member_read_state set state='FAILED',finished_at=now(),error_kind=%s,last_failure_at=now(),last_failure_reason=%s where singleton", (type(error).__name__,type(error).__name__))
             c.execute("update startup_radar.profile_calculation_requests set state='FAILED',finished_at=now(),error_kind=%s where state='RUNNING'", (type(error).__name__,))
         raise
     return {'status': 'SUCCESS', 'computed': computed, 'reused': reused, 'scopes': len(scopes), 'delivery': 'DISABLED'}

@@ -31,8 +31,8 @@ Every item remains unproven until current evidence is linked here. Local tests d
 | 8 | Preserve Radar recommendation ordering | LOCAL PASS: RPC ranking retained despite reverse chronological dates; production PENDING |
 | 9 | Correct explicit mixed-feed pagination | LOCAL PASS: independent GFC/Radar sections, two pages, pinned notices, no omitted/duplicate fixture items; production PENDING |
 | 10 | Preferences cannot bypass channel suspension | LOCAL PASS: RPC and Python saves preserve administrative gates and BLOCKED/UNVERIFIED health; production PENDING |
-| 11 | Distinct collection/persistence/documents/calculation/delivery health | PENDING |
-| 12 | Member freshness and staleness visible | PENDING |
+| 11 | Distinct collection/persistence/documents/calculation/delivery health | LOCAL PASS: shared sanitized health projection, independent clocks and current/history denominators; production PENDING |
+| 12 | Member freshness and staleness visible | LOCAL PASS: version observation, profile queue state and explicit delayed target; production PENDING |
 | 13 | Actual production-safe OCR path | Native OCR PASS incl. limits; 3 real originals/15 pages extracted as drafts; Linux offline container CI PASS (run 34819471110); deployment PENDING |
 | 14 | AI timeout/retry/cost/cache observability | LOCAL PASS: request metrics, persistent failure cache, short claims, concurrent/expired owner tests; live usage PENDING |
 | 15 | Incremental current-result recomputation | PENDING |
@@ -87,7 +87,7 @@ Before tightening profile preference validation, a read-only production check fo
 
 The all tab is two independently paged sections, not a globally time-sorted feed. GFC notice order remains pinned/published/id; Radar preserves the exact RPC order, with recommendation score priority in recommended mode. The two-page E2E proof uses a stable 39-program/23-notice snapshot, all 15 supported categories, reversed score/date order and a pinned oldest notice. Concurrent source updates can still change an offset-based result set; this is not a snapshot-isolation or keyset-pagination guarantee.
 
-Evidence UI separates requirement value, stored evaluation-profile input and verdict. Preset assumptions are marked. Recommendation fit is explicitly not selection/funding probability. Member/source freshness and the full health dashboard remain Phase 5 work.
+Evidence UI separates requirement value, stored evaluation-profile input and verdict. Preset assumptions are marked. Recommendation fit is explicitly not selection/funding probability. Member/source freshness and the health dashboard are implemented on the hardening branch; production rollout remains pending.
 
 ## Notification state and recovery contract
 
@@ -98,3 +98,17 @@ Channel health is UNVERIFIED, HEALTHY or BLOCKED. New unverified rows are not de
 Planning and pre-send revalidation require all administrative, user and channel-health gates. Already in-flight requests cannot be recalled. UNCERTAIN receipts are not automatically retried. Zero pending work returns an explicit no-op result without touching transport. Opportunity links contain only the program UUID; team context stays in the authenticated web session.
 
 Legacy ledger/scenario validation helpers can no longer activate production channels: they reject the real Telegram transport and require the ephemeral test-database marker before any write. Their synthetic D-7/D-3 records are not natural scheduled delivery proof. Actual deployed V1/Cloudflare command isolation remains Phase 8 work.
+
+## Health and freshness contract
+
+Both the GFC admin RPC and Python health endpoint use one sanitized SQL projection. It keeps separate source-attempt, successful-full-scan, persistence, observation and failure clocks. A source is counted healthy only when its latest source run succeeded and a full scan is at most 24 hours old. Over 24 hours is WARNING; over 48 hours is INCIDENT; missing or implausibly future clocks are UNKNOWN. Member refresh success cannot turn failed or stale collection green.
+
+Current and historical document denominators are separate. The quality view rechecks elapsed time on every read, reports OPEN/UPCOMING counts, D-7/D-3 backlog, per-source evidence and a prioritized review queue. Stored eligibility facts are unchanged. Primary-query advertised totals are not divided into the union of primary and targeted search results. The dashboard identifies those scopes separately.
+
+Version creation, exact-version source observation, quality assessment and team-result computation have distinct labels in Asia/Seoul. Re-observing identical source content updates the version observation clock without rewriting or duplicating its immutable snapshot. Reviewing or revoking stored evidence inherits the original source clock, including unknown, instead of pretending a new primary-source fetch occurred. Ambiguous legacy review timestamps are not backfilled as fresh source observations.
+
+Profile status distinguishes QUEUED, CALCULATING, READY, FAILED, STALE and NOT_CALCULATED. A successful global refresh clock survives later failures. The existing hourly worker has a provisional 90-minute operational target, not a verified SLA or five-minute promise; overdue queued/running requests are explicitly delayed. Refreshing status preserves unsaved profile edits. Stored results that no longer match the profile, response, generation or Seoul date remain hidden until recomputed.
+
+Operator views include unresolved latest attempts, retry history, exact task/attempt/execution identifiers and recovery prerequisites. Old failures remain in the ledger after a successful retry. Channel counts and confirmed receipt time are separate from ingestion/calculation. Existing receipt origin is not fully verified, so this dashboard does not claim natural scheduled delivery acceptance.
+
+Phase 4 remote verification: Radar run 34822972462 PASS; GFC run 34822979946 PASS. Phase 5 final native verification: 421 passed, 1 Linux-only container test skipped (197.64s), including unchanged re-observation and review/revocation clock preservation. Phase 5 GFC verification: 81 Node/DB tests, 39 browser tests and production build PASS. Radar DB/Worker regressions also PASS. Main bundle is 758.53 kB (220.14 kB gzip); route splitting and runtime measurements remain Phase 6/acceptance work. Phase 5 remote verification remains pending. No production migration, configuration change or message was made.
