@@ -27,13 +27,13 @@ Every item remains unproven until current evidence is linked here. Local tests d
 | 4 | Every current quality state and reason explicit | LOCAL PASS: current-version assessment and review report; live backfill/UI PENDING |
 | 5 | No confident eligibility from incomplete evidence | Baseline tests; final regression PENDING |
 | 6 | Material active-program evidence improvement without weaker safety | PENDING real canary and denominator |
-| 7 | One canonical support-type contract, WORKSPACE path | PENDING |
-| 8 | Preserve Radar recommendation ordering | PENDING |
-| 9 | Correct explicit mixed-feed pagination | PENDING |
+| 7 | One canonical support-type contract, WORKSPACE path | LOCAL PASS: Python/SQL contract parity, all 15 UI filters execute real SQL; production PENDING |
+| 8 | Preserve Radar recommendation ordering | LOCAL PASS: RPC ranking retained despite reverse chronological dates; production PENDING |
+| 9 | Correct explicit mixed-feed pagination | LOCAL PASS: independent GFC/Radar sections, two pages, pinned notices, no omitted/duplicate fixture items; production PENDING |
 | 10 | Preferences cannot bypass channel suspension | PENDING |
 | 11 | Distinct collection/persistence/documents/calculation/delivery health | PENDING |
 | 12 | Member freshness and staleness visible | PENDING |
-| 13 | Actual production-safe OCR path | Native OCR PASS incl. limits; 3 real originals/15 pages extracted as drafts; Linux offline container CI and deployment PENDING |
+| 13 | Actual production-safe OCR path | Native OCR PASS incl. limits; 3 real originals/15 pages extracted as drafts; Linux offline container CI PASS (run 34819471110); deployment PENDING |
 | 14 | AI timeout/retry/cost/cache observability | LOCAL PASS: request metrics, persistent failure cache, short claims, concurrent/expired owner tests; live usage PENDING |
 | 15 | Incremental current-result recomputation | PENDING |
 | 16 | Measured 100/1,000-team growth | PENDING |
@@ -60,6 +60,9 @@ Implementation branches in both repositories: codex/production-hardening-2026091
 - Phase 2 targeted: 97 passed, 5 OCR skipped; subsequent native OCR/sandbox-contract run: 40 passed, 1 Linux-container test skipped.
 - Phase 2 full checkpoint before the final real-source semantic guard additions: 394 passed, 1 Linux-container test skipped (257.30s).
 - Radar PGlite migration/RLS/role regression PASS; Worker 4/4 PASS.
+- Phase 2 Linux CI commit `26bb4974e70a99b5b129b7522848c4160384586a`: all three jobs PASS, including native OCR and actual offline/read-only/non-root container probe. Initial container model-file permission failure was fixed with read-only model permissions, not root execution.
+- Phase 3 native PostgreSQL full suite: 408 passed, 1 Linux-only sandbox test skipped (215.74s). Default support type is explicitly UNKNOWN and survives cache serialization unchanged.
+- Phase 3 GFC: 81 Node/DB tests PASS, 36 Playwright tests PASS (53.7s), production build PASS. The added E2E test runs actual migrations and authenticated SQL behind intercepted HTTP transport; it is not a production session test.
 - All JUnit/logs and real-document OCR measurements are in the task workspace `startup-radar-hardening` directory. These are local evidence, not production canary proof.
 
 ## Evidence quality implementation notes
@@ -73,3 +76,13 @@ The evidence container has no network, no application secrets, a read-only root,
 OCR v2 uses automatic layout segmentation. Three hash-verified official originals were visually inspected in full: Pre-WoW (6 pages), Gyeonggi poster (1), and BizInfo Japanese expert program (8). v2 extracted 2,090/153/6,974 characters respectively. OCR remains imperfect and untrusted: a poster event date is not its application deadline, and expert experience is not founder age. The real-source golden corpus records these distinctions; its injected-response tests prove semantic guards, not live model accuracy. Live extraction scoring and active-program improvement remain PENDING.
 
 Reference contracts: [Anthropic SDK errors/timeouts/retries](https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/python), [Docker resource/isolation flags](https://docs.docker.com/reference/cli/docker/container/run/). Pinned repo dependency versions remain authoritative.
+
+## Support types and feed contract
+
+`radar.support_types` owns the normalized values, Korean labels and exact raw-source mapping. The additive migration embeds this contract and is parity-tested. GFC receives selectable values from `gfc_radar_me`; no frontend SPACE alias remains. Existing GRANT/GLOBAL identifiers are retained. Broad unmapped categories remain UNKNOWN. Raw source payloads and historical normalized JSON are not rewritten; the read projection normalizes historical categories. Source content/fingerprints remain traceable.
+
+Before tightening profile preference validation, a read-only production check found two unset profiles and one EDUCATION preference. No profile was changed. New profile saves reject values outside the canonical contract.
+
+The all tab is two independently paged sections, not a globally time-sorted feed. GFC notice order remains pinned/published/id; Radar preserves the exact RPC order, with recommendation score priority in recommended mode. The two-page E2E proof uses a stable 39-program/23-notice snapshot, all 15 supported categories, reversed score/date order and a pinned oldest notice. Concurrent source updates can still change an offset-based result set; this is not a snapshot-isolation or keyset-pagination guarantee.
+
+Evidence UI separates requirement value, stored evaluation-profile input and verdict. Preset assumptions are marked. Recommendation fit is explicitly not selection/funding probability. Member/source freshness and the full health dashboard remain Phase 5 work.

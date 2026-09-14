@@ -12,9 +12,9 @@ from radar.dates import korean_date
 from core.clock import SEOUL
 from radar.extraction_review import rule_review_reasons,rule_context_reasons,future_commitments,omitted_applicant_conditions
 from radar.ai_requests import request,REQUEST_TIMEOUT
+from radar.support_types import SupportType
 
-ProgramType=Literal['GRANT','COMPETITION','INCUBATION','ACCELERATION','INVESTMENT_LINKED','WORKSPACE',
-    'GLOBAL','MARKET_ENTRY','EDUCATION','MENTORING','POLICY_LOAN','SME_FINANCING','GENERIC_RD','UNKNOWN']
+ProgramType=SupportType
 
 
 class Extraction(StrictModel):
@@ -81,7 +81,7 @@ def cited_datetime(value,quote,end=False,source_texts=()):
 
 
 class RequirementExtractor:
-    version='requirements-2.0.9'
+    version='requirements-2.0.10'
     def __init__(self,client=None,model=None):
         self.client=client
         self.model=model or os.environ.get('RADAR_EXTRACTION_MODEL','claude-sonnet-4-5')

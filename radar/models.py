@@ -4,7 +4,8 @@ from enum import StrEnum
 import math
 from typing import Any, Literal
 import re
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
+from radar.support_types import SupportType, normalize
 
 
 class StrictModel(BaseModel):
@@ -40,7 +41,7 @@ class TeamProfile(StrictModel):
     revenue_band: str | None = None
     investment_received: bool | None = None
     investment_stage: str | None = None
-    preferred_program_types: list[str] | None = None
+    preferred_program_types: list[SupportType] | None = None
     global_expansion_interest: bool | None = None
     applicant_type: str | None = None
     prior_support_restrictions: list[str] | None = None
@@ -174,7 +175,7 @@ class EligibilityResult(StrictModel):
 class Program(StrictModel):
     title: str = Field(min_length=1)
     organization: str = Field(min_length=1)
-    program_types: list[str] = Field(default_factory=list)
+    program_types: list[str] = Field(default_factory=lambda: ['UNKNOWN'])
     official_url: str
     application_url: str | None = None
     application_start_at: datetime | None = None
@@ -196,6 +197,11 @@ class Program(StrictModel):
     document_hashes: list[str] = Field(default_factory=list)
     document_coverage: list[dict] = Field(default_factory=list)
     material_notes: list[str] = Field(default_factory=list)
+
+    @field_validator('program_types')
+    @classmethod
+    def canonical_support_types(cls, values):
+        return normalize(values)
 
     @model_validator(mode='after')
     def aware_dates(self):
