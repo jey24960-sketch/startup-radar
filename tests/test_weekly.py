@@ -1,0 +1,153 @@
+import os
+from datetime import datetime, timedelta
+from uuid import uuid4
+from unittest.mock import Mock
+import pytest
+import psycopg
+from core.clock import SEOUL
+from radar.weekly import build_briefing, snapshot, week_window, announce, run_weekly
+from radar.ingestion import ingest
+from radar.models import Program
+from radar.adapters.base import Candidate, SourceFailure
+from radar.adapters.official import KStartupApiAdapter, BizInfoApiAdapter
+from test_database import db
+
+pytestmark=pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Explicit test database required')
+AT=datetime(2026,9,14,15,tzinfo=SEOUL)
+
+
+def collection(db, count=3):
+    source=db.upsert_source('weekly-k','K-Startup','KSTARTUP',{})
+    with db.transaction() as c:
+        run=c.execute("insert into startup_radar.ingestion_runs(status,trigger_type,finished_at) values('SUCCESS','weekly-test',now()) returning id").fetchone()['id']
+    rows=[]
+    for i in range(count):
+        p=Program(title=f'Official program {i}',organization='Agency',official_url=f'https://example.org/{i}',
+            support_summary='Official support',application_end_at=datetime(2027,1,1,tzinfo=SEOUL),application_end_precision='DATE',deadline_type='FIXED_DATE')
+        saved=db.save_program(p,source['id'],str(i),p.official_url,{},'Official structured fields')
+        rows.append({**saved,'snapshot':snapshot(p,{}),'status':'OPEN'})
+    return {'id':str(run),'status':'SUCCESS','sources':[{'status':'SUCCESS','parsed':count,'coverage':{'pagination_complete':True}} for _ in range(2)],'weekly_programs':rows}
+
+
+def test_week_is_seoul_monday_through_sunday():
+    assert tuple(map(str,week_window(AT)))==('2026-09-14','2026-09-20')
+    assert week_window(AT+timedelta(days=6,hours=8))[0]==AT.date()
+    with pytest.raises(ValueError):week_window(AT.replace(tzinfo=None))
+
+
+def test_many_programs_one_post_dedup_and_same_week_stable(db):
+    acquired=collection(db)
+    acquired['weekly_programs'].append(acquired['weekly_programs'][0])
+    first=build_briefing(db,acquired,AT)
+    assert first['published'] and first['item_count']==3 and first['new_count']==3
+    acquired['weekly_programs'][0]['snapshot']['title']='Do not overwrite published content'
+    second=build_briefing(db,acquired,AT)
+    assert second['unchanged'] and second['briefing_id']==first['briefing_id']
+    with db.transaction() as c:
+        assert c.execute('select count(*) n from startup_radar.weekly_briefings').fetchone()['n']==1
+        assert c.execute('select count(*) n from startup_radar.weekly_briefing_items').fetchone()['n']==3
+        assert c.execute("select count(*) n from startup_radar.weekly_briefing_items where snapshot->>'title' like 'Do not%'").fetchone()['n']==0
+
+
+def test_unchanged_not_repeated_material_update_and_archive(db):
+    acquired=collection(db)
+    first=build_briefing(db,acquired,AT)
+    acquired['weekly_programs'][0]['snapshot']['application_end_at']='2027-01-10T00:00:00+09:00'
+    acquired['weekly_programs'][1]['status']='CLOSED'
+    second=build_briefing(db,acquired,AT+timedelta(days=7))
+    assert (second['item_count'],second['new_count'],second['updated_count'])==(1,0,1)
+    third=build_briefing(db,acquired,AT+timedelta(days=14))
+    assert third['published'] and third['item_count']==0
+    with db.transaction() as c:
+        assert c.execute('select count(*) n from startup_radar.weekly_briefings').fetchone()['n']==3
+        assert c.execute('select item_count from startup_radar.weekly_briefings where id=%s',(first['briefing_id'],)).fetchone()['item_count']==3
+
+
+@pytest.mark.parametrize('case,expected', [('failed',False),('partial-empty',False),('partial-useful',True),('complete-empty',True)])
+def test_failed_collection_never_becomes_empty_week(db,case,expected):
+    acquired=collection(db,1 if case=='partial-useful' else 0)
+    if case!='complete-empty':acquired['sources'][1]={'status':'FAILED','parsed':0,'coverage':{'pagination_complete':False}}
+    if case=='failed':acquired['sources'][0]=acquired['sources'][1]
+    result=build_briefing(db,acquired,AT)
+    assert result['published'] is expected
+    if case=='partial-useful':assert result['status']=='PARTIAL_SUCCESS'
+    with db.transaction() as c:
+        assert c.execute('select count(*) n from startup_radar.weekly_briefings').fetchone()['n']==int(expected)
+
+
+def test_draft_regenerate_and_publish_same_id(db):
+    acquired=collection(db,1)
+    draft=build_briefing(db,acquired,AT,publish=False)
+    assert not draft['published']
+    acquired['weekly_programs'][0]['snapshot']['support_summary']='Updated official benefit'
+    published=build_briefing(db,acquired,AT)
+    assert published['briefing_id']==draft['briefing_id'] and published['published']
+    with db.transaction() as c:assert c.execute('select revision from startup_radar.weekly_briefings').fetchone()['revision']==2
+
+
+def test_member_rpc_requires_verified_gfc_membership_without_team(db):
+    result=build_briefing(db,collection(db),AT)
+    member,external=uuid4(),uuid4()
+    with db.transaction() as c:
+        c.execute('insert into auth.users(id) values(%s),(%s)',(member,external))
+        c.execute("insert into public.test_gfc_roles values(%s,'member'),(%s,'external')",(member,external))
+    with db.transaction(member) as c:
+        assert c.execute('select public.gfc_radar_weekly_briefings() data').fetchone()['data']['total']==1
+        article=c.execute('select public.gfc_radar_weekly_briefing(%s) data',(result['briefing_id'],)).fetchone()['data']
+        assert len(article['items'])==3 and 'program_id' not in article['items'][0]
+    with db.transaction(external) as c:assert c.execute('select count(*) n from startup_radar.weekly_briefings').fetchone()['n']==0
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        with db.transaction(external) as c:c.execute('select public.gfc_radar_weekly_briefings()')
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        with db.transaction() as c:
+            c.execute('set local role anon');c.execute('select public.gfc_radar_weekly_briefing(%s)',(result['briefing_id'],))
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        with db.transaction(member) as c:c.execute("update startup_radar.weekly_briefings set title='unauthorized'")
+
+
+@pytest.mark.parametrize('state',['DELIVERED','UNCERTAIN','FAILED'])
+def test_one_weekly_announcement_and_no_duplicate_or_uncertain_resend(db,state):
+    result=build_briefing(db,collection(db),AT)
+    transport=Mock();transport.send.return_value={'state':state,'receipt':{'message_id':17} if state=='DELIVERED' else None}
+    assert announce(db,result['briefing_id'],transport)['state']=='NO_SUBSCRIBERS'
+    user=uuid4()
+    with db.transaction() as c:c.execute('insert into auth.users(id) values(%s)',(user,))
+    team=db.create_team('Weekly fixture',user)
+    with db.transaction() as c:
+        c.execute("insert into startup_radar.telegram_subscriptions(team_id,chat_id,enabled,digest_enabled,channel_health) values(%s,'fixture-weekly',false,true,'HEALTHY')",(team['id'],))
+    assert announce(db,result['briefing_id'],transport)['state']=='NO_SUBSCRIBERS'
+    with db.transaction() as c:c.execute('update startup_radar.telegram_subscriptions set enabled=true')
+    assert announce(db,result['briefing_id'])['state']=='DELIVERY_DISABLED'
+    first=announce(db,result['briefing_id'],transport)
+    announce(db,result['briefing_id'],transport)
+    assert transport.send.call_count==1
+    assert '/notice/weekly/'+result['briefing_id'] in transport.send.call_args.args[1]
+    assert first['states'][state]==1
+    with db.transaction() as c:assert c.execute('select count(*) n from startup_radar.notification_batches').fetchone()['n']==0
+
+
+def test_weekly_official_ingestion_never_calls_ai_documents_or_team_calculation(db,monkeypatch):
+    sources=[db.upsert_source('weekly-k','K','KSTARTUP',{}),db.upsert_source('weekly-b','B','BIZINFO',{})]
+    monkeypatch.setattr('radar.ingestion.RequirementExtractor',Mock(side_effect=AssertionError('AI must not be instantiated')))
+    adapters=[]
+    def factory(s):
+        klass=KStartupApiAdapter if s['adapter']=='KSTARTUP' else BizInfoApiAdapter
+        adapter=klass(s,Mock())
+        raw={'pbanc_sn':1,'biz_pbanc_nm':'Official fixture','pbanc_ctnt':'Official support','pbanc_rcpt_end_dt':'20271231'} if s['adapter']=='KSTARTUP' else {'bsnsSumryCn':'Official support','reqstBeginEndDe':'20260901 ~ 20271231'}
+        candidate=Candidate(s['slug'],'1',f"https://example.org/{s['slug']}",f"https://example.org/{s['slug']}",'Official fixture',raw)
+        adapter.discover=lambda:iter([candidate]);adapter.fetch_detail=Mock(side_effect=AssertionError('No portal dependency'))
+        adapter.fetch_documents=Mock(side_effect=AssertionError('No OCR dependency'))
+        adapters.append(adapter);return adapter
+    result=ingest(db,sources,adapter_factory=factory,structured_only=True)
+    assert result['status']=='SUCCESS' and len(result['weekly_programs'])==2
+    assert all(not a.fetch_detail.called and not a.fetch_documents.called for a in adapters)
+    assert all(row['snapshot']['applicant_summary']=='공식 공고 확인 필요' for row in result['weekly_programs'])
+
+
+def test_weekly_rerun_does_not_recollect_published_week(db):
+    first=build_briefing(db,collection(db),AT)
+    collector=Mock(side_effect=AssertionError('Published week must stay stable'))
+    second=run_weekly(db,at=AT,collector=collector)
+    assert second['status']=='SUCCESS' and second['briefing_id']==first['briefing_id']
+    assert second['announcement']['state']=='NO_SUBSCRIBERS'
+    assert not collector.called

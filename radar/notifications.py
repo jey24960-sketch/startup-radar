@@ -4,7 +4,8 @@ import os
 import re
 from hashlib import sha256
 from datetime import timedelta
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
+from uuid import UUID
 from psycopg.types.json import Jsonb
 import requests
 from core.clock import now, SEOUL
@@ -40,10 +41,19 @@ class TelegramTransport:
             return {'state':'DELIVERED','receipt':{'message_id':payload['result']['message_id']}}
         if payload.get('ok') is not False or response.status_code>=500:
             return {'state':'UNCERTAIN','error':'Telegram delivery could not be confirmed'}
-        return {'state':'FAILED','error':f'Telegram rejected request (HTTP {response.status_code})'}
+        return {'state':'FAILED','error':f'Telegram rejected request (HTTP {response.status_code})',
+                'channel_health':'BLOCKED' if response.status_code==403 else None}
 
 
-def message(program,team_name,outcome,score,explanation,kind,at=None):
+def safe_link(url):
+    try:
+        parsed=urlsplit(url)
+        return bool(parsed.scheme=='https' and parsed.hostname and not parsed.username and not parsed.password
+                    and (parsed.port is None or 1<=parsed.port<=65535))
+    except (ValueError,TypeError):return False
+
+
+def message(program,team_name,outcome,score,explanation,kind,at=None,program_id=None):
     labels={'DIGEST':'StartupRadar Weekly','HIGH_FIT':'StartupRadar 중요 신규·변경 공고','REMINDER':'StartupRadar 마감 알림'}
     state='지원 가능' if outcome.status=='ELIGIBLE' else '추가 정보 필요'
     remaining=days_left(program,at)
@@ -62,10 +72,12 @@ def message(program,team_name,outcome,score,explanation,kind,at=None):
     text='\n'.join(html.escape(line[:700]) for line in lines)
     member_url=os.environ.get('RADAR_MEMBER_NOTICE_URL','https://www.gfc-startup.com/notice')
     parsed=urlsplit(member_url)
-    if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password:
+    if not safe_link(member_url) or parsed.query or parsed.fragment:
         raise ValueError('Member notice link must be an HTTPS URL without credentials')
+    if program_id is not None:
+        member_url=urlunsplit((parsed.scheme,parsed.netloc,parsed.path.rstrip('/')+'/radar/'+str(UUID(str(program_id))),'',''))
     for label,url in [('GFC에서 추천 보기',member_url),('원문 보기',program.official_url),('신청',program.application_url)]:
-        if url and urlsplit(url).scheme=='https':text+=f'\n<a href="{html.escape(url,quote=True)}">{label}</a>'
+        if url and safe_link(url):text+=f'\n<a href="{html.escape(url,quote=True)}">{label}</a>'
     if len(text)>4000:raise ValueError('Notification exceeds safe size; cannot silently truncate conditions')
     return text
 
@@ -91,12 +103,12 @@ def plan_notifications(db,kind,at=None,*,subscription_id=None,program_id=None):
     with db.transaction() as c:
         policy=policy_for(c)
         # Lock subscriptions in a stable order: parallel planners cannot exceed caps.
-        subscriptions=c.execute('select s.*,(s.enabled and coalesce(pref.enabled,true)) enabled,(s.digest_enabled and coalesce(pref.digest_enabled,true)) digest_enabled,'
+        subscriptions=c.execute('select s.*,startup_radar.channel_deliverable(s.enabled,s.channel_health,pref.enabled) enabled,(s.digest_enabled and coalesce(pref.digest_enabled,true)) digest_enabled,'
             '(s.alerts_enabled and coalesce(pref.alerts_enabled,true)) alerts_enabled,(s.reminders_enabled and coalesce(pref.reminders_enabled,true)) reminders_enabled,'
             't.name,p.profile,p.version profile_version from startup_radar.telegram_subscriptions s '
             'join startup_radar.teams t on t.id=s.team_id join startup_radar.team_profiles p on p.team_id=s.team_id '
             'left join startup_radar.team_notification_preferences pref on pref.team_id=s.team_id '
-            'where (s.enabled and coalesce(pref.enabled,true))=true and (%s::uuid is null or s.id=%s) order by s.id for update of s',
+            'where startup_radar.channel_deliverable(s.enabled,s.channel_health,pref.enabled) and (%s::uuid is null or s.id=%s) order by s.id for update of s',
             (subscription_id,subscription_id)).fetchall()
         for sub in subscriptions:
             if not sub[FLAGS[kind]]:continue
@@ -111,7 +123,7 @@ def plan_notifications(db,kind,at=None,*,subscription_id=None,program_id=None):
                                 (sub['id'],midnight,midnight+timedelta(days=1))).fetchone()['n']
                 capacity=max(0,policy['high_fit_daily_limit']-count)
             else:capacity=policy['delivery_batch_limit']
-            rows=c.execute("select distinct on (v.program_id) r.*,v.id version_id,v.normalized,v.created_at version_created,coalesce(a.responses,'{}'::jsonb) responses "
+            rows=c.execute("select distinct on (v.program_id) r.*,v.program_id,v.id version_id,v.normalized,v.created_at version_created,coalesce(a.responses,'{}'::jsonb) responses "
                 'from startup_radar.recommendations r join startup_radar.eligibility_evaluations e on e.id=r.evaluation_id '
                 'join startup_radar.team_profile_versions tp on tp.id=e.profile_version_id '
                 'join startup_radar.program_versions v on v.id=e.program_version_id join startup_radar.programs p on p.current_version_id=v.id '
@@ -139,7 +151,7 @@ def plan_notifications(db,kind,at=None,*,subscription_id=None,program_id=None):
                     period=f'D-{left}'
                 else:period=week
                 key=f"{kind}:{sub['id']}:{row['version_id']}:{period}"
-                payload={'text':message(program,sub['name'],outcome,row['score'],row['explanation'],kind,at),
+                payload={'text':message(program,sub['name'],outcome,row['score'],row['explanation'],kind,at,program_id=row['program_id']),
                          'period':period,'profile_version':sub['profile_version'],'eligibility':outcome.status,'days_left':left,
                          'response_snapshot':row['responses'],'score':row['score']}
                 item=c.execute("insert into startup_radar.notification_items(subscription_id,team_id,program_version_id,recommendation_id,dedupe_key,kind,state,payload,created_at) "
@@ -184,7 +196,7 @@ def deliver_pending(db,transport,kind,limit=None,at=None,*,subscription_id=None)
     states=[];delivered_items=cancelled=0
     for _ in range(limit):
         with db.transaction() as c:
-            batch=c.execute("select b.*,s.chat_id,(s.enabled and coalesce(pref.enabled,true)) enabled,(s.digest_enabled and coalesce(pref.digest_enabled,true)) digest_enabled,"
+            batch=c.execute("select b.*,s.chat_id,startup_radar.channel_deliverable(s.enabled,s.channel_health,pref.enabled) enabled,(s.digest_enabled and coalesce(pref.digest_enabled,true)) digest_enabled,"
                 "(s.alerts_enabled and coalesce(pref.alerts_enabled,true)) alerts_enabled,(s.reminders_enabled and coalesce(pref.reminders_enabled,true)) reminders_enabled,s.reminder_days,s.high_fit_threshold,"
                 "p.profile,p.version profile_version from startup_radar.notification_batches b join startup_radar.telegram_subscriptions s on s.id=b.subscription_id "
                 "join startup_radar.team_profiles p on p.team_id=s.team_id left join startup_radar.team_notification_preferences pref on pref.team_id=s.team_id "
@@ -221,6 +233,9 @@ def deliver_pending(db,transport,kind,limit=None,at=None,*,subscription_id=None)
         except Exception:result={'state':'UNCERTAIN','error':'Transport outcome unknown'}
         with db.transaction() as c:
             delivered_at=now() if result['state']=='DELIVERED' else None
+            if result['state']=='DELIVERED' or result.get('channel_health')=='BLOCKED':
+                c.execute('update startup_radar.telegram_subscriptions set channel_health=%s,health_checked_at=now(),health_reason=%s where id=%s',
+                    ('HEALTHY' if delivered_at else 'BLOCKED','DELIVERY_RECEIPT' if delivered_at else 'TELEGRAM_FORBIDDEN',batch['subscription_id']))
             c.execute('update startup_radar.notification_batches set state=%s,receipt=%s,error=%s,delivered_at=%s where id=%s',
                 (result['state'],Jsonb(result.get('receipt')),result.get('error'),delivered_at,batch['id']))
             c.execute('update startup_radar.notification_items set state=%s,delivery_receipts=%s,error=%s,delivered_at=%s where batch_id=%s',
@@ -229,7 +244,9 @@ def deliver_pending(db,transport,kind,limit=None,at=None,*,subscription_id=None)
         if result['state']=='DELIVERED':delivered_items+=len(items)
     status='SUCCESS' if all(s=='DELIVERED' for s in states) else 'PARTIAL_SUCCESS' if 'DELIVERED' in states else 'FAILED'
     with db.transaction() as c:c.execute('update startup_radar.notification_runs set status=%s,finished_at=now() where id=%s',(status,run))
-    return {'run_id':str(run),'status':status,'delivered':delivered_items,'failed':len(states)-states.count('DELIVERED'),'cancelled':cancelled}
+    return {'run_id':str(run),'status':status,'delivered':delivered_items,'failed':len(states)-states.count('DELIVERED'),'cancelled':cancelled,
+            'attempted_batches':len(states),'no_op':not states and cancelled==0,
+            'reason':'NO_PENDING_DELIVERY' if not states and cancelled==0 else None}
 
 
 def recover_batch(db,batch_id,action,note,user_id):

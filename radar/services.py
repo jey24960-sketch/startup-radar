@@ -71,22 +71,9 @@ def detail(db,user_id,program_id,team_id=None,preset=None,version_id=None):
 
 
 def health(db,user_id=None):
-    if user_id is not None:require_admin(db,user_id)
-    with db.transaction() as c:
-        sources=c.execute("select s.id,s.slug,s.name,s.adapter,s.enabled,s.config->>'disabled_reason' as disabled_reason,s.config->>'last_audit_failure' as last_audit_failure,s.last_attempted_at,s.last_successful_at,r.status,r.discovered_count,r.fetched_count,r.parsed_count,r.failures,r.latency_ms "
-            'from startup_radar.sources s left join lateral(select * from startup_radar.source_run_results r where r.source_id=s.id order by r.created_at desc limit 1) r on true order by s.slug').fetchall()
-        runs=c.execute('select * from startup_radar.ingestion_runs order by started_at desc limit 20').fetchall()
-        jobs=c.execute('select * from startup_radar.job_requests order by created_at desc limit 20').fetchall()
-        claims=c.execute('select * from startup_radar.schedule_claims order by created_at desc limit 20').fetchall()
-        settings=c.execute('select key,value,updated_at from startup_radar.runtime_settings order by key').fetchall()
-        failure_counts=c.execute("select (select count(*) from startup_radar.documents where extraction_status in ('FAILED','UNSUPPORTED')) documents, "
-            "(select count(*) from startup_radar.ingestion_runs where summary->>'eligibility_error' is not null) eligibility").fetchone()
-    active=[s for s in sources if s['enabled']]
-    success=sum(s['status']=='SUCCESS' for s in active)
-    return {'sources':sources,'runs':runs,'jobs':jobs,'schedule_claims':claims,'settings':settings,'failure_counts':failure_counts,'tracked_sources':len(sources),
-            'enabled_sources':len(active),'successful_sources':success,
-            'tracked_source_success_rate':round(100*success/len(active),1) if active else None,
-            'coverage_note':'등록된 활성 소스의 최근 수집 성공률이며 국내 전체 창업지원사업의 포괄률이 아닙니다.'}
+    with db.transaction(user_id) as c:
+        query='select public.gfc_radar_health() result' if user_id is not None else 'select startup_radar.health_snapshot() result'
+        return c.execute(query).fetchone()['result']
 
 
 def admin_trace(db,user_id,recommendation_id):

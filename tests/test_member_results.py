@@ -141,12 +141,21 @@ def add_history(c, last_version):
             (last_version,c['saved']['version_id']))
 
 
+def add_current(c,count):
+    for i in range(1,count):
+        program=c['program'].model_copy(deep=True)
+        program.official_url+=f'/page-fixture-{i}';program.title+=f' {i}'
+        c['db'].save_program(program,c['source'],f'page-fixture-{i}',program.official_url,{},'Current pagination fixture')
+
+
 def test_bounded_cache_lookup_pages_and_mixed_stale_results(context, monkeypatch):
     c=context
-    add_history(c,101)
+    add_current(c,101)
+    add_history(c,3)
     db=c['db'];transaction=db.transaction;lookup_sizes=[]
     class TracedConnection:
         def __init__(self, connection):self.connection=connection
+        def cursor(self,*args,**kwargs):return self.connection.cursor(*args,**kwargs)
         def execute(self, sql, params=None):
             if sql.startswith('select program_version_id,response_snapshot from startup_radar.member_program_results'):
                 lookup_sizes.append(len(params[1]))
@@ -175,7 +184,7 @@ def test_bounded_cache_lookup_pages_and_mixed_stale_results(context, monkeypatch
 
 def test_batched_cache_rechecks_seoul_day_inside_a_page(context,monkeypatch):
     import radar.member_results as worker
-    c=context;add_history(c,2)
+    c=context;add_current(c,2)
     before=now().replace(hour=23,minute=59,second=59,microsecond=0)
     after=before+timedelta(seconds=2)
     monkeypatch.setattr(worker,'now',lambda:before)
@@ -189,7 +198,7 @@ def test_batched_cache_rechecks_seoul_day_inside_a_page(context,monkeypatch):
     assert [(r['evaluated_on'],r['n']) for r in dates]==[(before.date(),1),(after.date(),13)]
 
 def test_historical_facts_document_failures_and_foreign_version(context):
-    c=context;updated=c['program'].model_copy(deep=True)
+    c=context;refresh_member_results(c['db']);updated=c['program'].model_copy(deep=True)
     updated.application_end_at+=timedelta(days=2);updated.evidence_complete=False
     saved=c['db'].save_program(updated,c['source'],'first',updated.official_url,{},'Changed fixture',documents=[{
         'original_url':'https://example.org/broken.hwp','filename':'broken.hwp','content_hash':'broken',
@@ -203,6 +212,48 @@ def test_historical_facts_document_failures_and_foreign_version(context):
     another=updated.model_copy(deep=True);another.official_url+='/different'
     foreign=c['db'].save_program(another,c['source'],'other',another.official_url,{},'Other fixture')
     with pytest.raises(psycopg.errors.NoDataFound):detail(c,version=foreign['version_id'])
+
+
+def test_ordinary_refresh_preserves_historical_result_context_and_missing_history(context):
+    c=context;refresh_member_results(c['db'])
+    original=detail(c,c['team']['id'])
+    with c['db'].transaction() as con:
+        before=con.execute('select * from startup_radar.member_program_results where program_version_id=%s order by scope_key',(c['saved']['version_id'],)).fetchall()
+    changed=c['program'].model_copy(deep=True);changed.application_end_at+=timedelta(days=2)
+    c['db'].save_program(changed,c['source'],'first',changed.official_url,{},'Changed current version')
+    c['db'].save_profile(c['team']['id'],TeamProfile(business_status='CORPORATION'),c['admin'],1)
+    result=refresh_member_results(c['db'])
+    assert result['computed']==7 and result['reused']==0
+    historical=detail(c,c['team']['id'],c['saved']['version_id'])
+    assert historical['evaluation_context']=='HISTORICAL_STORED' and historical['evaluation_profile_version']==1
+    assert historical['eligibility']==original['eligibility'] and historical['computed_at']==original['computed_at']
+    assert detail(c,c['team']['id'])['evaluation_context']=='CURRENT'
+    with c['db'].transaction() as con:
+        assert con.execute('select * from startup_radar.member_program_results where program_version_id=%s order by scope_key',(c['saved']['version_id'],)).fetchall()==before
+        con.execute("delete from startup_radar.member_program_results where program_version_id=%s and scope_key='preset:0'",(c['saved']['version_id'],))
+    assert refresh_member_results(c['db'])['computed']==0
+    missing=detail(c,version=c['saved']['version_id'])
+    assert missing['calculation_state']=='NOT_STORED' and missing['eligibility'] is None
+
+
+def test_failed_batch_rolls_back_every_result_in_the_page(context):
+    c=context;add_current(c,2)
+    with c['db'].transaction() as con:
+        con.execute("create function startup_radar.reject_second_fixture_result() returns trigger language plpgsql as $$ begin "
+            "if (select count(*) from startup_radar.member_program_results where scope_key=new.scope_key)>=2 then "
+            "raise exception 'Synthetic batch failure'; end if; return new; end $$")
+        con.execute('create trigger reject_second_fixture_result after insert on startup_radar.member_program_results '
+            'for each row execute function startup_radar.reject_second_fixture_result()')
+    try:
+        with pytest.raises(psycopg.errors.RaiseException):refresh_member_results(c['db'])
+        with c['db'].transaction() as con:
+            assert con.execute('select count(*) n from startup_radar.member_program_results').fetchone()['n']==0
+            assert con.execute('select state from startup_radar.member_read_state where singleton').fetchone()['state']=='FAILED'
+    finally:
+        with c['db'].transaction() as con:
+            con.execute('drop trigger reject_second_fixture_result on startup_radar.member_program_results')
+            con.execute('drop function startup_radar.reject_second_fixture_result()')
+    assert refresh_member_results(c['db'])['computed']==14
 
 def test_sql_filters_pagination_live_deadline_and_failed_refresh(context,monkeypatch):
     c=context;refresh_member_results(c['db'])

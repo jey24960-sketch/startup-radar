@@ -1,6 +1,7 @@
 """Transactional PostgreSQL repository; no JSON/cache primary state in V2."""
 import os
 from contextlib import contextmanager,nullcontext
+from contextvars import ContextVar
 from uuid import uuid4
 import psycopg
 from psycopg.rows import dict_row
@@ -9,15 +10,33 @@ from radar.models import TeamProfile, Program
 from radar.identity import normalize_url,normalize_text,digest,changed_fields,duplicate_confidence
 from radar.dates import program_status
 
+_CURRENT_OBSERVATION=object()
 
 class Database:
     def __init__(self,url=None):
         self.url=url or os.environ.get('DATABASE_URL')
         if not self.url: raise ValueError('DATABASE_URL is required')
+        self._session_connection=ContextVar('radar_database_session',default=None)
+
+    @contextmanager
+    def session(self):
+        """Reuse a connection inside one synchronous, deterministic batch only."""
+        if self._session_connection.get() is not None:
+            yield self
+            return
+        with psycopg.connect(self.url,row_factory=dict_row,prepare_threshold=None) as connection:
+            token=self._session_connection.set(connection)
+            try:yield self
+            finally:self._session_connection.reset(token)
 
     @contextmanager
     def transaction(self,user_id=None):
-        with psycopg.connect(self.url,row_factory=dict_row,prepare_threshold=None) as connection:
+        borrowed=self._session_connection.get()
+        # A nested actor operation is a separate transaction, not a savepoint:
+        # SET LOCAL role/JWT would otherwise survive savepoint release.
+        if borrowed is not None and borrowed.info.transaction_status!=psycopg.pq.TransactionStatus.IDLE:
+            borrowed=None
+        with (nullcontext(borrowed) if borrowed is not None else psycopg.connect(self.url,row_factory=dict_row,prepare_threshold=None)) as connection:
             with connection.transaction():
                 connection.execute("set local timezone='Asia/Seoul'")
                 if user_id:
@@ -50,11 +69,14 @@ class Database:
               'on conflict(slug) do update set name=excluded.name,adapter=excluded.adapter,config=excluded.config returning *',
               (slug,name,adapter,Jsonb(config))).fetchone()
 
-    def save_program(self,program:Program,source_id,source_program_id,discovery_url,raw_metadata,raw_text='',documents=None,extraction_metadata=None,expected_version_id=None,connection=None):
+    def save_program(self,program:Program,source_id,source_program_id,discovery_url,raw_metadata,raw_text='',documents=None,extraction_metadata=None,expected_version_id=None,connection=None,source_observed_at=_CURRENT_OBSERVATION):
         from radar.ocr import review_metadata
+        from radar.quality import save_assessment
         extraction_metadata=review_metadata(documents,extraction_metadata)
         normal=program.model_dump(mode='json'); canonical_url=normalize_url(program.official_url)
-        fingerprint=digest({'normalized':normal,'raw':raw_text})
+        fingerprint=digest({'normalized':normal,'raw':raw_text,'documents':[
+            {key:doc.get(key) for key in ('original_url','content_hash','fetch_status','extraction_status','extracted_text')}
+            for doc in sorted(documents or [],key=lambda doc:doc['original_url'])]})
         with (self.transaction() if connection is None else nullcontext(connection)) as c:
             # One transaction-scoped lock serializes canonical matching/versioning.
             # Ingestion stays concurrent outside this short database critical section.
@@ -103,12 +125,13 @@ class Database:
             if previous and previous['content_hash']==fingerprint:
                 # Dates can close a notice without a new content version.
                 c.execute('update startup_radar.programs set status=%s,updated_at=now() where id=%s',(program_status(program),pid))
-                self._snapshot(c,pid,previous['id'],source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata)
+                self._snapshot(c,pid,previous['id'],source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata,source_observed_at)
+                save_assessment(c,previous['id'],program,documents,extraction_metadata,raw_text)
                 return {'program_id':pid,'version_id':previous['id'],'event':None}
             version=c.execute('insert into startup_radar.program_versions(program_id,version,content_hash,normalized,raw_text,evidence_complete) '
                 'values(%s,%s,%s,%s,%s,%s) returning *',(pid,previous['version']+1 if previous else 1,fingerprint,Jsonb(normal),raw_text,program.evidence_complete)).fetchone()
             vid=version['id']
-            self._snapshot(c,pid,vid,source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata)
+            self._snapshot(c,pid,vid,source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata,source_observed_at)
             c.execute('update startup_radar.programs set title=%s,organization=%s,program_types=%s,status=%s,application_start_at=%s,application_end_at=%s,'
                 'deadline_type=%s,official_url=%s,application_url=%s,applicant_summary=%s,support_summary=%s,benefit_summary=%s,'
                 'amount_min=%s,amount_max=%s,currency=%s,current_version_id=%s,updated_at=now() where id=%s',
@@ -135,10 +158,11 @@ class Database:
                 if confidence>=0.8:
                     c.execute('insert into startup_radar.possible_duplicates(program_id,candidate_program_id,confidence,reason) values(%s,%s,%s,%s) on conflict do nothing',
                               (pid,candidate['id'],confidence,'Shared URL or similar title/organization; publisher IDs and ambiguity require review'))
+            save_assessment(c,vid,program,documents,extraction_metadata,raw_text)
             return {'program_id':pid,'version_id':vid,'event':event if changed else None}
 
     @staticmethod
-    def _snapshot(c,pid,vid,source_id,source_program_id,discovery_url,detail_url,raw_metadata,raw_text,extraction_metadata):
+    def _snapshot(c,pid,vid,source_id,source_program_id,discovery_url,detail_url,raw_metadata,raw_text,extraction_metadata,source_observed_at=_CURRENT_OBSERVATION):
         source=c.execute('select adapter,config from startup_radar.sources where id=%s',(source_id,)).fetchone()
         source_config={'adapter':source['adapter'],'config':source['config']}
         observation={'source_program_id':source_program_id,'discovery_url':discovery_url,'official_detail_url':detail_url,
@@ -146,3 +170,8 @@ class Database:
         c.execute('insert into startup_radar.program_source_snapshots(program_id,program_version_id,source_id,source_program_id,discovery_url,official_detail_url,raw_metadata,source_config,detail_hash,observation_hash,extraction_metadata) '
                   'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict do nothing',
                   (pid,vid,source_id,source_program_id,discovery_url,detail_url,Jsonb(raw_metadata),Jsonb(source_config),digest(raw_text),digest(observation),Jsonb(extraction_metadata or {})))
+        # Deduplication does not suppress a real re-observation. Conversely,
+        # reviewing stored evidence inherits its clock instead of claiming a fetch.
+        current=source_observed_at is _CURRENT_OBSERVATION
+        c.execute('update startup_radar.program_versions set last_observed_at=greatest(last_observed_at,case when %s then now() else %s::timestamptz end) where id=%s',
+                  (current,None if current else source_observed_at,vid))

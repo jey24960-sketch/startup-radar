@@ -27,7 +27,26 @@ def rule_review_reasons(rule):
     if rule.key=='business_age_months':
         if re.search(r'예비\s*창업',quotes):reasons.append('BUSINESS_AGE_BRANCH_NOT_REPRESENTED')
         if re.search(r'공고일|공고\s*일|모집\s*공고.*기준',quotes):reasons.append('BUSINESS_AGE_REFERENCE_DATE_NOT_REPRESENTED')
+    if rule.key=='student_status' and re.search(r'휴학|졸업',quotes):
+        reasons.append('STUDENT_ALTERNATIVES_NOT_REPRESENTED')
     return reasons
+
+
+def rule_context_reasons(rule,evidence):
+    if not rule.mandatory:return []
+    compact=lambda text:re.sub(r'\s+',' ',text).strip()
+    for item in rule.evidence:
+        if not item.verified:continue
+        source=compact(evidence.get(item.document_id or item.source_id,''));quote=compact(item.text)
+        if not quote:continue
+        start=source.find(quote)
+        if start<0:continue
+        context=source[max(0,start-140):start+len(quote)]
+        if re.search(r'동\s*순위|우대\s*(?:사항|조건|대상)|가점\s*(?:항목|사항|대상)|우선\s*선정',context):
+            return ['PREFERENCE_NOT_MANDATORY']
+        if rule.key=='product_stage' and '개발단계' in context and re.search(r'□|☐',context):
+            return ['FORM_OPTION_NOT_REQUIREMENT']
+    return []
 
 
 def omitted_applicant_conditions(evidence,requirements,applicant_summary,eligibility_quote):
@@ -61,6 +80,6 @@ def future_commitments(evidence):
         for line in text.splitlines():
             if (re.search(r'(?:입주|선정|협약)\s*후',line)
                 and re.search(r'사업자\s*등록|주소(?:지)?\s*이전|소재지.*이전',line)
-                and re.search(r'가능|필수|해야|하여야|해야만',line)):
+                and re.search(r'가능|필수|해야|하여야|해야만|예정',line)):
                 findings.append({'kind':'FUTURE_COMMITMENT_NOT_REPRESENTED','evidence_key':key,'quote':line.strip()[:500]})
     return findings

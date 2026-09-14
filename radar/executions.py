@@ -73,6 +73,11 @@ def recover_execution(db,execution_id,note,confirmed_stopped=False):
                 'execution_id':str(execution_id)}
         c.execute("update startup_radar.worker_executions set state='ABANDONED',finished_at=now(),result=%s,recovery_note=%s where id=%s",
                   (Jsonb(result),note.strip(),execution_id))
+        attempts=c.execute("update startup_radar.schedule_task_attempts set state='UNCERTAIN',reason_code='WORKER_TERMINATED',finished_at=now(), "
+                           "result=coalesce(result,'{}') || %s where execution_id=%s and state='RUNNING' returning task_key",
+                           (Jsonb(result),execution_id)).fetchall()
+        for attempt in attempts:
+            c.execute("update startup_radar.schedule_claims set state='UNCERTAIN',finished_at=now() where task_key=%s",(attempt['task_key'],))
         if row['job_id']:
             c.execute("update startup_radar.job_requests set state='UNCERTAIN',finished_at=now(),result=%s where id=%s and state='RUNNING'",
                       (Jsonb(result),row['job_id']))

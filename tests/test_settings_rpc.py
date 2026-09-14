@@ -20,7 +20,7 @@ def test_preferences_unconnected_connected_and_private_projection(context):
  assert prefs(c)['connected'] is False and prefs(c)['preferences']==ON
  off={**ON,'enabled':False};assert prefs(c,changes=off)['preferences']==off
  with c['db'].transaction() as con:
-  con.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id) values(%s,%s)',(c['team']['id'],'PRIVATE_CHAT_CANARY'))
+  con.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,channel_health) values(%s,%s,$health$HEALTHY$health$)',(c['team']['id'],'PRIVATE_CHAT_CANARY'))
  assert prefs(c)['connected'] is True and 'PRIVATE_CHAT_CANARY' not in str(prefs(c))
  assert prefs(c,changes=ON)['updated']==1
  with c['db'].transaction() as con:
@@ -34,7 +34,7 @@ def test_preferences_unconnected_connected_and_private_projection(context):
 
 def test_direct_preferences_are_rechecked_before_plan_and_delivery(context):
  c=context
- with c['db'].transaction() as con:con.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id) values(%s,%s)',(c['team']['id'],'FIXTURE'))
+ with c['db'].transaction() as con:con.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,channel_health) values(%s,%s,$health$HEALTHY$health$)',(c['team']['id'],'FIXTURE'))
  refresh_recommendations(c['db']);assert plan_notifications(c['db'],'DIGEST')==1
  # A direct authorized RLS write need not mutate channel rows for the worker to
  # enforce it. No transport call is permitted after the stored preference changes.
@@ -49,10 +49,16 @@ def test_direct_preferences_are_rechecked_before_plan_and_delivery(context):
 def test_team_preference_cannot_reenable_a_disabled_channel(context,flag):
  c=context
  with c['db'].transaction() as con:
-  sub=con.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id) values(%s,%s) returning id',(c['team']['id'],'FIXTURE')).fetchone()['id']
+  sub=con.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,channel_health) values(%s,%s,$health$HEALTHY$health$) returning id',(c['team']['id'],'FIXTURE')).fetchone()['id']
   con.execute('insert into startup_radar.team_notification_preferences(team_id) values(%s)',(c['team']['id'],))
  refresh_recommendations(c['db'])
  with c['db'].transaction() as con:con.execute('update startup_radar.telegram_subscriptions set '+flag+'=false where id=%s',(sub,))
+ # Exercise both actual preference-save entry points, not only the planner.
+ assert prefs(c,changes=ON)['preferences']==ON
+ path='/api/teams/'+str(c['team']['id'])+'/preferences'
+ assert c['client'].put(path,json=ON).status_code==200
+ with c['db'].transaction() as con:
+  assert con.execute('select '+flag+' from startup_radar.telegram_subscriptions where id=%s',(sub,)).fetchone()[flag] is False
  assert plan_notifications(c['db'],'DIGEST',subscription_id=sub)==0
  with c['db'].transaction() as con:con.execute('update startup_radar.telegram_subscriptions set '+flag+'=true where id=%s',(sub,))
  assert plan_notifications(c['db'],'DIGEST',subscription_id=sub)==1

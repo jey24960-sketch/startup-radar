@@ -64,7 +64,7 @@ def extract(data, model_dir):
             api.Clear()
 
     with tesserocr.PyTessBaseAPI(path=str(model_dir), lang='kor+eng',
-            oem=tesserocr.OEM.LSTM_ONLY, psm=tesserocr.PSM.SPARSE_TEXT) as api:
+            oem=tesserocr.OEM.LSTM_ONLY, psm=tesserocr.PSM.AUTO) as api:
         if data.startswith(b'%PDF-'):
             with pdfium.PdfDocument(data) as document:
                 if not 1 <= len(document) <= MAX_PAGES:
@@ -96,7 +96,7 @@ def extract(data, model_dir):
         raise DocumentFailure('DOCUMENT_EMPTY', 'OCR found no readable text')
     return {'version': VERSION, 'content_hash': hashlib.sha256(data).hexdigest(),
             'review_required': True, 'engine': tesserocr.tesseract_version(),
-            'languages': MODEL_HASHES, 'segmentation': 'SPARSE_TEXT', 'pdf_scale': 3,
+            'languages': MODEL_HASHES, 'segmentation': 'AUTO', 'pdf_scale': 3,
             'coordinate_system': 'rendered image pixels: left, top, right, bottom',
             'page_count': len(pages), 'pages': pages}
 

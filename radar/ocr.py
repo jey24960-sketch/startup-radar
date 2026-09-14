@@ -10,7 +10,7 @@ import tempfile
 
 from radar.documents import DocumentFailure
 
-VERSION = 'ocr-review-1'
+VERSION = 'ocr-review-2'
 MODEL_COMMIT = 'e12c65a915945e4c28e237a9b52bc4a8f39a0cec'
 MODEL_HASHES = {
     'kor': 'f888d4038348a0c3d25151e7f452bda0d74ca275b18cab146798bcbb94084fff',
@@ -54,7 +54,8 @@ def extract_ocr_isolated(data, model_dir, cache_dir=None, timeout=120):
         raise DocumentFailure('DOCUMENT_OCR_SETUP', 'Install the optional OCR requirements') from None
     content_hash = hashlib.sha256(data).hexdigest()
     identity = {'version': VERSION, 'content_hash': content_hash, 'models': MODEL_HASHES,
-                'packages': versions, 'platform': sys.platform, 'python': sys.version.split()[0]}
+                'packages': versions, 'platform': sys.platform, 'python': sys.version.split()[0],
+                'sandbox_image':os.environ.get('RADAR_EVIDENCE_IMAGE')}
     key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     cache = Path(cache_dir) / (key + '.json') if cache_dir else None
     if cache and cache.is_file() and cache.stat().st_size <= MAX_RESULT_BYTES:
@@ -71,9 +72,16 @@ def extract_ocr_isolated(data, model_dir, cache_dir=None, timeout=120):
         env = {k: v for k, v in os.environ.items() if k in ('PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP')}
         env.update(PYTHONIOENCODING='utf-8', OMP_THREAD_LIMIT='1')
         try:
-            process = subprocess.run([sys.executable, '-m', 'radar.ocr_worker', str(path),
-                str(Path(model_dir).resolve()), str(output)], cwd=Path(__file__).resolve().parent.parent,
-                env=env, capture_output=True, timeout=timeout)
+            if os.environ.get('RADAR_EVIDENCE_IMAGE'):
+                from radar.evidence_sandbox import run_worker
+                run_worker(os.environ['RADAR_EVIDENCE_IMAGE'],folder,'radar.ocr_worker',
+                    ['/evidence/document.bin','/opt/tessdata','/evidence/result.json'],timeout,1536)
+                from types import SimpleNamespace
+                process=SimpleNamespace(returncode=0)
+            else:
+                process = subprocess.run([sys.executable, '-m', 'radar.ocr_worker', str(path),
+                    str(Path(model_dir).resolve()), str(output)], cwd=Path(__file__).resolve().parent.parent,
+                    env=env, capture_output=True, timeout=timeout)
         except subprocess.TimeoutExpired:
             raise DocumentFailure('DOCUMENT_TIMEOUT', 'OCR review time limit exceeded') from None
         if process.returncode or not output.is_file():

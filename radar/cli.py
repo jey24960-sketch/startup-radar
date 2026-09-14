@@ -13,6 +13,9 @@ from radar.scheduler import run_job
 def main(argv=None):
     parser=argparse.ArgumentParser(description='StartupRadar V2 PostgreSQL operations')
     commands=parser.add_subparsers(dest='command',required=True)
+    weekly=commands.add_parser('weekly',help='Collect official APIs and publish one Seoul-week briefing; no AI, OCR or team calculation')
+    weekly.add_argument('--draft',action='store_true',help='Regenerate unpublished draft only')
+    weekly.add_argument('--deliver',action='store_true',help='Announce a published briefing to existing enabled subscribers only')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
     bootstrap=commands.add_parser('bootstrap-team');bootstrap.add_argument('--user-id',type=UUID,required=True)
     bootstrap.add_argument('--name',default='GFC');bootstrap.add_argument('--admin',action='store_true')
@@ -21,14 +24,40 @@ def main(argv=None):
     comparison=commands.add_parser('compare');comparison.add_argument('--v1',required=True);comparison.add_argument('--team-id',type=UUID,required=True)
     comparison.add_argument('--output',required=True)
     commands.add_parser('execution-status',help='Inspect the durable active batch owner')
+    quality=commands.add_parser('quality-report',help='Current-version evidence quality, reasons and prioritized review queue')
+    quality.add_argument('--refresh',action='store_true',help='Reassess stored official evidence only; no AI, network or delivery')
+    retry=commands.add_parser('retry-ingest',help='Queue an explicit auditable ingestion retry; never delivers notifications')
+    retry.add_argument('--task-key',required=True)
+    retry.add_argument('--note',required=True)
+    extraction_retry=commands.add_parser('retry-extraction',help='Authorize one changed-condition retry of an exact failed input; no immediate AI call')
+    extraction_retry.add_argument('--input-hash',required=True);extraction_retry.add_argument('--note',required=True)
+    extraction_retry.add_argument('--confirm-stopped',action='store_true')
     recovery=commands.add_parser('recover-execution',help='Release a verified stopped owner; never dispatches a retry')
     recovery.add_argument('--execution-id',type=UUID,required=True)
     recovery.add_argument('--note',required=True)
     recovery.add_argument('--confirm-stopped',action='store_true',help='Affirm the recorded process/Actions run is terminal, not just disconnected')
     args=parser.parse_args(argv);db=Database()
-    if args.command=='execution-status':
+    if args.command=='weekly':
+        from radar.weekly import run_weekly
+        transport=None
+        if args.deliver:
+            token=os.environ.get('TELEGRAM_BOT_TOKEN')
+            if not token:raise ValueError('TELEGRAM_BOT_TOKEN is required for --deliver')
+            transport=TelegramTransport(token)
+        result=run_weekly(db,transport,publish=not args.draft)
+    elif args.command=='quality-report':
+        from radar.quality import refresh_quality,quality_report
+        if args.refresh:refresh_quality(db)
+        result=quality_report(db)
+    elif args.command=='execution-status':
         from radar.executions import active_execution
         result={'status':'SUCCESS','active_execution':active_execution(db)}
+    elif args.command=='retry-ingest':
+        from radar.schedule_attempts import request_ingest_retry
+        result=request_ingest_retry(db,args.task_key,args.note)
+    elif args.command=='retry-extraction':
+        from radar.analysis_cache import request_extraction_retry
+        result=request_extraction_retry(db,args.input_hash,args.note,args.confirm_stopped)
     elif args.command=='recover-execution':
         from radar.executions import recover_execution
         result=recover_execution(db,args.execution_id,args.note,args.confirm_stopped)

@@ -169,7 +169,7 @@ def fetch_document(http,url,filename):
             result.update(extraction_status='FAILED',error_kind='DOCUMENT_PARSE',error_message=str(error)[:300])
     except SourceFailure as error:
         result.update(fetch_status='BLOCKED' if error.kind in ('BLOCKED','ROBOTS_DENIED') else 'FAILED',
-                      extraction_status='FAILED',error_kind=error.kind,error_message=error.message)
+                      extraction_status='FAILED',error_kind=error.kind,error_message=error.message,failure=error.record(url=url))
     return result
 
 
@@ -178,6 +178,13 @@ def extract_isolated(data,filename,mime,timeout=25):
     if len(data)>20_000_000:raise DocumentFailure('DOCUMENT_LIMIT','File size limit')
     with tempfile.TemporaryDirectory(prefix='radar-document-') as folder:
         path=Path(folder)/'document.bin';path.write_bytes(data)
+        image=os.environ.get('RADAR_EVIDENCE_IMAGE')
+        if image:
+            from radar.evidence_sandbox import run_worker
+            output=run_worker(image,folder,'radar.document_worker',['/evidence/document.bin',filename,mime],timeout,768)
+            parsed=json.loads(output)
+            if parsed.get('error'):raise DocumentFailure(parsed.get('error_kind','DOCUMENT_PARSE'),parsed['error'])
+            return parsed['kind'],parsed['text']
         env={k:v for k,v in os.environ.items() if k in ('PATH','SYSTEMROOT','WINDIR','TEMP','TMP')}
         env['PYTHONIOENCODING']='utf-8'
         try:
