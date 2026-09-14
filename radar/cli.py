@@ -16,9 +16,15 @@ def main(argv=None):
     weekly=commands.add_parser('weekly',help='Collect official APIs and publish one Seoul-week briefing; no AI, OCR or team calculation')
     weekly.add_argument('--draft',action='store_true',help='Regenerate unpublished draft only')
     weekly.add_argument('--scheduled',action='store_true',help='Check the administrator calendar; at most one automatic attempt per week')
+    weekly.add_argument('--from-catalog',action='store_true',help='Publish already collected daily opportunities without recollecting')
     weekly.add_argument('--deliver',action='store_true',help='Announce a published briefing to existing enabled subscribers only')
     weekly.add_argument('--revision-note',help='Explicitly recollect and revise the current published issue, keeping its ID and prior-item audit; never duplicates announcements')
+    discovery=commands.add_parser('discover',help='Collect public APIs and approved official channels; never sends Telegram')
+    discovery.add_argument('--scheduled',action='store_true')
+    calendar=commands.add_parser('calendar',help='Check independent daily discovery and weekly publication calendars')
+    calendar.add_argument('--deliver',action='store_true')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
+    institutions=commands.add_parser('seed-institutions');institutions.add_argument('--file',default='institutions.json')
     bootstrap=commands.add_parser('bootstrap-team');bootstrap.add_argument('--user-id',type=UUID,required=True)
     bootstrap.add_argument('--name',default='GFC');bootstrap.add_argument('--admin',action='store_true')
     run=commands.add_parser('run');run.add_argument('--kind',choices=['INGEST','DIGEST','REMINDER','HIGH_FIT','TICK','REFRESH'],default='TICK')
@@ -46,7 +52,14 @@ def main(argv=None):
             token=os.environ.get('TELEGRAM_BOT_TOKEN')
             if not token:raise ValueError('TELEGRAM_BOT_TOKEN is required for --deliver')
             transport=TelegramTransport(token)
-        result=run_weekly(db,transport,publish=not args.draft,revision_note=args.revision_note,scheduled=args.scheduled)
+        result=run_weekly(db,transport,publish=not args.draft,revision_note=args.revision_note,scheduled=args.scheduled,from_catalog=args.from_catalog)
+    elif args.command=='discover':
+        from radar.discovery import run_discovery
+        result=run_discovery(db,scheduled=args.scheduled)
+    elif args.command=='calendar':
+        from radar.discovery import run_calendar
+        transport=TelegramTransport(os.environ['TELEGRAM_BOT_TOKEN']) if args.deliver else None
+        result=run_calendar(db,transport)
     elif args.command=='quality-report':
         from radar.quality import refresh_quality,quality_report
         if args.refresh:refresh_quality(db)
@@ -63,6 +76,9 @@ def main(argv=None):
     elif args.command=='recover-execution':
         from radar.executions import recover_execution
         result=recover_execution(db,args.execution_id,args.note,args.confirm_stopped)
+    elif args.command=='seed-institutions':
+        from radar.institutions import seed_institutions
+        result=seed_institutions(db,args.file)
     elif args.command=='seed-sources':
         rows=json.loads(Path(args.file).read_text(encoding='utf-8'))
         for row in rows:

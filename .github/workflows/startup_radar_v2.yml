@@ -1,14 +1,14 @@
-name: StartupRadar Weekly
+name: StartupRadar Daily and Weekly
 on:
   schedule:
-    # Poll the admin-selected Seoul calendar; only a due week collects/publishes.
+    # Poll independent admin-selected Seoul daily and weekly calendars.
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
     inputs:
       kind:
         description: Task kind
         type: choice
-        options: [WEEKLY, INGEST, REFRESH]
+        options: [WEEKLY, DISCOVER, INGEST, REFRESH]
         default: WEEKLY
       source_slug:
         description: Optional registered source slug
@@ -64,9 +64,18 @@ jobs:
           RADAR_EVIDENCE_IMAGE: startup-radar-evidence:${{ github.sha }}
         shell: bash
         run: |
-          if [ "$KIND" = 'WEEKLY' ]; then
+          if [ "$EVENT_NAME" = 'schedule' ]; then
             args=()
-            if [ "$EVENT_NAME" = 'schedule' ]; then args+=(--scheduled); fi
+            if [ "$DELIVERY_ENABLED" = 'true' ]; then args+=(--deliver); fi
+            python -m radar.cli calendar "${args[@]}"
+            exit $?
+          fi
+          if [ "$KIND" = 'DISCOVER' ]; then
+            python -m radar.cli discover
+            exit $?
+          fi
+          if [ "$KIND" = 'WEEKLY' ]; then
+            args=(--from-catalog)
             if [ -n "$REVISION_NOTE" ]; then args+=(--revision-note "$REVISION_NOTE"); fi
             if [ "$DELIVERY_ENABLED" = 'true' ]; then args+=(--deliver); fi
             python -m radar.cli weekly "${args[@]}"

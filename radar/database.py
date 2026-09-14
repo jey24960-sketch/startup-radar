@@ -88,6 +88,12 @@ class Database:
                 'where s.source_id=%s and s.source_program_id is null and s.discovery_url=%s',
                 (source_id,discovery_url)).fetchone()
             url_candidates=[]
+            if not existing and program.opportunity:
+                from radar.opportunity_facts import strict_duplicate_key
+                key=strict_duplicate_key(program)
+                if key:
+                    exact=c.execute('select p.* from startup_radar.opportunity_records o join startup_radar.programs p on p.id=o.program_id where o.duplicate_key=%s and o.duplicate_of is null',(key,)).fetchall()
+                    if len(exact)==1:existing=exact[0]
             if not existing:
                 url_candidates=c.execute('select p.* from startup_radar.programs p where exists '
                     '(select 1 from startup_radar.program_sources s where s.program_id=p.id and s.official_detail_url=%s)',(canonical_url,)).fetchall()
@@ -99,6 +105,11 @@ class Database:
                         (candidate['id'],source_id,source_program_id)).fetchone()
                     same_notice=(normalize_text(candidate['title'])==normalize_text(program.title)
                         and normalize_text(candidate['organization'])==normalize_text(program.organization))
+                    if same_notice and program.opportunity:
+                        from radar.opportunity_facts import identity_scope
+                        old=c.execute('select normalized from startup_radar.program_versions where id=%s',(candidate['current_version_id'],)).fetchone()
+                        if old and old['normalized'].get('opportunity'):
+                            same_notice=identity_scope(Program.model_validate(old['normalized']))==identity_scope(program)
                     if not conflict and same_notice:matches.append(candidate)
                 # A shared URL is only corroboration, never an override of publisher IDs.
                 if len(matches)==1:existing=matches[0]
