@@ -1,14 +1,15 @@
-name: StartupRadar V2
+name: StartupRadar Weekly
 on:
   schedule:
-    - cron: '17 * * * *'
+    # Single production schedule: Tuesday 15:00 Asia/Seoul, existing weekly preference.
+    - cron: '0 6 * * 2'
   workflow_dispatch:
     inputs:
       kind:
         description: Task kind
         type: choice
-        options: [TICK, INGEST, DIGEST, REMINDER, HIGH_FIT, REFRESH]
-        default: TICK
+        options: [WEEKLY, INGEST, REFRESH]
+        default: WEEKLY
       source_slug:
         description: Optional registered source slug
         type: string
@@ -34,9 +35,11 @@ jobs:
           cache-dependency-path: |
             requirements-v2.lock.txt
             requirements-ocr.lock.txt
-      - run: pip install -r requirements-v2.lock.txt -r requirements-ocr.lock.txt
+      - run: pip install -r requirements-v2.lock.txt
       - name: Prepare verified evidence runtime
+        if: inputs.kind == 'INGEST'
         run: |
+          pip install -r requirements-ocr.lock.txt
           python -m tools.prepare_ocr_models work/tessdata
           docker build -f Dockerfile.evidence --tag startup-radar-evidence:${{ github.sha }} .
           docker image inspect --format '{{.Id}}' startup-radar-evidence:${{ github.sha }}
@@ -47,7 +50,7 @@ jobs:
           KSTARTUP_API_KEY: ${{ secrets.KSTARTUP_API_KEY }}
           BIZINFO_API_KEY: ${{ secrets.BIZINFO_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          KIND: ${{ inputs.kind || 'TICK' }}
+          KIND: ${{ inputs.kind || 'WEEKLY' }}
           SOURCE_SLUG: ${{ inputs.source_slug }}
           JOB_ID: ${{ inputs.job_id }}
           DELIVERY_ENABLED: ${{ vars.RADAR_V2_DELIVERY_ENABLED }}
@@ -56,10 +59,16 @@ jobs:
           RADAR_EVIDENCE_IMAGE: startup-radar-evidence:${{ github.sha }}
         shell: bash
         run: |
+          if [ "$KIND" = 'WEEKLY' ]; then
+            args=()
+            if [ "$DELIVERY_ENABLED" = 'true' ]; then args+=(--deliver); fi
+            python -m radar.cli weekly "${args[@]}"
+            exit $?
+          fi
           args=(--kind "$KIND")
           if [ -n "$SOURCE_SLUG" ]; then args+=(--source "$SOURCE_SLUG"); fi
           if [ -n "$JOB_ID" ]; then args+=(--job-id "$JOB_ID"); fi
-          if [ "$DELIVERY_ENABLED" = 'true' ]; then args+=(--deliver); fi
+          # Advanced/manual jobs never send normal GFC per-program notifications.
           python -m radar.cli run "${args[@]}"
       - name: Remove interrupted evidence workers
         if: always()

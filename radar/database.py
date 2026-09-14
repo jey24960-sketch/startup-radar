@@ -1,6 +1,7 @@
 """Transactional PostgreSQL repository; no JSON/cache primary state in V2."""
 import os
 from contextlib import contextmanager,nullcontext
+from contextvars import ContextVar
 from uuid import uuid4
 import psycopg
 from psycopg.rows import dict_row
@@ -15,10 +16,23 @@ class Database:
     def __init__(self,url=None):
         self.url=url or os.environ.get('DATABASE_URL')
         if not self.url: raise ValueError('DATABASE_URL is required')
+        self._session_connection=ContextVar('radar_database_session',default=None)
+
+    @contextmanager
+    def session(self):
+        """Reuse a connection inside one synchronous, deterministic batch only."""
+        if self._session_connection.get() is not None:
+            yield self
+            return
+        with psycopg.connect(self.url,row_factory=dict_row,prepare_threshold=None) as connection:
+            token=self._session_connection.set(connection)
+            try:yield self
+            finally:self._session_connection.reset(token)
 
     @contextmanager
     def transaction(self,user_id=None):
-        with psycopg.connect(self.url,row_factory=dict_row,prepare_threshold=None) as connection:
+        borrowed=self._session_connection.get()
+        with (nullcontext(borrowed) if borrowed is not None else psycopg.connect(self.url,row_factory=dict_row,prepare_threshold=None)) as connection:
             with connection.transaction():
                 connection.execute("set local timezone='Asia/Seoul'")
                 if user_id:

@@ -13,6 +13,9 @@ from radar.scheduler import run_job
 def main(argv=None):
     parser=argparse.ArgumentParser(description='StartupRadar V2 PostgreSQL operations')
     commands=parser.add_subparsers(dest='command',required=True)
+    weekly=commands.add_parser('weekly',help='Collect official APIs and publish one Seoul-week briefing; no AI, OCR or team calculation')
+    weekly.add_argument('--draft',action='store_true',help='Regenerate unpublished draft only')
+    weekly.add_argument('--deliver',action='store_true',help='Announce a published briefing to existing enabled subscribers only')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
     bootstrap=commands.add_parser('bootstrap-team');bootstrap.add_argument('--user-id',type=UUID,required=True)
     bootstrap.add_argument('--name',default='GFC');bootstrap.add_argument('--admin',action='store_true')
@@ -34,7 +37,15 @@ def main(argv=None):
     recovery.add_argument('--note',required=True)
     recovery.add_argument('--confirm-stopped',action='store_true',help='Affirm the recorded process/Actions run is terminal, not just disconnected')
     args=parser.parse_args(argv);db=Database()
-    if args.command=='quality-report':
+    if args.command=='weekly':
+        from radar.weekly import run_weekly
+        transport=None
+        if args.deliver:
+            token=os.environ.get('TELEGRAM_BOT_TOKEN')
+            if not token:raise ValueError('TELEGRAM_BOT_TOKEN is required for --deliver')
+            transport=TelegramTransport(token)
+        result=run_weekly(db,transport,publish=not args.draft)
+    elif args.command=='quality-report':
         from radar.quality import refresh_quality,quality_report
         if args.refresh:refresh_quality(db)
         result=quality_report(db)

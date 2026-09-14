@@ -9,6 +9,11 @@ from radar.identity import digest
 
 
 def refresh_member_results(db):
+    with db.session():
+        return _refresh_member_results(db)
+
+
+def _refresh_member_results(db):
     weights = configured_weights(db)
     generation = digest({'contract': 'member-read-1', 'weights': weights, 'presets': PRESETS,
                          'eligibility': EligibilityResult.model_fields['engine_version'].default,
@@ -31,12 +36,12 @@ def refresh_member_results(db):
                     c.execute("update startup_radar.profile_calculation_requests set state='RUNNING',started_at=now(),finished_at=null,attempts=attempts+1,error_kind=null "
                               "where team_id=%s and profile_version=%s and state in ('PENDING','RUNNING','FAILED')", (team_id,scope['version']))
             profile = TeamProfile.model_validate(scope['profile'])
-            # Historical facts remain browsable and are evaluated against the
-            # current scope, explicitly identified as such by the GFC UI.
+            # Keep historical stored decisions intact; normal refreshes visit
+            # current versions only and evaluate changed cache inputs.
             cursor = None
             while True:
                 with db.transaction() as c:
-                    rows = c.execute('select v.* from startup_radar.program_versions v '
+                    rows = c.execute('select v.id,v.normalized from startup_radar.programs p join startup_radar.program_versions v on v.id=p.current_version_id '
                         'where (%s::uuid is null or v.id>%s) order by v.id limit 100', (cursor, cursor)).fetchall()
                 if not rows:
                     break
@@ -46,6 +51,7 @@ def refresh_member_results(db):
                         'select program_version_id,responses from startup_radar.team_program_responses '
                         'where team_id=%s and program_version_id=any(%s::uuid[])',(team_id,page_ids)).fetchall()} if team_id else {}
                     cache_day = None
+                    pending=[]
                     for row in rows:
                         at = now().astimezone(SEOUL)
                         # One bounded lookup per page/scope, not one network
@@ -67,13 +73,16 @@ def refresh_member_results(db):
                         response=responses.get(row['id'],{})
                         eligibility = evaluate(profile, program.requirements, program.evidence_complete, as_of=at.date(), program_responses=response)
                         recommendation = rank(program, profile, eligibility, weights=weights, at=at)
-                        c.execute('insert into startup_radar.member_program_results(scope_key,program_version_id,team_id,preset,profile_version,profile_snapshot,evaluated_on,generation,eligibility,recommendation,response_snapshot) '
-                            'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict(scope_key,program_version_id) do update set '
-                            'profile_version=excluded.profile_version,profile_snapshot=excluded.profile_snapshot,evaluated_on=excluded.evaluated_on,generation=excluded.generation,'
-                            'eligibility=excluded.eligibility,recommendation=excluded.recommendation,response_snapshot=excluded.response_snapshot,computed_at=now()',
-                            (key,row['id'],team_id,preset,scope['version'],Jsonb(scope['profile']),at.date(),generation,
-                             Jsonb(eligibility.model_dump(mode='json')),Jsonb(asdict(recommendation)) if recommendation else None,Jsonb(response)))
-                        computed += 1
+                        pending.append((key,row['id'],team_id,preset,scope['version'],Jsonb(scope['profile']),at.date(),generation,
+                            Jsonb(eligibility.model_dump(mode='json')),Jsonb(asdict(recommendation)) if recommendation else None,Jsonb(response)))
+                    if pending:
+                        with c.cursor() as writer:
+                            writer.executemany('insert into startup_radar.member_program_results(scope_key,program_version_id,team_id,preset,profile_version,profile_snapshot,evaluated_on,generation,eligibility,recommendation,response_snapshot) '
+                                'values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict(scope_key,program_version_id) do update set '
+                                'profile_version=excluded.profile_version,profile_snapshot=excluded.profile_snapshot,evaluated_on=excluded.evaluated_on,generation=excluded.generation,'
+                                'eligibility=excluded.eligibility,recommendation=excluded.recommendation,response_snapshot=excluded.response_snapshot,computed_at=now()',
+                                pending)
+                        computed += len(pending)
                 cursor = rows[-1]['id']
             if team_id:
                 with db.transaction() as c:
