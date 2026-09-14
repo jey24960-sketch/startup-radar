@@ -140,6 +140,20 @@ def test_kstartup_encoded_and_decoded_keys_share_one_wire_encoding(monkeypatch,k
     assert '%252B' not in prepared.url
 
 
+@pytest.mark.parametrize('value',['20260914 ~ 20260930','2026-09-14 ~ 2026-09-30','2026.09.14 ~ 2026.09.30'])
+def test_bizinfo_live_calendar_range(value):
+    from radar.adapters.official import parse_period
+    start,end=parse_period(value)
+    assert start.date().isoformat()=='2026-09-14' and end.date().isoformat()=='2026-09-30'
+    assert start.hour==0 and end.hour==23 and end.utcoffset().total_seconds()==9*3600
+
+
+@pytest.mark.parametrize('value',[None,'예산 소진시','2026-09-31 ~ 2026-10-02','2026-09-30 ~ 2026-09-14','2026-09-14 ~ 미정'])
+def test_bizinfo_unknown_or_invalid_period_never_fabricates_date(value):
+    from radar.adapters.official import parse_period
+    assert parse_period(value)==(None,None)
+
+
 @pytest.mark.parametrize('guide',[None,'forms.gle/public-form','startup.example.org/'])
 def test_live_kstartup_null_detail_field_uses_verified_portal_notice(monkeypatch,guide):
     monkeypatch.setenv('KSTARTUP_API_KEY','fixture-key')

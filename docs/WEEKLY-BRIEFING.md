@@ -18,13 +18,15 @@ Privileged operator commands, with the existing server credentials:
 python -m radar.cli weekly --draft
 python -m radar.cli weekly
 python -m radar.cli weekly --deliver
+python -m radar.cli weekly --revision-note "Reason for verified correction"
 python -m radar.cli execution-status
 ```
 
 `--draft` rebuilds only an unpublished current-week draft. The normal command publishes.
-A published week is immutable: reruns return its existing ID and do not recollect or rewrite it.
-There is no automatic revision of an already published article. Correct exceptional errors through an
-explicit reviewed database revision, not a blanket retry. Ordinary next-week changes appear in that week's post.
+A published week is stable: ordinary reruns return its existing ID and do not recollect or rewrite it.
+Only an explicit `--revision-note` recollects/revises the current issue. Prior item snapshots and version links
+remain in `admin_audit`, the briefing ID/first publication time remain stable, and announcement uniqueness
+does not reset. This is for verified corrections, never a blanket scheduled retry.
 
 Weeks are Monday-Sunday in Seoul, with exact dates shown in the title/article.
 The first briefing includes currently obtained opportunities; later issues compare each opportunity

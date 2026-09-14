@@ -80,8 +80,13 @@ def parse_json(data):
 
 
 def parse_period(value):
-    dates=re.findall(r'\b\d{8}\b',value or '')
-    if len(dates)==2:return korean_date(dates[0]),korean_date(dates[1],True)
+    # BizInfo's live field uses ISO calendar ranges; compact dates remain supported.
+    day=r'(\d{8}|\d{4}[-.]\d{2}[-.]\d{2})'
+    matched=re.fullmatch(r'\s*'+day+r'\s*[~\u223c\uff5e]\s*'+day+r'\s*',value or '')
+    if matched:
+        try:start,end=korean_date(matched[1]),korean_date(matched[2],True)
+        except ValueError:return None,None
+        if start<=end:return start,end
     return None,None
 
 
