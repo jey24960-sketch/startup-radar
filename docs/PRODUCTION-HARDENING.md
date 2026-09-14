@@ -1,0 +1,75 @@
+# Production hardening implementation ledger
+
+Status: IN PROGRESS. This is not production acceptance or the current runbook.
+
+Authoritative scope: the user's 2026-09-14 Production Hardening & Reliability Completion Goal, sections 0-72. A verbatim local copy is preserved in the task's startup-radar-hardening/goal-spec.md. Audit baseline: Radar 6ecdf96, GFC 7a369fe.
+
+## Execution sequence
+
+1. Reliability: auditable bounded ingestion retries, no false-green claims, sanitized error causes, complete official pagination.
+2. Data quality: explicit reasons and prioritized review, production OCR, measured AI calls and claims outside long transactions, real golden corpus.
+3. Product: canonical types, preserved Radar ranking, independently paged mixed sections, evidence and freshness language.
+4. Notifications: user preference vs administrative suspension, health, deep links, zero-subscriber correctness.
+5. Operations: separate health clocks, queued calculations, operator recovery visibility.
+6. Performance: incremental current-version results, measured DB/RPC/100/1,000-team load.
+7. Reproducibility: policy-bound private originals and a measured non-production restore.
+8. Acceptance: live authorization, actual legacy control-plane state, full regressions, no-delivery production canary and scheduled proof.
+
+## Definition-of-done evidence matrix
+
+Every item remains unproven until current evidence is linked here. Local tests do not alone prove production deployment.
+
+| DoD | Requirement | Current evidence / status |
+|---|---|---|
+| 1 | No silent healthy state after failed scheduled ingestion | LOCAL PASS: failed empty TICK regression; production PENDING |
+| 2 | Safe retry and verified-owner recovery | LOCAL PASS: bounded history and no-delivery recovery; production PENDING |
+| 3 | Defined official scope pagination or explicit incompleteness | LOCAL PASS: both adapters, duplicates, short/empty pages, page caps; production scope PENDING |
+| 4 | Every current quality state and reason explicit | LOCAL PASS: current-version assessment and review report; live backfill/UI PENDING |
+| 5 | No confident eligibility from incomplete evidence | Baseline tests; final regression PENDING |
+| 6 | Material active-program evidence improvement without weaker safety | PENDING real canary and denominator |
+| 7 | One canonical support-type contract, WORKSPACE path | PENDING |
+| 8 | Preserve Radar recommendation ordering | PENDING |
+| 9 | Correct explicit mixed-feed pagination | PENDING |
+| 10 | Preferences cannot bypass channel suspension | PENDING |
+| 11 | Distinct collection/persistence/documents/calculation/delivery health | PENDING |
+| 12 | Member freshness and staleness visible | PENDING |
+| 13 | Actual production-safe OCR path | Native OCR PASS incl. limits; 3 real originals/15 pages extracted as drafts; Linux offline container CI and deployment PENDING |
+| 14 | AI timeout/retry/cost/cache observability | LOCAL PASS: request metrics, persistent failure cache, short claims, concurrent/expired owner tests; live usage PENDING |
+| 15 | Incremental current-result recomputation | PENDING |
+| 16 | Measured 100/1,000-team growth | PENDING |
+| 17 | Policy-permitted original preservation | PENDING |
+| 18 | Non-production restore exercise | PENDING |
+| 19 | Real authorization boundaries | PENDING controlled legitimate roles |
+| 20 | Actual V1/Cloudflare control paths unambiguous | PENDING deployed-state evidence |
+| 21 | Existing suites stay green | Baseline: 335 Python + 5 OCR skips; 81 GFC; 35 E2E; 4 Worker. Rerun PENDING |
+| 22 | Defect-specific regressions | IN PROGRESS |
+| 23 | Real source-to-member no-delivery canary | PENDING |
+| 24 | Scheduled health correct after canary | PENDING |
+| 25 | No unintended worker/queue/message | Final inspection PENDING |
+| 26 | No unresolved critical audit finding except documented unavoidable external limits with safe degradation | PENDING all phases |
+
+## Safety and change management
+
+Production migrations are additive and applied only after local database verification. Preserve original failed attempts and existing source configuration. Do not enable subscriber delivery or invent subscribers. Keep user local changes/stashes. Never copy production secrets into tests or client bundles. Do not alter unrelated GFC schemas.
+
+Implementation branches in both repositories: codex/production-hardening-20260914. No production changes have been made by this hardening run yet.
+
+## Local verification checkpoints
+
+- Phase 1 full native PostgreSQL: 374 passed, 5 optional OCR skipped (155.43s).
+- Phase 2 targeted: 97 passed, 5 OCR skipped; subsequent native OCR/sandbox-contract run: 40 passed, 1 Linux-container test skipped.
+- Phase 2 full checkpoint before the final real-source semantic guard additions: 394 passed, 1 Linux-container test skipped (257.30s).
+- Radar PGlite migration/RLS/role regression PASS; Worker 4/4 PASS.
+- All JUnit/logs and real-document OCR measurements are in the task workspace `startup-radar-hardening` directory. These are local evidence, not production canary proof.
+
+## Evidence quality implementation notes
+
+AI requests use a 90-second explicit SDK timeout, SDK retries disabled, and at most two measured provider requests per attempt. Identical transient input has three automatic attempts maximum with persistent backoff; deterministic failures are retained until input/contract changes or an explicit audited single-input retry. Unknown provider usage is recorded as unknown, not zero billed usage. Tokens are recorded without inventing currency estimates.
+
+AI claims commit before the external call. A ten-minute expired claim is UNCERTAIN; it is never automatically re-owned. `retry-extraction --input-hash ... --note ...` authorizes one controlled retry; RUNNING/UNCERTAIN owners additionally require verified termination and `--confirm-stopped`. No notification is sent. A non-secret `RADAR_AI_CONFIGURATION_REVISION` may change when provider configuration is deliberately repaired.
+
+The evidence container has no network, no application secrets, a read-only root, no capabilities, a non-root UID, one CPU, bounded RAM/swap/PIDs and one disposable input directory. Native Windows parsing remains a local development path, not proof of Linux production sandboxing. There is no native fallback after configured container failure.
+
+OCR v2 uses automatic layout segmentation. Three hash-verified official originals were visually inspected in full: Pre-WoW (6 pages), Gyeonggi poster (1), and BizInfo Japanese expert program (8). v2 extracted 2,090/153/6,974 characters respectively. OCR remains imperfect and untrusted: a poster event date is not its application deadline, and expert experience is not founder age. The real-source golden corpus records these distinctions; its injected-response tests prove semantic guards, not live model accuracy. Live extraction scoring and active-program improvement remain PENDING.
+
+Reference contracts: [Anthropic SDK errors/timeouts/retries](https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/python), [Docker resource/isolation flags](https://docs.docker.com/reference/cli/docker/container/run/). Pinned repo dependency versions remain authoritative.

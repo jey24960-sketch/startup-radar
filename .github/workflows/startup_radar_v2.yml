@@ -31,8 +31,15 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: requirements-v2.lock.txt
-      - run: pip install -r requirements-v2.lock.txt
+          cache-dependency-path: |
+            requirements-v2.lock.txt
+            requirements-ocr.lock.txt
+      - run: pip install -r requirements-v2.lock.txt -r requirements-ocr.lock.txt
+      - name: Prepare verified evidence runtime
+        run: |
+          python -m tools.prepare_ocr_models work/tessdata
+          docker build -f Dockerfile.evidence --tag startup-radar-evidence:${{ github.sha }} .
+          docker image inspect --format '{{.Id}}' startup-radar-evidence:${{ github.sha }}
       - name: Execute persistent V2 task
         env:
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
@@ -44,6 +51,9 @@ jobs:
           SOURCE_SLUG: ${{ inputs.source_slug }}
           JOB_ID: ${{ inputs.job_id }}
           DELIVERY_ENABLED: ${{ vars.RADAR_V2_DELIVERY_ENABLED }}
+          RADAR_OCR_MODEL_DIR: work/tessdata
+          RADAR_OCR_CACHE_DIR: work/ocr-cache
+          RADAR_EVIDENCE_IMAGE: startup-radar-evidence:${{ github.sha }}
         shell: bash
         run: |
           args=(--kind "$KIND")
@@ -51,3 +61,6 @@ jobs:
           if [ -n "$JOB_ID" ]; then args+=(--job-id "$JOB_ID"); fi
           if [ "$DELIVERY_ENABLED" = 'true' ]; then args+=(--deliver); fi
           python -m radar.cli run "${args[@]}"
+      - name: Remove interrupted evidence workers
+        if: always()
+        run: docker ps -aq --filter label=startup-radar.evidence=true | xargs --no-run-if-empty docker rm --force

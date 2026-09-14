@@ -20,7 +20,7 @@ pytestmark=pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Ex
 def context(db):
     admin,other=uuid4(),uuid4()
     with db.transaction() as c:
-        c.execute('truncate startup_radar.telegram_updates,startup_radar.schedule_claims')
+        c.execute('truncate startup_radar.telegram_updates,startup_radar.schedule_claims cascade')
         c.execute('insert into auth.users values(%s),(%s)',(admin,other))
         c.execute('insert into startup_radar.admin_users values(%s)',(admin,))
     team=db.create_team('GFC fixture A',admin,apply_preset(TeamProfile(),0))

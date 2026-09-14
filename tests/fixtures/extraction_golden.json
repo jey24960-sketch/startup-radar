@@ -1,0 +1,101 @@
+{
+  "version": "real-source-golden-1",
+  "reviewed_at": "2026-09-14",
+  "review_method": "Official stored source passages and all 15 pages of the three hash-verified scanned originals were inspected. This is a semantic guard corpus, not a claim of live-model accuracy.",
+  "cases": [
+    {
+      "id": "founder-age-is-tiebreaker",
+      "tags": ["founder_age", "nonmandatory_preference"],
+      "url": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000126419",
+      "text": "동 순위 처리기준(아래 각 호의 순서로 선정)\n① 2025년 카드 매출액이 많은 사업자\n② 청년 사업자(만 19세 이상 39세 이하) 여부\n③ 개업 일자가 오래된 사업자",
+      "quote": "청년 사업자(만 19세 이상 39세 이하) 여부",
+      "rule": {"key":"founder_age","operator":"RANGE","value":[19,39]},
+      "expected_review": "PREFERENCE_NOT_MANDATORY"
+    },
+    {
+      "id": "student-status-has-graduate-alternatives",
+      "tags": ["student_requirement", "compound_or"],
+      "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179200",
+      "text": "국내 대학 재학생, 휴학생 및 졸업(예정)자\n단, 졸업자의 경우 공고일 기준 졸업 이후 3년이 경과하지 아니한 학생에 한하여 지원가능",
+      "quote": "국내 대학 재학생, 휴학생 및 졸업(예정)자",
+      "rule": {"key":"student_status","operator":"EQ","value":true},
+      "expected_review": "STUDENT_ALTERNATIVES_NOT_REPRESENTED"
+    },
+    {
+      "id": "compound-business-age-branch",
+      "tags": ["business_age", "compound_or", "business_status"],
+      "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179219",
+      "text": "[신청자격] : 예비창업자 또는 업력 7년 이내 이종창업 희망기업",
+      "quote": "예비창업자 또는 업력 7년 이내 이종창업 희망기업",
+      "rule": {"key":"business_age_months","operator":"LTE","value":84},
+      "expected_review": "BUSINESS_AGE_BRANCH_NOT_REPRESENTED"
+    },
+    {
+      "id": "facility-region-is-not-team-region",
+      "tags": ["region", "compound_and", "business_age"],
+      "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179204",
+      "text": "고양시 소재(사업자등록증상 본점 또는 사업장 기준) F&B·프랜차이즈 분야 창업 7년 이내 초기 창업기업",
+      "quote": "고양시 소재(사업자등록증상 본점 또는 사업장 기준) F&B·프랜차이즈 분야 창업 7년 이내 초기 창업기업",
+      "rule": {"key":"region","operator":"EQ","value":"고양시"},
+      "expected_review": "FACILITY_LOCATION_NOT_REPRESENTED"
+    },
+    {
+      "id": "product-stage-checkbox-is-not-a-restriction",
+      "tags": ["product_stage"],
+      "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179213",
+      "text": "개발단계 ☐ 아이디어·설계 ☐ 시제품(Lab) ☐ 현장 시험 완료 ☐ 상용화·판매 중",
+      "quote": "시제품(Lab)",
+      "rule": {"key":"product_stage","operator":"EQ","value":"MVP"},
+      "expected_review": "FORM_OPTION_NOT_REQUIREMENT"
+    },
+    {
+      "id": "future-registration-is-not-current-status",
+      "tags": ["future_commitment", "compound_and"],
+      "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179199",
+      "text": "입주 후 6개월 이내에 관내 사업자등록 예정자",
+      "expected_review": "FUTURE_COMMITMENT_NOT_REPRESENTED"
+    },
+    {
+      "id": "prior-support-needs-controlled-response",
+      "tags": ["prior_support_restriction"],
+      "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179199",
+      "text": "지원 제외대상: 스타트업 96 입주대상자로 선정되어 입주한 이력이 있는 자(팀)",
+      "quote": "스타트업 96 입주대상자로 선정되어 입주한 이력이 있는 자(팀)",
+      "rule": {"key":"prior_support_restrictions","operator":"NOT_IN","value":["스타트업 96"]},
+      "expected_review": "UNCONTROLLED_HISTORY_VALUES"
+    },
+    {
+      "id": "precise-application-cutoff",
+      "tags": ["fixed_deadline", "time_specific_deadline"],
+      "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179214",
+      "text": "접수기간\n2026-09-09 ~ 2026-09-30 18:00",
+      "date_quote": "2026-09-09 ~ 2026-09-30 18:00",
+      "end_at": "2026-09-30T18:00:00+09:00",
+      "expected_end_at": "2026-09-30T18:00:00+09:00"
+    },
+    {
+      "id": "event-time-is-not-deadline",
+      "tags": ["event_vs_deadline", "conflicting_body_attachment"],
+      "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179219",
+      "text": "[행사일시] 2026. 9. 15.(화) 14:00~15:00",
+      "date_quote": "[행사일시] 2026. 9. 15.(화) 14:00~15:00",
+      "end_at": "2026-09-15T14:00:00+09:00",
+      "expected_error": "AI_DATE_EVENT_NOT_DEADLINE"
+    },
+    {
+      "id": "rolling-source-phrase",
+      "tags": ["rolling_deadline"],
+      "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=179204",
+      "text": "9.7.(월)부터 상시\n참여기업 모집",
+      "date_quote": "9.7.(월)부터 상시\n참여기업 모집",
+      "deadline_type": "ROLLING",
+      "expected_deadline_type": "ROLLING",
+      "note": "Isolated attachment phrase only. The full notice has a conflicting fixed portal deadline and cannot be certified complete from this excerpt."
+    }
+  ],
+  "scanned_originals": [
+    {"id":"pre-wow-scanned","pages":6,"sha256":"dfb0e133d143c19a02955beb7c5959ae980e1d7305620750092187e9225bf79b","tags":["scanned_document","future_attendance_commitment"],"reviewed_facts":{"deadline_local":"2026-09-30 18:00","offline_attendance_required":true,"completion_percent":70,"student_only":false}},
+    {"id":"gyeonggi-poster","pages":1,"sha256":"07e9909362d46321ce9d6a9871bc43e356c13c1952e7e3a4699112477be282ee","tags":["scanned_document","event_vs_deadline"],"reviewed_facts":{"event_start_local":"2026-09-15 14:00","poster_contains_application_deadline":false}},
+    {"id":"bizinfo-scanned","pages":8,"sha256":"e9ba4752569788c060eb82d25fbd4a60cd8aca9a5ac6264489377361c222e060","tags":["scanned_document","time_specific_deadline","prior_support_restriction"],"reviewed_facts":{"deadline_local":"2026-09-28 18:00","annual_application_limit":1,"years_experience_applies_to":"Japanese technical expert, not startup founder"}}
+  ]
+}

@@ -11,6 +11,69 @@ from radar.documents import html_text
 from core.clock import now
 
 
+class Pagination:
+    """Measured per-query coverage; a safety cap is never a completed scan."""
+    def __init__(self,config):
+        self.maximum=config.get('max_pages',100);self.size=config.get('page_size',100)
+        if any(type(n) is not int or not 1<=n<=1000 for n in (self.maximum,self.size)):
+            raise SourceFailure('CONFIGURATION','Page size and cap must be integers in 1..1000')
+        self.seen=set();self.queries=[];self.rejected=0;self.duplicates=0
+        self.scope=config.get('scope','API_DEFAULT')
+        if self.scope not in ('API_DEFAULT','OPEN'):raise SourceFailure('CONFIGURATION','Unknown official scope')
+
+    def start(self,label):
+        self.local=set()
+        self.current={'query':label,'pages_requested':0,'records_returned':0,'advertised_records':None,
+                      'unique_records':0,'pagination_complete':False}
+        self.queries.append(self.current)
+
+    def requested(self):self.current['pages_requested']+=1
+
+    def returned(self,rows,total):
+        self.current['records_returned']+=len(rows)
+        if total is not None:
+            if isinstance(total,bool) or not str(total).isdigit():raise SourceFailure('API_SCHEMA','Invalid advertised record count')
+            self.current['advertised_records']=int(total)
+        self.before=len(self.local)
+
+    def accept(self,sid):
+        if sid is None:
+            self.rejected+=1
+            return False
+        self.local.add(str(sid));self.current['unique_records']=len(self.local)
+        if str(sid) in self.seen:
+            self.duplicates+=1
+            return False
+        self.seen.add(str(sid))
+        return True
+
+    def exhausted(self,rows):
+        total=self.current['advertised_records']
+        if total is not None:
+            done=len(self.local)>=total
+            if not rows and not done:raise SourceFailure('PAGINATION_INCOMPLETE','Empty page before advertised scope was acquired')
+        else:done=len(rows)<self.size
+        if not done and rows and len(self.local)==self.before:
+            raise SourceFailure('PAGINATION_STALLED','Page returned no new source identities')
+        if done:self.current['pagination_complete']=True
+        return done
+
+    def finish(self):
+        if not all(q['pagination_complete'] for q in self.queries):
+            raise SourceFailure('PAGE_LIMIT','Configured safety cap reached before source scope completed')
+        if self.rejected:raise SourceFailure('API_SCHEMA',f'{self.rejected} source records rejected because identity fields were invalid')
+
+    def report(self):
+        return {'scope':self.scope,'advertised_scope':'PRIMARY_QUERY','page_cap':self.maximum,'page_size':self.size,
+                'pages_requested':sum(q['pages_requested'] for q in self.queries),
+                'records_returned':sum(q['records_returned'] for q in self.queries),
+                'advertised_records':self.queries[0]['advertised_records'] if self.queries else None,
+                'fetched_unique_records':len(self.seen),'unique_source_ids':len(self.seen),
+                'duplicates':self.duplicates,'rejected_records':self.rejected,
+                'pagination_complete':bool(self.queries) and all(q['pagination_complete'] for q in self.queries),
+                'queries':self.queries}
+
+
 def parse_json(data):
     try:return json.loads(data)
     except (ValueError,UnicodeError):raise SourceFailure('API_JSON','API did not return valid JSON')
@@ -67,41 +130,44 @@ class KStartupApiAdapter(HtmlAdapter):
         filename=container.select_one('a.file_bg') if container else None
         return filename.get_text(' ',strip=True) if filename else super().document_name(link)
     def discover(self):
+        self.pagination=Pagination(self.config)
         key=os.environ.get(self.config.get('key_env','KSTARTUP_API_KEY'))
         if not key:raise SourceFailure('MISSING_CREDENTIAL','KSTARTUP_API_KEY is required')
         # Public-data portals supply encoded and decoded key forms. Requests
         # encodes params itself; decode once without treating literal '+' as space.
         key=unquote(key)
-        maximum=self.config.get('max_pages',100);size=self.config.get('page_size',100)
+        maximum=self.pagination.maximum;size=self.pagination.size
         queries=self.config.get('current_title_queries',[])
         if not isinstance(queries,list) or len(queries)>5 or any(not isinstance(q,str) or not q.strip() or len(q)>100 for q in queries):
             raise SourceFailure('CONFIGURATION','At most five nonempty current-title queries are allowed')
-        seen=set();limited=False
         # Current featured notices can predate the latest page. Query the same
         # official API, bound every query, and preserve publisher identity.
         for query in [None,*dict.fromkeys(queries)]:
+            self.pagination.start(query or 'PRIMARY')
             for page in range(1,maximum+1):
-                data,_,_=self.http.get(self.endpoint,params={**{'serviceKey':key,'page':page,'perPage':size,'returnType':'json'},**({'cond[biz_pbanc_nm::LIKE]':query,'cond[rcrt_prgs_yn::EQ]':'Y'} if query else {})})
+                self.pagination.requested()
+                params={'serviceKey':key,'page':page,'perPage':size,'returnType':'json'}
+                if query:params['cond[biz_pbanc_nm::LIKE]']=query
+                if query or self.pagination.scope=='OPEN':params['cond[rcrt_prgs_yn::EQ]']='Y'
+                data,_,_=self.http.get(self.endpoint,params=params)
                 payload=parse_json(data)
-                if 'data' not in payload:raise SourceFailure('API_SCHEMA','K-Startup data field missing (possible API error)')
+                if not isinstance(payload,dict) or 'data' not in payload:raise SourceFailure('API_SCHEMA','K-Startup data field missing (possible API error)')
                 rows=payload['data']
                 if isinstance(rows,dict):rows=rows.get('data')
                 if not isinstance(rows,list):raise SourceFailure('API_SCHEMA','K-Startup data must contain an array')
+                self.pagination.returned(rows,payload.get('matchCount',payload.get('totalCount')))
                 for row in rows:
                     if not isinstance(row,dict) or not row.get('biz_pbanc_nm') or not row.get('pbanc_sn'):
-                        raise SourceFailure('API_SCHEMA','Required K-Startup notice fields missing')
+                        self.pagination.accept(None);continue
                     sid=str(row['pbanc_sn'])
-                    if sid in seen:continue
-                    seen.add(sid)
                     # The live API uses detl_pg_url for its canonical portal notice,
                     # even when the documented biz_aply_url field is null.
                     url=kstartup_portal_detail(row) or row.get('biz_aply_url') or row.get('biz_gdnc_url')
-                    if not url:raise SourceFailure('API_SCHEMA','Official notice URL missing')
+                    if not url:self.pagination.accept(None);continue
+                    if not self.pagination.accept(sid):continue
                     yield Candidate(self.source['slug'],str(row['pbanc_sn']),url,url,row['biz_pbanc_nm'],row,now().isoformat())
-                total=payload.get('matchCount',payload.get('totalCount'))
-                if not rows or len(rows)<size or total is not None and page*size>=int(total):break
-            else:limited=True
-        if limited:raise SourceFailure('PAGE_LIMIT','Discovery stopped at configured page limit; source is partial')
+                if self.pagination.exhausted(rows):break
+        self.pagination.finish()
     def normalize(self,candidate,detail,documents):
         row=candidate.raw_metadata
         start=korean_date(row['pbanc_rcpt_bgng_dt']) if row.get('pbanc_rcpt_bgng_dt') else None
@@ -123,10 +189,14 @@ class KStartupApiAdapter(HtmlAdapter):
 class BizInfoApiAdapter(HtmlAdapter):
     endpoint='https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do'
     def discover(self):
+        self.pagination=Pagination(self.config)
+        if self.pagination.scope!='API_DEFAULT':raise SourceFailure('CONFIGURATION','BizInfo supports only its documented API_DEFAULT scope')
         key=os.environ.get(self.config.get('key_env','BIZINFO_API_KEY'))
         if not key:raise SourceFailure('MISSING_CREDENTIAL','BIZINFO_API_KEY is required')
-        size=self.config.get('page_size',100);maximum=self.config.get('max_pages',100)
+        size=self.pagination.size;maximum=self.pagination.maximum
+        self.pagination.start('PRIMARY')
         for page in range(1,maximum+1):
+            self.pagination.requested()
             data,_,_=self.http.get(self.endpoint,params={'crtfcKey':key,'dataType':'json','pageUnit':size,'pageIndex':page,'searchCnt':0})
             payload=parse_json(data)
             envelope=payload.get('jsonArray') if isinstance(payload,dict) else None
@@ -134,15 +204,18 @@ class BizInfoApiAdapter(HtmlAdapter):
             elif isinstance(envelope,list):rows=envelope
             else:raise SourceFailure('API_SCHEMA','BizInfo jsonArray missing (possible API error)')
             if not isinstance(rows,list):raise SourceFailure('API_SCHEMA','BizInfo items must be an array')
+            total=envelope.get('totalCount',envelope.get('totCnt')) if isinstance(envelope,dict) else None
+            if total is None and rows and isinstance(rows[0],dict):total=rows[0].get('totCnt')
+            self.pagination.returned(rows,total)
             for row in rows:
+                if not isinstance(row,dict):self.pagination.accept(None);continue
                 title=row.get('pblancNm') or row.get('title');url=row.get('pblancUrl') or row.get('link');sid=row.get('pblancId') or row.get('seq')
-                if not title or not url or not sid:raise SourceFailure('API_SCHEMA','Required BizInfo notice fields missing')
+                if not title or not url or not sid:self.pagination.accept(None);continue
+                if not self.pagination.accept(sid):continue
                 url=urljoin('https://www.bizinfo.go.kr',url)
-                yield Candidate(self.source['slug'],sid,url,url,title,row,now().isoformat())
-            if not rows or len(rows)<size:return
-            total=rows[0].get('totCnt')
-            if total is not None and page*size>=int(total):return
-        raise SourceFailure('PAGE_LIMIT','Discovery reached page limit; source is partial')
+                yield Candidate(self.source['slug'],str(sid),url,url,title,row,now().isoformat())
+            if self.pagination.exhausted(rows):break
+        self.pagination.finish()
     def fetch_detail(self,candidate):
         detail=super().fetch_detail(candidate)
         for url_key,name_key in [('flpthNm','fileNm'),('printFlpthNm','printFileNm')]:

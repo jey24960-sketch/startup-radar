@@ -1,4 +1,4 @@
-# Optional local review only. Install after requirements-v2.lock.txt.
+# Production evidence runtime and local review. Install after requirements-v2.lock.txt.
 Pillow==12.3.0
 pypdfium2==5.13.0
 tesserocr==2.10.0 ; sys_platform != "win32"

@@ -52,9 +52,12 @@ class Database:
 
     def save_program(self,program:Program,source_id,source_program_id,discovery_url,raw_metadata,raw_text='',documents=None,extraction_metadata=None,expected_version_id=None,connection=None):
         from radar.ocr import review_metadata
+        from radar.quality import save_assessment
         extraction_metadata=review_metadata(documents,extraction_metadata)
         normal=program.model_dump(mode='json'); canonical_url=normalize_url(program.official_url)
-        fingerprint=digest({'normalized':normal,'raw':raw_text})
+        fingerprint=digest({'normalized':normal,'raw':raw_text,'documents':[
+            {key:doc.get(key) for key in ('original_url','content_hash','fetch_status','extraction_status','extracted_text')}
+            for doc in sorted(documents or [],key=lambda doc:doc['original_url'])]})
         with (self.transaction() if connection is None else nullcontext(connection)) as c:
             # One transaction-scoped lock serializes canonical matching/versioning.
             # Ingestion stays concurrent outside this short database critical section.
@@ -104,6 +107,7 @@ class Database:
                 # Dates can close a notice without a new content version.
                 c.execute('update startup_radar.programs set status=%s,updated_at=now() where id=%s',(program_status(program),pid))
                 self._snapshot(c,pid,previous['id'],source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata)
+                save_assessment(c,previous['id'],program,documents,extraction_metadata,raw_text)
                 return {'program_id':pid,'version_id':previous['id'],'event':None}
             version=c.execute('insert into startup_radar.program_versions(program_id,version,content_hash,normalized,raw_text,evidence_complete) '
                 'values(%s,%s,%s,%s,%s,%s) returning *',(pid,previous['version']+1 if previous else 1,fingerprint,Jsonb(normal),raw_text,program.evidence_complete)).fetchone()
@@ -135,6 +139,7 @@ class Database:
                 if confidence>=0.8:
                     c.execute('insert into startup_radar.possible_duplicates(program_id,candidate_program_id,confidence,reason) values(%s,%s,%s,%s) on conflict do nothing',
                               (pid,candidate['id'],confidence,'Shared URL or similar title/organization; publisher IDs and ambiguity require review'))
+            save_assessment(c,vid,program,documents,extraction_metadata,raw_text)
             return {'program_id':pid,'version_id':vid,'event':event if changed else None}
 
     @staticmethod

@@ -21,6 +21,14 @@ jobs:
       - run: python -m pytest tests/test_ocr_review.py -q
         env:
           RADAR_TEST_OCR_MODELS: work/tessdata
+      - run: docker build -f Dockerfile.evidence --tag startup-radar-evidence:verify .
+      - run: python -m pytest tests/test_evidence_sandbox.py -q
+        env:
+          RADAR_TEST_EVIDENCE_IMAGE: startup-radar-evidence:verify
+          RADAR_TEST_OCR_MODELS: work/tessdata
+      - name: Remove interrupted evidence workers
+        if: always()
+        run: docker ps -aq --filter label=startup-radar.evidence=true | xargs --no-run-if-empty docker rm --force
   container:
     runs-on: ubuntu-latest
     timeout-minutes: 15

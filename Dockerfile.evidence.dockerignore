@@ -1,0 +1,14 @@
+**
+!Dockerfile.evidence
+!Dockerfile.evidence.dockerignore
+!requirements-v2.lock.txt
+!requirements-ocr.lock.txt
+!radar/
+!radar/**
+!core/
+!core/**
+!tools/
+!tools/prepare_ocr_models.py
+**/__pycache__/
+**/*.pyc
+**/.env*

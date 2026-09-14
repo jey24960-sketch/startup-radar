@@ -18,7 +18,7 @@ def ingestion_execution_result(result):
         'AI_TRUNCATED','AI_SCHEMA','AI_DATE_CONFLICT','AI_NORMALIZATION','DETAIL_UNAVAILABLE'}
     def completed(source):
         if not (source.get('discovered',0)>0 and source.get('fetched')==source['discovered']==source.get('parsed')):return False
-        return all((failure.get('kind')=='PAGE_LIMIT' or failure.get('stage')=='DOCUMENT'
+        return all((failure.get('stage')=='DOCUMENT'
                     or failure.get('stage')=='EXTRACTION' and failure.get('kind') in evidence_warnings)
                    and failure.get('kind')!='SOURCE_REVIEW_CHANGED' for failure in source.get('failures',[]))
     if not sources or not all(completed(source) for source in sources):return result
@@ -50,6 +50,8 @@ def execute(db,kind,source_slug=None,transport=None):
             if not sources:raise ValueError('Unknown source slug')
         result=ingest(db,sources,trigger='v2-job')
         try:
+            from radar.quality import refresh_quality
+            refresh_quality(db)
             refresh_recommendations(db)
             refresh_member_results(db)
         except Exception as error:
@@ -73,7 +75,9 @@ def execute(db,kind,source_slug=None,transport=None):
     return {**deliver_pending(db,transport,kind),'planned':added}
 
 
-def tick(db,at=None,transport=None,executor=execute):
+def tick(db,at=None,transport=None,executor=execute,execution_id=None):
+    from radar.schedule_attempts import retry_policy,pending_retries,begin_attempt,finish_attempt
+    fixed_at=at
     at=at or now()
     with db.transaction() as c:settings=c.execute("select value from startup_radar.runtime_settings where key='scheduling'").fetchone()['value']
     results=[]
@@ -82,16 +86,32 @@ def tick(db,at=None,transport=None,executor=execute):
         # The existing repository and DB scheduling gates still apply.
         from radar.member_results import refresh_member_results
         refresh_member_results(db)
-    for kind,key in due_tasks(settings,at):
-        with db.transaction() as c:
-            claimed=c.execute("insert into startup_radar.schedule_claims(task_key,kind,state) values(%s,%s,'RUNNING') on conflict do nothing returning task_key",(key,kind)).fetchone()
-        if not claimed:continue
-        try:result=executor(db,kind,transport=transport)
+    policy=retry_policy(db)
+    due=due_tasks(settings,at)
+    if settings.get('enabled',False) and settings.get('ingestion_enabled',True):
+        due+= [(r['kind'],r['task_key']) for r in pending_retries(db,at)]
+    due=list(dict.fromkeys(due));observations=[]
+    for kind,key in due:
+        attempt,state=begin_attempt(db,kind,key,at,policy,execution_id)
+        if not attempt:
+            observations.append(state)
+            continue
+        # Retried acquisition never retries a possibly delivered external alert.
+        delivery=transport if attempt['attempt_number']==1 else None
+        try:result=executor(db,kind,transport=delivery)
         except Exception as error:result={'status':'FAILED','error':type(error).__name__}
-        with db.transaction() as c:c.execute('update startup_radar.schedule_claims set state=%s,finished_at=now(),result=%s where task_key=%s',(result['status'],Jsonb(result),key))
-        results.append({'key':key,**result})
-    status='SUCCESS' if all(r['status']=='SUCCESS' for r in results) else 'PARTIAL_SUCCESS' if any(r['status']=='SUCCESS' for r in results) else 'FAILED'
-    return {'status':status,'tasks':results}
+        state=finish_attempt(db,attempt,result,policy,fixed_at or now())
+        observations.append(state)
+        results.append({'key':key,'attempt_id':str(attempt['id']),'attempt':attempt['attempt_number'],**result})
+    states={s['state'] for s in observations}
+    if 'UNCERTAIN' in states:status='UNCERTAIN'
+    elif states.intersection({'FAILED_RETRYABLE','FAILED_TERMINAL'}):status='PARTIAL_SUCCESS' if 'SUCCESS' in states else 'FAILED'
+    elif states-{'SUCCESS'}:status='PARTIAL_SUCCESS'
+    else:status='SUCCESS'
+    return {'status':status,'health_state':'NOT_DUE' if not due else status,'tasks':results,
+            'due':[key for _,key in due],'task_states':observations,
+            **{key:sum(bool(s[key]) for s in observations) for key in
+               ('already_successful','unresolved_failure','retry_scheduled','terminal_failure','currently_running')}}
 
 
 def run_job(db,kind,source_slug=None,job_id=None,transport=None,executor=execute):
@@ -100,7 +120,7 @@ def run_job(db,kind,source_slug=None,job_id=None,transport=None,executor=execute
     if 'execution_id' not in claim:return claim
     execution_id=claim['execution_id']
     # BaseException/abrupt process termination deliberately leaves the claim.
-    try:result=tick(db,transport=transport,executor=executor) if kind=='TICK' else executor(db,kind,source_slug=source_slug,transport=transport)
+    try:result=tick(db,transport=transport,executor=executor,execution_id=execution_id) if kind=='TICK' else executor(db,kind,source_slug=source_slug,transport=transport)
     except Exception as error:result={'status':'FAILED','error':type(error).__name__}
     try:finish_execution(db,execution_id,result)
     except Exception as error:

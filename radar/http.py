@@ -16,8 +16,11 @@ class SafeHttp:
         self.robots={}
 
     def validate_url(self,url):
-        p=urlsplit(url)
-        if p.scheme!='https' or not p.hostname or p.username or p.password or p.port not in (None,443):
+        try:
+            p=urlsplit(url)
+            safe=p.scheme=='https' and p.hostname and not p.username and not p.password and p.port in (None,443)
+        except (ValueError,TypeError):safe=False
+        if not safe:
             raise SourceFailure('UNSAFE_URL','HTTPS public URLs required')
         if p.hostname not in self.allowed_hosts:
             raise SourceFailure('UNAPPROVED_HOST','Host must be configured for this source')
@@ -33,19 +36,27 @@ class SafeHttp:
             try:
                 with self.session.get(url,params=params,timeout=self.timeout,stream=True,allow_redirects=False) as response:
                     if response.status_code in (301,302,303,307,308):
-                        url=urljoin(url,response.headers.get('Location',''));params=None;continue
-                    if response.status_code in (401,403): raise SourceFailure('BLOCKED','Source denied access')
-                    if response.status_code==429: raise SourceFailure('RATE_LIMIT','Source rate limit',True)
-                    if response.status_code==404: raise SourceFailure('NOT_FOUND','Source not found')
+                        location=response.headers.get('Location')
+                        if not location:raise SourceFailure('INVALID_REDIRECT','Redirect has no destination')
+                        url=urljoin(url,location);params=None;continue
+                    if response.status_code in (401,403): raise SourceFailure('BLOCKED','Source denied access',False,response.status_code)
+                    if response.status_code==429: raise SourceFailure('RATE_LIMIT','Source rate limit',False,429,'HTTP_4XX')
+                    if response.status_code==404: raise SourceFailure('NOT_FOUND','Source not found',False,404,'HTTP_4XX')
                     if response.status_code>=400: raise SourceFailure('HTTP',f'HTTP {response.status_code}',response.status_code>=500,response.status_code)
-                    if int(response.headers.get('Content-Length','0'))>self.max_bytes: raise SourceFailure('SIZE_LIMIT','Response too large')
+                    try:declared=int(response.headers.get('Content-Length','0'))
+                    except (TypeError,ValueError):raise SourceFailure('INVALID_RESPONSE','Invalid content length')
+                    if declared<0:raise SourceFailure('INVALID_RESPONSE','Negative content length')
+                    if declared>self.max_bytes: raise SourceFailure('SIZE_LIMIT','Response too large')
                     data=bytearray()
                     for chunk in response.iter_content(65536):
                         data.extend(chunk)
                         if len(data)>self.max_bytes: raise SourceFailure('SIZE_LIMIT','Response too large')
                     return bytes(data),response.headers.get('Content-Type','').split(';')[0].lower(),url
-            except requests.Timeout: raise SourceFailure('TIMEOUT','Source request timed out',True)
-            except requests.RequestException: raise SourceFailure('NETWORK','Source request failed',True)
+            except requests.ConnectTimeout: raise SourceFailure('TIMEOUT','Source connection timed out',True,reason_code='CONNECT_TIMEOUT')
+            except requests.ReadTimeout: raise SourceFailure('TIMEOUT','Source response timed out',True,reason_code='READ_TIMEOUT')
+            except requests.exceptions.SSLError: raise SourceFailure('TLS_ERROR','Source TLS verification failed')
+            except requests.Timeout: raise SourceFailure('TIMEOUT','Source request timed out',True,reason_code='READ_TIMEOUT')
+            except requests.RequestException: raise SourceFailure('NETWORK','Source request failed',True,reason_code='NETWORK_ERROR')
         raise SourceFailure('REDIRECT_LIMIT','Too many redirects')
 
     def check_robots(self,url):
@@ -61,7 +72,11 @@ class SafeHttp:
                 # throttling, network errors and server errors.
                 if failure.kind=='NOT_FOUND' or (failure.kind=='HTTP' and failure.http_status in (400,410)):
                     self.robots[origin]=None
-                else: raise SourceFailure('ROBOTS_UNAVAILABLE','Cannot verify robots policy',failure.retryable and failure.kind!='RATE_LIMIT')
+                else:
+                    cause=failure.record()['reason_code']
+                    reason='ROBOTS_FETCH_TIMEOUT' if cause in ('CONNECT_TIMEOUT','READ_TIMEOUT') else 'DNS_ERROR' if cause=='DNS_ERROR' else 'ROBOTS_HTTP_ERROR' if failure.http_status else cause
+                    raise SourceFailure('ROBOTS_UNAVAILABLE','Cannot verify robots policy',
+                                        failure.retryable and failure.kind!='RATE_LIMIT',failure.http_status,reason,cause)
         parser=self.robots[origin]
         if parser and not parser.can_fetch('StartupRadar',url): raise SourceFailure('ROBOTS_DENIED','Robots policy disallows this resource')
 

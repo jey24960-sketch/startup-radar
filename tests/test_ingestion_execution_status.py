@@ -9,7 +9,7 @@ def partial(failure,discovered=5,parsed=5):
 
 
 @pytest.mark.parametrize('failure',[{'stage':'DOCUMENT','kind':'DOCUMENT_OCR_REQUIRED'},
-    {'stage':'EXTRACTION','kind':'AI_DATE_EVIDENCE'},{'kind':'PAGE_LIMIT'}])
+    {'stage':'EXTRACTION','kind':'AI_DATE_EVIDENCE'}])
 def test_completed_import_retains_partial_source_health_and_warning(failure):
     raw=partial(failure);original=deepcopy(raw)
     result=ingestion_execution_result(raw)
@@ -19,6 +19,7 @@ def test_completed_import_retains_partial_source_health_and_warning(failure):
 
 
 @pytest.mark.parametrize('raw',[
+    partial({'kind':'PAGE_LIMIT'}),
     partial({'kind':'HTTP'}),partial({'kind':'NORMALIZE_OR_PERSIST'},parsed=4),
     partial({'stage':'EXTRACTION','kind':'SOURCE_REVIEW_CHANGED'}),
     partial({'stage':'EXTRACTION','kind':'AuthenticationError'}),

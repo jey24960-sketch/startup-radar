@@ -21,14 +21,32 @@ def main(argv=None):
     comparison=commands.add_parser('compare');comparison.add_argument('--v1',required=True);comparison.add_argument('--team-id',type=UUID,required=True)
     comparison.add_argument('--output',required=True)
     commands.add_parser('execution-status',help='Inspect the durable active batch owner')
+    quality=commands.add_parser('quality-report',help='Current-version evidence quality, reasons and prioritized review queue')
+    quality.add_argument('--refresh',action='store_true',help='Reassess stored official evidence only; no AI, network or delivery')
+    retry=commands.add_parser('retry-ingest',help='Queue an explicit auditable ingestion retry; never delivers notifications')
+    retry.add_argument('--task-key',required=True)
+    retry.add_argument('--note',required=True)
+    extraction_retry=commands.add_parser('retry-extraction',help='Authorize one changed-condition retry of an exact failed input; no immediate AI call')
+    extraction_retry.add_argument('--input-hash',required=True);extraction_retry.add_argument('--note',required=True)
+    extraction_retry.add_argument('--confirm-stopped',action='store_true')
     recovery=commands.add_parser('recover-execution',help='Release a verified stopped owner; never dispatches a retry')
     recovery.add_argument('--execution-id',type=UUID,required=True)
     recovery.add_argument('--note',required=True)
     recovery.add_argument('--confirm-stopped',action='store_true',help='Affirm the recorded process/Actions run is terminal, not just disconnected')
     args=parser.parse_args(argv);db=Database()
-    if args.command=='execution-status':
+    if args.command=='quality-report':
+        from radar.quality import refresh_quality,quality_report
+        if args.refresh:refresh_quality(db)
+        result=quality_report(db)
+    elif args.command=='execution-status':
         from radar.executions import active_execution
         result={'status':'SUCCESS','active_execution':active_execution(db)}
+    elif args.command=='retry-ingest':
+        from radar.schedule_attempts import request_ingest_retry
+        result=request_ingest_retry(db,args.task_key,args.note)
+    elif args.command=='retry-extraction':
+        from radar.analysis_cache import request_extraction_retry
+        result=request_extraction_retry(db,args.input_hash,args.note,args.confirm_stopped)
     elif args.command=='recover-execution':
         from radar.executions import recover_execution
         result=recover_execution(db,args.execution_id,args.note,args.confirm_stopped)

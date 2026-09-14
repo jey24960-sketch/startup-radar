@@ -10,7 +10,8 @@ from radar.models import StrictModel,Requirement,Program,ProductStage,TeamStatus
 from radar.adapters.base import SourceFailure
 from radar.dates import korean_date
 from core.clock import SEOUL
-from radar.extraction_review import rule_review_reasons,future_commitments,omitted_applicant_conditions
+from radar.extraction_review import rule_review_reasons,rule_context_reasons,future_commitments,omitted_applicant_conditions
+from radar.ai_requests import request,REQUEST_TIMEOUT
 
 ProgramType=Literal['GRANT','COMPETITION','INCUBATION','ACCELERATION','INVESTMENT_LINKED','WORKSPACE',
     'GLOBAL','MARKET_ENTRY','EDUCATION','MENTORING','POLICY_LOAN','SME_FINANCING','GENERIC_RD','UNKNOWN']
@@ -80,7 +81,7 @@ def cited_datetime(value,quote,end=False,source_texts=()):
 
 
 class RequirementExtractor:
-    version='requirements-2.0.8'
+    version='requirements-2.0.9'
     def __init__(self,client=None,model=None):
         self.client=client
         self.model=model or os.environ.get('RADAR_EXTRACTION_MODEL','claude-sonnet-4-5')
@@ -88,10 +89,11 @@ class RequirementExtractor:
         # Failures must leave the caller's normalized official facts intact.
         program=program.model_copy(deep=True)
         self.review_flags=[]
+        self.metrics={'model':self.model,'contract_version':self.version,'request_count':0}
         if self.client is None:
             key=os.environ.get('ANTHROPIC_API_KEY')
             if not key:raise SourceFailure('AI_NOT_CONFIGURED','ANTHROPIC_API_KEY is required for unstructured requirements')
-            self.client=anthropic.Anthropic(api_key=key)
+            self.client=anthropic.Anthropic(api_key=key,timeout=REQUEST_TIMEOUT,max_retries=0)
         evidence={str(source_id):detail.text}
         document_keys=set()
         for doc in documents:
@@ -142,10 +144,8 @@ class RequirementExtractor:
           'Preserve program category distinctions: general policy loans, SME finance and unrelated R&D are excluded categories. '
           'Schema: '+json.dumps(Extraction.model_json_schema(),ensure_ascii=False)
         )
-        try:
-            response=self.client.messages.create(model=self.model,max_tokens=10000,system=system,messages=[{'role':'user','content':json.dumps({
-                'official_program':program.model_dump(mode='json'),'evidence':evidence},ensure_ascii=False)}])
-        except anthropic.APIError as error:raise SourceFailure(type(error).__name__,'AI extraction request failed',True)
+        response=request(self.client,self.metrics,model=self.model,max_tokens=10000,system=system,messages=[{'role':'user','content':json.dumps({
+            'official_program':program.model_dump(mode='json'),'evidence':evidence},ensure_ascii=False)}])
         if getattr(response,'stop_reason',None)=='max_tokens':raise SourceFailure('AI_TRUNCATED','AI extraction output was truncated')
         text='\n'.join(part.text for part in response.content if getattr(part,'type','text')=='text').strip()
         if text.startswith('```') and text.endswith('```'):text=text.split('\n',1)[1].rsplit('```',1)[0]
@@ -171,7 +171,7 @@ class RequirementExtractor:
                 quotes=[re.sub(r'\s+','',e.text).casefold() for e in rule.evidence if e.verified]
                 if any(not any(re.sub(r'\s+','',value).casefold() in quote for quote in quotes) for value in values):
                     rule.certain=False
-            for reason in rule_review_reasons(rule):
+            for reason in [*rule_review_reasons(rule),*rule_context_reasons(rule,evidence)]:
                 rule.certain=False
                 self.review_flags.append({'kind':reason,'requirement_key':rule.key,
                     'quotes':[e.text[:500] for e in rule.evidence if e.verified]})
@@ -192,6 +192,8 @@ class RequirementExtractor:
         needs_date=((can_fill('start') and (extracted.application_start_at or extracted.application_start_date)) or
             (can_fill('end') and (extracted.application_end_at or extracted.application_end_date)))
         if needs_date and not date_supported:raise SourceFailure('AI_DATE_EVIDENCE','Extracted dates require a verbatim citation')
+        if needs_date and date_supported and re.search(r'행사\s*(?:일시|일정)|개최\s*일시|교육\s*일시',extracted.date_evidence_quote) and not re.search(r'신청|접수|마감|모집기간',extracted.date_evidence_quote):
+            raise SourceFailure('AI_DATE_EVENT_NOT_DEADLINE','An event time is not an application cutoff')
         if date_supported:
             try:
                 for which in ('start','end'):
