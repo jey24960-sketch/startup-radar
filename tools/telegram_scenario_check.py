@@ -1,4 +1,4 @@
-"""Review then send three scoped checks; reminder clocks are explicitly simulated."""
+"""Isolated non-production notification scenarios; transport and clocks are simulated."""
 import json,os,sys
 from datetime import datetime,timedelta
 from pathlib import Path
@@ -10,7 +10,7 @@ from radar.models import Program
 from radar.notifications import TelegramTransport,plan_notifications,deliver_pending
 from radar.recommendations import refresh_recommendations
 from radar.scheduler import run_job
-from tools.telegram_ledger_check import FLAGS,validate_environment,cleanup
+from tools.telegram_ledger_check import FLAGS,validate_environment,cleanup,require_simulated_validation
 
 SCENARIOS=('HIGH_FIT','D-7','D-3')
 PREFIX='[운영 검증 · '
@@ -32,6 +32,7 @@ class ApprovedMessages:
 
 
 def check(db,env,transport_factory=TelegramTransport):
+    require_simulated_validation(db,transport_factory)
     env=environment(env);team,target=validate_environment(env)
     program_id=UUID(env.get('SCENARIO_CHECK_PROGRAM_ID',''));mode=env['LEDGER_CHECK_MODE']
     report={'mode':mode,'team_id':str(team),'program_id':str(program_id),'messages_sent':0,
@@ -66,7 +67,7 @@ def check(db,env,transport_factory=TelegramTransport):
             refresh_recommendations(database,team_id=team)
             with database.transaction() as c:
                 c.execute('update startup_radar.team_notification_preferences set enabled=true,digest_enabled=false,alerts_enabled=true,reminders_enabled=true where team_id=%s',(team,))
-                c.execute('update startup_radar.telegram_subscriptions set enabled=true,digest_enabled=false,alerts_enabled=true,reminders_enabled=true where id=%s',(sub,))
+                c.execute("update startup_radar.telegram_subscriptions set enabled=true,digest_enabled=false,alerts_enabled=true,reminders_enabled=true,channel_health='HEALTHY',health_reason='SIMULATED_VALIDATION' where id=%s",(sub,))
             if mode=='prepare':
                 prepared=[]
                 for scenario in SCENARIOS:

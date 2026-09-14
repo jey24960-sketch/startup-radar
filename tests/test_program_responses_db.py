@@ -70,7 +70,7 @@ def notification_context(c):
     answer(c,version,{'offline':True})
     refresh_recommendations(c['db'])
     with c['db'].transaction() as connection:
-        sub=connection.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,high_fit_threshold) values(%s,%s,0) returning id',
+        sub=connection.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,high_fit_threshold,channel_health) values(%s,%s,0,$health$HEALTHY$health$) returning id',
             (c['team']['id'],'fixture-channel')).fetchone()['id']
     return version,sub
 

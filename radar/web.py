@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import Field
 from psycopg.types.json import Jsonb
+from psycopg.errors import InsufficientPrivilege, InvalidParameterValue
 from radar.auth import authenticated_user
 from radar.database import Database
 from radar.models import StrictModel,TeamProfile,PRESETS,apply_preset,update_profile
@@ -65,6 +66,8 @@ class SubscriptionInput(StrictModel):
     reminders_enabled:bool=True
     high_fit_threshold:float=Field(default=90,ge=0,le=100)
     reminder_days:list[int]=Field(default_factory=lambda:[7,3],max_length=10)
+    channel_health:Literal['UNVERIFIED','HEALTHY','BLOCKED']|None=None
+    note:str=Field(min_length=5,max_length=500)
 class NotificationRecovery(StrictModel):
     action:Literal['RETRY_REJECTED','CANCEL','CONFIRM_NOT_SENT']
     note:str=Field(min_length=5,max_length=500)
@@ -96,6 +99,10 @@ def create_app(database=None,preview=False):
     async def not_found(request,error):return JSONResponse({'detail':str(error)},status_code=404)
     @app.exception_handler(ValueError)
     async def invalid(request,error):return JSONResponse({'detail':str(error)},status_code=400)
+    @app.exception_handler(InsufficientPrivilege)
+    async def database_forbidden(request,error):return JSONResponse({'detail':'Verified team authorization required'},status_code=403)
+    @app.exception_handler(InvalidParameterValue)
+    async def database_invalid(request,error):return JSONResponse({'detail':'Invalid settings value'},status_code=400)
     @app.get('/')
     def index():
         if legacy_ui:return FileResponse(ROOT/'web/static/index.html')
@@ -122,27 +129,12 @@ def create_app(database=None,preview=False):
         return team
     @app.get('/api/teams/{team_id}/preferences')
     def preferences(team_id:UUID,user=Depends(authenticated_user)):
-        profile_for(db(),user,team_id)
-        with db().transaction() as c:
-            rows=c.execute('select enabled,digest_enabled,alerts_enabled,reminders_enabled from startup_radar.telegram_subscriptions where team_id=%s order by created_at',(team_id,)).fetchall()
         with db().transaction(user) as c:
-            prefs=c.execute('select enabled,digest_enabled,alerts_enabled,reminders_enabled from startup_radar.team_notification_preferences where team_id=%s',(team_id,)).fetchone()
-        return {'connected':bool(rows),'subscriptions':rows,'preferences':prefs or (rows[0] if rows else NotificationPreferences().model_dump())}
+            return c.execute('select public.gfc_radar_preferences(%s) value',(team_id,)).fetchone()['value']
     @app.put('/api/teams/{team_id}/preferences')
     def save_preferences(team_id:UUID,body:NotificationPreferences,user=Depends(authenticated_user)):
-        profile_for(db(),user,team_id)
         with db().transaction(user) as c:
-            editor=c.execute("select 1 from startup_radar.team_members where team_id=%s and user_id=%s and role in ('OWNER','EDITOR')",(team_id,user)).fetchone()
-        if not editor:raise PermissionError('Editing requires owner/editor membership')
-        with db().transaction(user) as c:
-            c.execute('insert into startup_radar.team_notification_preferences(team_id,enabled,digest_enabled,alerts_enabled,reminders_enabled) values(%s,%s,%s,%s,%s) '
-                'on conflict(team_id) do update set enabled=excluded.enabled,digest_enabled=excluded.digest_enabled,alerts_enabled=excluded.alerts_enabled,reminders_enabled=excluded.reminders_enabled',
-                (team_id,body.enabled,body.digest_enabled,body.alerts_enabled,body.reminders_enabled))
-        with db().transaction() as c:
-            rows=c.execute('update startup_radar.telegram_subscriptions set enabled=%s,digest_enabled=%s,alerts_enabled=%s,reminders_enabled=%s where team_id=%s returning id',
-                (body.enabled,body.digest_enabled,body.alerts_enabled,body.reminders_enabled,team_id)).fetchall()
-            c.execute('insert into startup_radar.admin_audit(actor_id,action,entity_id,detail) values(%s,%s,%s,%s)',(user,'TEAM_NOTIFICATION_PREFERENCES',str(team_id),Jsonb(body.model_dump())))
-        return {'updated':len(rows),'preferences':body.model_dump()}
+            return c.execute('select public.gfc_radar_save_preferences(%s,%s) value',(team_id,Jsonb(body.model_dump()))).fetchone()['value']
     @app.get('/api/programs/{program_id}')
     def program_detail(program_id:UUID,team_id:UUID|None=None,preset:int|None=Query(default=None,ge=0,le=4),version_id:UUID|None=None,user=Depends(authenticated_user)):
         return detail(db(),user,program_id,team_id,preset,version_id)
@@ -237,12 +229,21 @@ def create_app(database=None,preview=False):
         require_admin(db(),user)
         if any(day<0 or day>365 for day in body.reminder_days):raise ValueError('Reminder days must be 0..365')
         with db().transaction() as c:
-            saved=c.execute('select * from startup_radar.team_notification_preferences where team_id=%s',(body.team_id,)).fetchone()
-            if saved:
-                body=body.model_copy(update={key:saved[key] for key in ('enabled','digest_enabled','alerts_enabled','reminders_enabled')})
-            return c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,enabled,digest_enabled,alerts_enabled,reminders_enabled,high_fit_threshold,reminder_days) '
+            prior=c.execute('select * from startup_radar.telegram_subscriptions where team_id=%s and chat_id=%s for update',(body.team_id,body.chat_id)).fetchone()
+            saved=c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,enabled,digest_enabled,alerts_enabled,reminders_enabled,high_fit_threshold,reminder_days) '
                 'values(%s,%s,%s,%s,%s,%s,%s,%s) on conflict(team_id,chat_id) do update set enabled=excluded.enabled,digest_enabled=excluded.digest_enabled,alerts_enabled=excluded.alerts_enabled,reminders_enabled=excluded.reminders_enabled,high_fit_threshold=excluded.high_fit_threshold,reminder_days=excluded.reminder_days returning id',
                 (body.team_id,body.chat_id,body.enabled,body.digest_enabled,body.alerts_enabled,body.reminders_enabled,body.high_fit_threshold,body.reminder_days)).fetchone()
+            if body.channel_health is not None:
+                c.execute('update startup_radar.telegram_subscriptions set channel_health=%s,health_checked_at=now(),health_reason=%s where id=%s',
+                    (body.channel_health,'OPERATOR_VERIFICATION',saved['id']))
+            fields=('enabled','digest_enabled','alerts_enabled','reminders_enabled','high_fit_threshold','reminder_days','channel_health')
+            current=c.execute('select * from startup_radar.telegram_subscriptions where id=%s',(saved['id'],)).fetchone()
+            for snapshot in (prior,current):
+                if snapshot is not None:snapshot['high_fit_threshold']=float(snapshot['high_fit_threshold'])
+            c.execute('insert into startup_radar.admin_audit(actor_id,action,entity_id,detail) values(%s,%s,%s,%s)',
+                (user,'CHANNEL_CONFIGURATION',str(saved['id']),Jsonb({'before':{k:prior[k] for k in fields} if prior else None,
+                    'after':{k:current[k] for k in fields},'reason':body.note})))
+            return saved
     @app.get('/api/admin/trace/{recommendation_id}')
     def trace(recommendation_id:UUID,user=Depends(authenticated_user)):return admin_trace(db(),user,recommendation_id)
     @app.post('/telegram/webhook')

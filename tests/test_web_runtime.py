@@ -178,7 +178,7 @@ def test_digest_receipt_matches_all_grouped_items(context):
     p.requirements.append(Requirement(key='founder_age',operator='LTE',value=39,certain=True,
         evidence=[Evidence(source_id=str(context['source']),text='대표자 만 39세 이하',method='MANUAL',verified=True,confidence=1)]))
     db.save_program(p,context['source'],'second',p.official_url,{},'Age fixture')
-    with db.transaction() as c:c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id) values(%s,%s)',(context['team']['id'],'fixture-chat'))
+    with db.transaction() as c:c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,channel_health) values(%s,%s,$health$HEALTHY$health$)',(context['team']['id'],'fixture-chat'))
     refresh_recommendations(db)
     assert plan_notifications(db,'DIGEST')==2
     assert plan_notifications(db,'DIGEST')==0
@@ -192,7 +192,7 @@ def test_digest_receipt_matches_all_grouped_items(context):
 
 
 def subscribe(context):
-    with context['db'].transaction() as c:c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,high_fit_threshold) values(%s,%s,0)',(context['team']['id'],'fixture-chat'))
+    with context['db'].transaction() as c:c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,high_fit_threshold,channel_health) values(%s,%s,0,$health$HEALTHY$health$)',(context['team']['id'],'fixture-chat'))
     refresh_recommendations(context['db'])
 
 

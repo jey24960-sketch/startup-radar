@@ -1,4 +1,4 @@
-"""Prepare/review then deliver one real digest to the existing approved target."""
+"""Legacy ledger scenarios: isolated test database and simulated transport only."""
 import json,os,re,sys
 from pathlib import Path
 from uuid import UUID
@@ -35,7 +35,19 @@ class OneApprovedMessage:
         return self.transport.send(target,text)
 
 
+def require_simulated_validation(db,transport_factory):
+    if transport_factory is TelegramTransport:
+        raise ValueError('Legacy validation cannot activate or message production channels')
+    with db.transaction() as c:
+        if not c.execute("select to_regclass('public.radar_test_marker') marker").fetchone()['marker']:
+            raise ValueError('An explicitly marked ephemeral database is required')
+        marker=c.execute('select value from public.radar_test_marker').fetchone()
+        if not marker or marker['value']!='ephemeral-test-only':
+            raise ValueError('An explicitly marked ephemeral database is required')
+
+
 def check(db,env,transport_factory=TelegramTransport):
+    require_simulated_validation(db,transport_factory)
     team_id,target=validate_environment(env);mode=env['LEDGER_CHECK_MODE']
     report={'kind':'DIGEST_LEDGER_CHECK','mode':mode,'team_id':str(team_id),'github_run_id':env.get('GITHUB_RUN_ID'),'messages_sent':0}
     def execute(database,kind,**kwargs):
@@ -65,7 +77,7 @@ def check(db,env,transport_factory=TelegramTransport):
         try:
             with database.transaction() as c:
                 c.execute('update startup_radar.team_notification_preferences set enabled=true,digest_enabled=true,alerts_enabled=false,reminders_enabled=false where team_id=%s',(team_id,))
-                c.execute('update startup_radar.telegram_subscriptions set enabled=true,digest_enabled=true where id=%s',(sub,))
+                c.execute("update startup_radar.telegram_subscriptions set enabled=true,digest_enabled=true,channel_health='HEALTHY',health_reason='SIMULATED_VALIDATION' where id=%s",(sub,))
             if mode=='prepare':
                 report['planned']=plan_notifications(database,'DIGEST',subscription_id=sub)
                 report['second_plan_added']=plan_notifications(database,'DIGEST',subscription_id=sub)

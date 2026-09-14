@@ -5,7 +5,7 @@ from test_database import db
 from test_web_runtime import context
 from test_program_responses_db import setup,answer
 from tools.telegram_scenario_check import check,ApprovedMessages
-from radar.models import TeamProfile,ProductStage,apply_preset
+from radar.models import TeamProfile,ProductStage,apply_preset,update_profile
 
 pytestmark=pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Explicit ephemeral database required')
 
@@ -13,7 +13,7 @@ pytestmark=pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Ex
 def test_three_reviewed_scenarios_use_real_planner_and_restore_preferences(context,monkeypatch,tmp_path):
     c=context;c['program'].product_stages=[ProductStage.IDEA]
     version=setup(c);answer(c,version,{'offline':True})
-    profile=apply_preset(TeamProfile(),0);profile.preferred_program_types=['GRANT']
+    profile=update_profile(apply_preset(TeamProfile(),0),{'preferred_program_types':['GRANT']})
     c['db'].save_profile(c['team']['id'],profile,c['admin'],1)
     with c['db'].transaction() as connection:
         connection.execute("update startup_radar.teams set name='운영 검증용 scenario fixture' where id=%s",(c['team']['id'],))

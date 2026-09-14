@@ -187,7 +187,7 @@ def test_notification_idempotency_and_partial_delivery(db):
         p.requirements=[Requirement(key='business_status',operator='EQ',value='PRE_BUSINESS',certain=True,
             evidence=[Evidence(source_id=str(s),text='예비창업자만 신청 가능',method='MANUAL',verified=True,confidence=1)])]
         db.save_program(p,s,str(uuid4()),p.official_url,{},'source')
-    with db.transaction() as c:c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id) values(%s,%s)',(team['id'],'fixture-chat'))
+    with db.transaction() as c:c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,channel_health) values(%s,%s,$health$HEALTHY$health$)',(team['id'],'fixture-chat'))
     refresh_recommendations(db,team['id'])
     first=plan_notifications(db,'REMINDER');second=plan_notifications(db,'REMINDER')
     assert first==2 and second==0
@@ -212,7 +212,7 @@ def test_scoped_notification_never_plans_or_claims_other_subscriptions(db):
     p=program();p.program_types=['EDUCATION'];p.evidence_complete=True;p.application_end_at=now()+timedelta(days=14)
     db.save_program(p,source(db),'scope',p.official_url,{},'fixture')
     with db.transaction() as c:
-        ids=[c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id) values(%s,%s) returning id',
+        ids=[c.execute('insert into startup_radar.telegram_subscriptions(team_id,chat_id,channel_health) values(%s,%s,$health$HEALTHY$health$) returning id',
                        (team['id'],chat)).fetchone()['id'] for chat in ('approved-fixture','other-fixture')]
     refresh_recommendations(db)
     assert plan_notifications(db,'DIGEST',subscription_id=ids[0])==1

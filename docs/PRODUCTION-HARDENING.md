@@ -30,7 +30,7 @@ Every item remains unproven until current evidence is linked here. Local tests d
 | 7 | One canonical support-type contract, WORKSPACE path | LOCAL PASS: Python/SQL contract parity, all 15 UI filters execute real SQL; production PENDING |
 | 8 | Preserve Radar recommendation ordering | LOCAL PASS: RPC ranking retained despite reverse chronological dates; production PENDING |
 | 9 | Correct explicit mixed-feed pagination | LOCAL PASS: independent GFC/Radar sections, two pages, pinned notices, no omitted/duplicate fixture items; production PENDING |
-| 10 | Preferences cannot bypass channel suspension | PENDING |
+| 10 | Preferences cannot bypass channel suspension | LOCAL PASS: RPC and Python saves preserve administrative gates and BLOCKED/UNVERIFIED health; production PENDING |
 | 11 | Distinct collection/persistence/documents/calculation/delivery health | PENDING |
 | 12 | Member freshness and staleness visible | PENDING |
 | 13 | Actual production-safe OCR path | Native OCR PASS incl. limits; 3 real originals/15 pages extracted as drafts; Linux offline container CI PASS (run 34819471110); deployment PENDING |
@@ -63,6 +63,8 @@ Implementation branches in both repositories: codex/production-hardening-2026091
 - Phase 2 Linux CI commit `26bb4974e70a99b5b129b7522848c4160384586a`: all three jobs PASS, including native OCR and actual offline/read-only/non-root container probe. Initial container model-file permission failure was fixed with read-only model permissions, not root execution.
 - Phase 3 native PostgreSQL full suite: 408 passed, 1 Linux-only sandbox test skipped (215.74s). Default support type is explicitly UNKNOWN and survives cache serialization unchanged.
 - Phase 3 GFC: 81 Node/DB tests PASS, 36 Playwright tests PASS (53.7s), production build PASS. The added E2E test runs actual migrations and authenticated SQL behind intercepted HTTP transport; it is not a production session test.
+- Phase 3 Linux CI: Radar run 34821179068 PASS; GFC run 34821350572 PASS. Both pull requests remain drafts (#7 Radar, #10 GFC).
+- Phase 4: native PostgreSQL 414 passed, 1 Linux-only skip (237.19s); GFC 81 Node/DB and 37 Playwright PASS; both DB/Worker regressions and GFC build PASS. Notification fixtures explicitly mark simulated channels healthy. No real messages were sent.
 - All JUnit/logs and real-document OCR measurements are in the task workspace `startup-radar-hardening` directory. These are local evidence, not production canary proof.
 
 ## Evidence quality implementation notes
@@ -86,3 +88,13 @@ Before tightening profile preference validation, a read-only production check fo
 The all tab is two independently paged sections, not a globally time-sorted feed. GFC notice order remains pinned/published/id; Radar preserves the exact RPC order, with recommendation score priority in recommended mode. The two-page E2E proof uses a stable 39-program/23-notice snapshot, all 15 supported categories, reversed score/date order and a pinned oldest notice. Concurrent source updates can still change an offset-based result set; this is not a snapshot-isolation or keyset-pagination guarantee.
 
 Evidence UI separates requirement value, stored evaluation-profile input and verdict. Preset assumptions are marked. Recommendation fit is explicitly not selection/funding probability. Member/source freshness and the full health dashboard remain Phase 5 work.
+
+## Notification state and recovery contract
+
+Subscription `enabled` and per-kind flags are administrative allow gates; false means suspended/restricted. User preferences live only in `team_notification_preferences`. Both member RPC and the legacy Python preference API use the same authorized atomic SQL implementation and never update channel gates or channel health.
+
+Channel health is UNVERIFIED, HEALTHY or BLOCKED. New unverified rows are not deliverable. A recent latest delivered receipt can backfill HEALTHY without enabling a channel; explicit documented operator verification can also establish health. Administrative configuration requires a note and records before/after, actor and timestamp without chat identifiers. A Telegram HTTP 403 marks the channel BLOCKED; preference saves cannot clear it. Administrators must separately verify the channel and lift any suspension. A user opt-out continues to block delivery after unsuspension.
+
+Planning and pre-send revalidation require all administrative, user and channel-health gates. Already in-flight requests cannot be recalled. UNCERTAIN receipts are not automatically retried. Zero pending work returns an explicit no-op result without touching transport. Opportunity links contain only the program UUID; team context stays in the authenticated web session.
+
+Legacy ledger/scenario validation helpers can no longer activate production channels: they reject the real Telegram transport and require the ephemeral test-database marker before any write. Their synthetic D-7/D-3 records are not natural scheduled delivery proof. Actual deployed V1/Cloudflare command isolation remains Phase 8 work.
