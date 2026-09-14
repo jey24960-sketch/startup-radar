@@ -6,11 +6,45 @@ Personalization, OCR, archives of original binaries and scale benchmarks are def
 
 ## Schedule and Operations
 
-The sole production calendar is `.github/workflows/startup_radar_v2.yml`:
-Tuesday 15:00 Asia/Seoul (06:00 UTC), preserving the existing weekly digest preference.
-GitHub may start late; this is not an exact-minute guarantee. `RADAR_V2_ENABLED` gates scheduled execution.
+The publication calendar is `startup_radar.weekly_schedule`, editable by a verified GFC
+administrator at `/radar/weekly-admin`. Its initial value is Tuesday 15:00 Asia/Seoul.
+Administrators can select any weekday and minute, or pause future automatic publication.
+`.github/workflows/startup_radar_v2.yml` checks this calendar every 15 minutes with `weekly --scheduled`.
+Only a due week collects and publishes; other checks return immediately without source collection or delivery.
+GitHub may start late and acquisition takes additional time; this is not an exact-minute guarantee.
+`RADAR_V2_ENABLED` remains the master gate for scheduled execution.
 Daily ingestion, high-fit, D-7/D-3 delivery and hourly team recalculation are not on this path.
 The prior `scheduling` database value is preserved in the cutover audit, then disabled.
+
+The new calendar does not re-enable the old daily/hourly team scheduler. Changing the calendar
+does not cancel an already claimed execution. If this week's newly selected time is already past,
+the next check may publish immediately. A published week is never automatically republished.
+One durable automatic attempt is recorded per Seoul week; failed/uncertain attempts require
+operator inspection and an explicit manual `weekly` run. Missed prior weeks are not backfilled.
+This uses up to 96 lightweight Actions checks daily; dependency setup still consumes runner minutes.
+
+## Administrator editing
+
+GFC notices -> **주간 공지 관리** opens the schedule form and a paged list of published issues.
+An issue's **내용 정정** link also opens its editor. The editor supports the issue title/summary
+and each existing item's title, organization, support/applicant description, deadline and official/application links.
+Dates are entered in Korea time; an unknown deadline can be restored explicitly.
+Adding/removing source records or changing original eligibility facts is outside this editorial form.
+
+Corrections require a 5..500-character reason. They update the member-facing article immediately
+and retain its ID, publication time, original source version and material hash. Actor, before/after
+content and reason are recorded in `admin_audit`. The source comparison hash remains unchanged,
+so a wording correction is not falsely presented as a new official change in the next issue.
+Already delivered Telegram messages are neither edited nor resent. Pending messages use the latest
+article text when claimed; a correction is rejected while an announcement is SENDING.
+Both schedule saves and corrections check the expected revision and reject stale concurrent edits.
+The UI retains unsaved input on rejection; copy it before choosing to reload.
+
+Deployment order: apply `20260914153311_weekly_admin_controls.sql` from this repository first,
+then deploy the GFC UI and this workflow/worker together. The GFC copy under tests/fixtures is
+test input only, not a second production migration. Deploying the UI alone cannot enable these controls.
+Keep the master schedule gate paused during a controlled cutover if a publication is not intended;
+restore the previously authorized state after deployment. No test should send real Telegram messages.
 
 Privileged operator commands, with the existing server credentials:
 

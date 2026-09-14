@@ -1,8 +1,8 @@
 name: StartupRadar Weekly
 on:
   schedule:
-    # Single production schedule: Tuesday 15:00 Asia/Seoul, existing weekly preference.
-    - cron: '0 6 * * 2'
+    # Poll the admin-selected Seoul calendar; only a due week collects/publishes.
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
     inputs:
       kind:
@@ -58,6 +58,7 @@ jobs:
           JOB_ID: ${{ inputs.job_id }}
           REVISION_NOTE: ${{ inputs.revision_note }}
           DELIVERY_ENABLED: ${{ vars.RADAR_V2_DELIVERY_ENABLED }}
+          EVENT_NAME: ${{ github.event_name }}
           RADAR_OCR_MODEL_DIR: work/tessdata
           RADAR_OCR_CACHE_DIR: work/ocr-cache
           RADAR_EVIDENCE_IMAGE: startup-radar-evidence:${{ github.sha }}
@@ -65,6 +66,7 @@ jobs:
         run: |
           if [ "$KIND" = 'WEEKLY' ]; then
             args=()
+            if [ "$EVENT_NAME" = 'schedule' ]; then args+=(--scheduled); fi
             if [ -n "$REVISION_NOTE" ]; then args+=(--revision-note "$REVISION_NOTE"); fi
             if [ "$DELIVERY_ENABLED" = 'true' ]; then args+=(--deliver); fi
             python -m radar.cli weekly "${args[@]}"

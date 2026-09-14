@@ -128,11 +128,16 @@ def announce(db, briefing_id, transport=None):
     delivered=0
     for item in ids:
         with db.transaction() as c:
+            # Serialize a correction with claiming a message. Pending messages
+            # use current editorial text; already sent messages remain untouched.
+            current=c.execute('select * from startup_radar.weekly_briefings where id=%s for update',(briefing_id,)).fetchone()
+            current_items=c.execute('select snapshot from startup_radar.weekly_briefing_items where briefing_id=%s order by display_order',(briefing_id,)).fetchall()
             row=c.execute("select a.* from startup_radar.weekly_announcements a join startup_radar.telegram_subscriptions s on s.id=a.subscription_id "
                 "left join startup_radar.team_notification_preferences p on p.team_id=s.team_id where a.id=%s and a.state='PENDING' "
                 "and s.chat_id=a.chat_id and s.enabled and s.digest_enabled and s.channel_health='HEALTHY' and coalesce(p.enabled,true) and coalesce(p.digest_enabled,true) for update of a skip locked",(item['id'],)).fetchone()
             if not row:continue
-            c.execute("update startup_radar.weekly_announcements set state='SENDING',attempted_at=now() where id=%s",(row['id'],))
+            row['payload']=announcement_text(current,current_items)
+            c.execute("update startup_radar.weekly_announcements set state='SENDING',attempted_at=now(),payload=%s where id=%s",(row['payload'],row['id']))
         try:result=transport.send(row['chat_id'],row['payload'])
         except Exception:result={'state':'UNCERTAIN'}
         state=result.get('state') if result.get('state') in ('DELIVERED','FAILED','UNCERTAIN') else 'UNCERTAIN'
@@ -146,13 +151,21 @@ def announce(db, briefing_id, transport=None):
     return {'state':'RECORDED','planned':len(ids),'delivered':delivered,'states':{row['state']:row['count'] for row in states}}
 
 
-def run_weekly(db, transport=None, at=None, publish=True, collector=None, revision_note=None):
+def run_weekly(db, transport=None, at=None, publish=True, collector=None, revision_note=None, scheduled=False):
     from radar.ingestion import ingest
     from radar.executions import claim_execution,finish_execution
+    from radar.weekly_schedule import scheduled_week
     at=at or now(); start,_=week_window(at)
+    if scheduled and (not publish or revision_note):raise ValueError('Scheduled run cannot draft or revise')
+    if scheduled and not scheduled_week(db,at):
+        return {'status':'SUCCESS','state':'NOT_DUE','executed':False}
     claim=claim_execution(db,'WEEKLY')
     if 'execution_id' not in claim:return claim
     try:
+        if scheduled and not scheduled_week(db,at,claim['execution_id']):
+            result={'status':'SUCCESS','state':'NOT_DUE','executed':False}
+            finish_execution(db,claim['execution_id'],result)
+            return result
         with db.transaction() as c:
             existing=c.execute("select id,collection_status from startup_radar.weekly_briefings where week_start=%s and status='PUBLISHED'",(start,)).fetchone()
             sources=c.execute("select * from startup_radar.sources where enabled and adapter in ('KSTARTUP','BIZINFO') order by slug").fetchall()
