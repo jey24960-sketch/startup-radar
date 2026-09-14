@@ -42,8 +42,10 @@ def week_window(at):
     return start,start+timedelta(days=6)
 
 
-def build_briefing(db, collection, at=None, publish=True):
+def build_briefing(db, collection, at=None, publish=True, revision_note=None):
     at = at or now()
+    if revision_note is not None and (not publish or not 5<=len(revision_note.strip())<=500):
+        raise ValueError('Published revision requires publication and a 5..500 character operator note')
     start,end = week_window(at)
     sources = collection.get('sources',[])
     useful = [s for s in sources if s['status']=='SUCCESS' or s.get('parsed',0)>0]
@@ -52,7 +54,7 @@ def build_briefing(db, collection, at=None, publish=True):
     with db.transaction() as c:
         c.execute('select pg_advisory_xact_lock(782394203)')
         old = c.execute('select * from startup_radar.weekly_briefings where week_start=%s for update',(start,)).fetchone()
-        if old and old['status']=='PUBLISHED':return {'status':old['collection_status'],'briefing_id':str(old['id']),'published':True,'unchanged':True}
+        if old and old['status']=='PUBLISHED' and not revision_note:return {'status':old['collection_status'],'briefing_id':str(old['id']),'published':True,'unchanged':True}
         previous = c.execute("select distinct on(i.program_id) i.program_id,i.material_hash from startup_radar.weekly_briefing_items i "
             "join startup_radar.weekly_briefings b on b.id=i.briefing_id where b.status='PUBLISHED' and b.week_start<%s "
             "order by i.program_id,b.week_start desc",(start,)).fetchall()
@@ -66,6 +68,12 @@ def build_briefing(db, collection, at=None, publish=True):
             items.setdefault(pid,{**row,'material_hash':fingerprint,'change_type':'UPDATE' if pid in known else 'NEW'})
         if not items and not complete:
             return {'status':'FAILED','reason':'INCOMPLETE_EMPTY_COLLECTION','published':False}
+        if old and old['status']=='PUBLISHED':
+            before=c.execute('select to_jsonb(i) item from startup_radar.weekly_briefing_items i where briefing_id=%s order by display_order',(old['id'],)).fetchall()
+            c.execute("insert into startup_radar.admin_audit(action,entity_id,detail) values('WEEKLY_BRIEFING_REVISION',%s,%s)",
+                (str(old['id']),Jsonb({'reason':revision_note.strip(),'previous_revision':old['revision'],
+                    'previous_ingestion_run_id':str(old['ingestion_run_id']),'items':[row['item'] for row in before],
+                    'replacement_ingestion_run_id':collection['id'],'actor':'PRIVILEGED_WEEKLY_OPERATOR'})))
         ordered = sorted(items.values(),key=lambda row:(row['snapshot'].get('application_end_at') or '9999',row['snapshot']['title'],str(row['program_id'])))
         new_count = sum(row['change_type']=='NEW' for row in ordered)
         title = f'{start:%m.%d} ~ {end:%m.%d} \uc8fc\uac04 \uc9c0\uc6d0\uc0ac\uc5c5 \uacf5\uc9c0'
@@ -80,7 +88,7 @@ def build_briefing(db, collection, at=None, publish=True):
         for index,item in enumerate(ordered):
             c.execute('insert into startup_radar.weekly_briefing_items(briefing_id,program_id,program_version_id,change_type,display_order,snapshot,material_hash) values(%s,%s,%s,%s,%s,%s,%s)',
                 (bid,item['program_id'],item['version_id'],item['change_type'],index,Jsonb(item['snapshot']),item['material_hash']))
-        if publish:c.execute("update startup_radar.weekly_briefings set status='PUBLISHED',published_at=now(),updated_at=now() where id=%s",(bid,))
+        if publish:c.execute("update startup_radar.weekly_briefings set status='PUBLISHED',published_at=coalesce(published_at,now()),updated_at=now() where id=%s",(bid,))
     return {'status':'SUCCESS' if complete else 'PARTIAL_SUCCESS','briefing_id':str(bid),'published':publish,'item_count':len(ordered),'new_count':new_count,'updated_count':len(ordered)-new_count}
 
 
@@ -138,7 +146,7 @@ def announce(db, briefing_id, transport=None):
     return {'state':'RECORDED','planned':len(ids),'delivered':delivered,'states':{row['state']:row['count'] for row in states}}
 
 
-def run_weekly(db, transport=None, at=None, publish=True, collector=None):
+def run_weekly(db, transport=None, at=None, publish=True, collector=None, revision_note=None):
     from radar.ingestion import ingest
     from radar.executions import claim_execution,finish_execution
     at=at or now(); start,_=week_window(at)
@@ -148,11 +156,11 @@ def run_weekly(db, transport=None, at=None, publish=True, collector=None):
         with db.transaction() as c:
             existing=c.execute("select id,collection_status from startup_radar.weekly_briefings where week_start=%s and status='PUBLISHED'",(start,)).fetchone()
             sources=c.execute("select * from startup_radar.sources where enabled and adapter in ('KSTARTUP','BIZINFO') order by slug").fetchall()
-        if existing:result={'status':existing['collection_status'],'briefing_id':str(existing['id']),'published':True,'unchanged':True}
+        if existing and not revision_note:result={'status':existing['collection_status'],'briefing_id':str(existing['id']),'published':True,'unchanged':True}
         else:
             if {s['adapter'] for s in sources}!={'KSTARTUP','BIZINFO'}:raise ValueError('Both official sources must be configured')
             collection=(collector or ingest)(db,sources,trigger='weekly',structured_only=True)
-            result=build_briefing(db,collection,at,publish)
+            result=build_briefing(db,collection,at,publish,revision_note)
             result['ingestion_run_id']=collection['id']
             result['sources']=collection['sources']
         if result.get('published'):

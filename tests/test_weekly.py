@@ -85,6 +85,21 @@ def test_draft_regenerate_and_publish_same_id(db):
     with db.transaction() as c:assert c.execute('select revision from startup_radar.weekly_briefings').fetchone()['revision']==2
 
 
+def test_explicit_published_revision_retains_prior_items_and_publication_identity(db):
+    acquired=collection(db,1)
+    first=build_briefing(db,acquired,AT)
+    acquired['weekly_programs'][0]['snapshot']['application_end_at']='2027-01-10T23:59:59+09:00'
+    revised=build_briefing(db,acquired,AT,revision_note='Correct verified official API calendar format')
+    assert revised['briefing_id']==first['briefing_id']
+    with db.transaction() as c:
+        assert c.execute('select count(*) n from startup_radar.weekly_briefings').fetchone()['n']==1
+        assert c.execute('select revision from startup_radar.weekly_briefings').fetchone()['revision']==2
+        audit=c.execute("select detail from startup_radar.admin_audit where action='WEEKLY_BRIEFING_REVISION'").fetchone()['detail']
+        assert audit['items'][0]['snapshot']['application_end_at'].startswith('2027-01-01')
+        assert audit['previous_revision']==1
+    with pytest.raises(ValueError):build_briefing(db,acquired,AT,revision_note='')
+
+
 def test_member_rpc_requires_verified_gfc_membership_without_team(db):
     result=build_briefing(db,collection(db),AT)
     member,external=uuid4(),uuid4()

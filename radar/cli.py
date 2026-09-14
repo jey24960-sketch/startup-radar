@@ -16,6 +16,7 @@ def main(argv=None):
     weekly=commands.add_parser('weekly',help='Collect official APIs and publish one Seoul-week briefing; no AI, OCR or team calculation')
     weekly.add_argument('--draft',action='store_true',help='Regenerate unpublished draft only')
     weekly.add_argument('--deliver',action='store_true',help='Announce a published briefing to existing enabled subscribers only')
+    weekly.add_argument('--revision-note',help='Explicitly recollect and revise the current published issue, keeping its ID and prior-item audit; never duplicates announcements')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
     bootstrap=commands.add_parser('bootstrap-team');bootstrap.add_argument('--user-id',type=UUID,required=True)
     bootstrap.add_argument('--name',default='GFC');bootstrap.add_argument('--admin',action='store_true')
@@ -44,7 +45,7 @@ def main(argv=None):
             token=os.environ.get('TELEGRAM_BOT_TOKEN')
             if not token:raise ValueError('TELEGRAM_BOT_TOKEN is required for --deliver')
             transport=TelegramTransport(token)
-        result=run_weekly(db,transport,publish=not args.draft)
+        result=run_weekly(db,transport,publish=not args.draft,revision_note=args.revision_note)
     elif args.command=='quality-report':
         from radar.quality import refresh_quality,quality_report
         if args.refresh:refresh_quality(db)

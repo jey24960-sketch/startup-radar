@@ -16,6 +16,9 @@ on:
       job_id:
         description: Persisted dashboard or Telegram request UUID
         type: string
+      revision_note:
+        description: Optional explicit reason to revise the published current-week issue
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -53,6 +56,7 @@ jobs:
           KIND: ${{ inputs.kind || 'WEEKLY' }}
           SOURCE_SLUG: ${{ inputs.source_slug }}
           JOB_ID: ${{ inputs.job_id }}
+          REVISION_NOTE: ${{ inputs.revision_note }}
           DELIVERY_ENABLED: ${{ vars.RADAR_V2_DELIVERY_ENABLED }}
           RADAR_OCR_MODEL_DIR: work/tessdata
           RADAR_OCR_CACHE_DIR: work/ocr-cache
@@ -61,6 +65,7 @@ jobs:
         run: |
           if [ "$KIND" = 'WEEKLY' ]; then
             args=()
+            if [ -n "$REVISION_NOTE" ]; then args+=(--revision-note "$REVISION_NOTE"); fi
             if [ "$DELIVERY_ENABLED" = 'true' ]; then args+=(--deliver); fi
             python -m radar.cli weekly "${args[@]}"
             exit $?
