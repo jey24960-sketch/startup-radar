@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "checked_at": "2026-09-15T01:25:00+09:00",
+  "checked_at": "2026-09-15T02:49:06.837001+09:00",
   "institutions": [
     {
       "slug": "dcamp",
@@ -43,9 +43,11 @@
       "name": "블루포인트",
       "kind": "AC",
       "homepage": "https://bluepoint.ac/program",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "일반 HTML에 모집 본문 없음. 브라우저 렌더링 또는 공식 뉴스레터 연결 검토 필요.",
+      "approved_hosts": [
+        "bluepoint.ac"
+      ],
+      "policy_status": "APPROVED",
+      "note": "공식 Apply를 브라우저로 읽어 투자 검토 접수 안내 확인. 온라인 폼 점검 중이라는 공식 안내와 이메일 대체 경로를 보존. 외부 PUT 및 폼 제출 차단. Events 데이터 연결은 별도 미완료. 공개 비로그인 경로/robots 확인. 기관 전체 수집이나 제휴 승인을 뜻하지 않음.",
       "channels": [
         {
           "slug": "bluepoint-request",
@@ -57,8 +59,34 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "bluepoint-investment",
+          "name": "블루포인트 투자 검토 · 이메일 접수",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "BROWSER",
+            "discovery_mode": "PAGE",
+            "url": "https://bluepoint.ac/contact/apply",
+            "detail_ready_selector": ".server__notice__title",
+            "detail_selector": "body",
+            "title_selector": "[data-radar-title]",
+            "title": "블루포인트 투자 검토 · 이메일 접수",
+            "email_application_selector": ".ReactModal__Content:has(.server__notice__title)",
+            "detail_selectors": [
+              ".limit__body:has(p.font-body)",
+              ".ReactModal__Content:has(.server__notice__title)"
+            ]
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "일반 HTML에 모집 본문 없음. 브라우저 렌더링 또는 공식 뉴스레터 연결 검토 필요."
+      }
     },
     {
       "slug": "sparklabs",
@@ -153,9 +181,12 @@
       "name": "경기창조경제혁신센터",
       "kind": "PUBLIC_INSTITUTION",
       "homepage": "https://ccei.creativekorea.or.kr/gyeonggi/",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 사이트 접근 정책/응답 확인 실패: ROBOTS_DENIED. 우회하지 않음. 공공 API 재게시 또는 공식 링크 수동 검토.",
+      "approved_hosts": [
+        "www.unicornbridge.kr",
+        "unicornbridge.kr"
+      ],
+      "policy_status": "APPROVED",
+      "note": "공식 경기도 보도자료(69742)에서 기관 관계가 확인된 유니콘브릿지 별도 공개 채널. 기존 CCEI 경로 제한은 유지. 홈페이지 첫 번째 연도 묶음의 프로그램만 수집하며 전체 센터 공고를 뜻하지 않음.",
       "channels": [
         {
           "slug": "ccei-gyeonggi-request",
@@ -167,8 +198,28 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "gyeonggi-unicornbridge",
+          "name": "경기창조경제혁신센터 유니콘브릿지",
+          "config": {
+            "method": "BOARD",
+            "url": "https://www.unicornbridge.kr/",
+            "link_selector": "#portfolio .pc-block > .marquee-container:not([style*=\"display:none\"]) a[href*=\"unicornbridge.kr/\"]",
+            "detail_selector": "main",
+            "title_selector": ".key-vs h2",
+            "max_pages": 1,
+            "max_records": 10,
+            "single_page_scope": true,
+            "require_detail_title": true
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "공식 사이트 접근 정책/응답 확인 실패: ROBOTS_DENIED. 우회하지 않음. 공공 API 재게시 또는 공식 링크 수동 검토."
+      }
     },
     {
       "slug": "ccei-daejeon",
@@ -247,9 +298,11 @@
       "name": "한양대학교 창업지원단",
       "kind": "UNIVERSITY",
       "homepage": "https://startup.hanyang.ac.kr/",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체.",
+      "approved_hosts": [
+        "startup.hanyang.ac.kr"
+      ],
+      "policy_status": "APPROVED",
+      "note": "공식 홈페이지 최신 공지 → 사이트가 사용하는 공개 GET 게시판 API. 인증/로그인 POST 불필요. 외부기관 재게시 목록은 별도 검토. 공개 비로그인 경로/robots 확인. 기관 전체 수집이나 제휴 승인을 뜻하지 않음.",
       "channels": [
         {
           "slug": "hanyang-request",
@@ -261,8 +314,31 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "hanyang-notices",
+          "name": "한양대 공식 공지 · 공개 게시판 API",
+          "config": {
+            "max_pages": 1,
+            "max_records": 20,
+            "single_page_scope": true,
+            "method": "BOARD",
+            "url": "https://startup.hanyang.ac.kr/",
+            "link_selector": "a[href*=\"/board/notice/view/\"]",
+            "detail_api": "HANYANG_PUBLIC_BOARD",
+            "detail_selector": "main",
+            "title_selector": "h1",
+            "required_title_pattern": "창업.*(?:모집|신청)|Campus Lab",
+            "application_link_selector": "a[href*=\"hylu-s.hanyang.ac.kr/ko/program/\"]",
+            "submission_path_prefix": "/board/notice/view/"
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체."
+      }
     },
     {
       "slug": "kaist",
@@ -297,9 +373,11 @@
       "name": "POSTECH 창업지원팀",
       "kind": "UNIVERSITY",
       "homepage": "https://startup.postech.ac.kr/",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 사이트 접근 정책/응답 확인 실패: ROBOTS_UNAVAILABLE. 우회하지 않음. 공공 API 재게시 또는 공식 링크 수동 검토.",
+      "approved_hosts": [
+        "aif.postech.ac.kr"
+      ],
+      "policy_status": "APPROVED",
+      "note": "창업지원팀 원래 사이트는 robots의 HTTP 하향 이동으로 미연결. 대체 공식 채널인 POSTECH 산학협력단 공지 중 창업지원팀 모집을 연결. 공개 비로그인 경로/robots 확인. 기관 전체 수집이나 제휴 승인을 뜻하지 않음.",
       "channels": [
         {
           "slug": "postech-request",
@@ -311,17 +389,41 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "postech-aif-notices",
+          "name": "POSTECH 산학협력단 · 창업지원팀 공지",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "BOARD",
+            "url": "https://aif.postech.ac.kr/kor/support/notice.do",
+            "link_selector": ".b-title-box a[href*=\"mode=view\"]",
+            "detail_selector": ".b-content-box",
+            "title_selector": ".b-title",
+            "required_title_pattern": "창업지원팀",
+            "application_link_selector": "a[href*=\"forms.gle/\"]",
+            "submission_path_prefix": "/kor/support/notice.do"
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "공식 사이트 접근 정책/응답 확인 실패: ROBOTS_UNAVAILABLE. 우회하지 않음. 공공 API 재게시 또는 공식 링크 수동 검토."
+      }
     },
     {
       "slug": "yonsei",
       "name": "연세대학교 창업지원단",
       "kind": "UNIVERSITY",
       "homepage": "https://venture.yonsei.ac.kr/",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체.",
+      "approved_hosts": [
+        "venture.yonsei.ac.kr"
+      ],
+      "policy_status": "APPROVED",
+      "note": "내부공지 첫 페이지에서 모집·신청 공고 탐색. 조교 채용·행정 안내 제외. 공개 비로그인 경로/robots 확인. 기관 전체 수집이나 제휴 승인을 뜻하지 않음.",
       "channels": [
         {
           "slug": "yonsei-request",
@@ -333,17 +435,41 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "yonsei-notices",
+          "name": "연세대 내부 모집 공지",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "BOARD",
+            "url": "https://venture.yonsei.ac.kr/community/notice",
+            "link_selector": "a[href*=\"/community/notice/\"]",
+            "detail_selector": ".covi-post-view__contents",
+            "title_selector": ".covi-post-view__header-title",
+            "required_title_pattern": "모집|신청|컨퍼런스",
+            "application_link_selector": "a[href*=\"forms.gle/\"]",
+            "submission_path_prefix": "/community/notice/"
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체."
+      }
     },
     {
       "slug": "korea",
       "name": "고려대학교 세종 창업교육센터",
       "kind": "UNIVERSITY",
       "homepage": "https://startup.korea.ac.kr/",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 사이트 현 명칭 확인. 연결 게시판의 mycafe24.com 도메인 기관 관계 검증 전에는 자동 허용하지 않음.",
+      "approved_hosts": [
+        "startup.korea.ac.kr"
+      ],
+      "policy_status": "APPROVED",
+      "note": "홈페이지의 공식 도메인 kboard_content_redirect 링크가 같은 도메인의 상세로 연결됨을 확인. mycafe24.com은 허용하지 않음. 공개 비로그인 경로/robots 확인. 기관 전체 수집이나 제휴 승인을 뜻하지 않음.",
       "channels": [
         {
           "slug": "korea-request",
@@ -355,17 +481,40 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "korea-opportunity-board",
+          "name": "고려대 세종 프로그램 모집",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "BOARD",
+            "url": "https://startup.korea.ac.kr/",
+            "link_selector": "a[href*=\"startup.korea.ac.kr/?kboard_content_redirect=\"]",
+            "detail_selector": ".kboard-content",
+            "title_selector": ".kboard-title h1",
+            "required_title_pattern": "모집|참여|참가|경진대회",
+            "submission_path_prefix": "/program/"
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "공식 사이트 현 명칭 확인. 연결 게시판의 mycafe24.com 도메인 기관 관계 검증 전에는 자동 허용하지 않음."
+      }
     },
     {
       "slug": "primer",
       "name": "프라이머",
       "kind": "AC",
       "homepage": "https://www.primer.kr/apply",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "고정 신청 페이지 본문은 현재 프로그램 없음, 차기 기수 예고. 오래된 HTML 제목을 현재 모집으로 사용하지 않음. 여러 기수 분리 확인 필요.",
+      "approved_hosts": [
+        "www.primer.kr"
+      ],
+      "policy_status": "APPROVED",
+      "note": "공식 Apply의 차기 모집 예고를 트랙별 분리. 고정된 HTML 제목 27기를 사용하지 않으며 새 본문 기수를 추출. 모집 시작 전에는 예정으로 표시. 공개 비로그인 경로/robots 확인. 기관 전체 수집이나 제휴 승인을 뜻하지 않음.",
       "channels": [
         {
           "slug": "primer-request",
@@ -377,17 +526,78 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "primer-next-batch",
+          "name": "프라이머 배치 모집 예고",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "PAGE",
+            "url": "https://www.primer.kr/apply",
+            "detail_selectors": [
+              "[data-block-viewer-type=\"text\"]:has(span:-soup-contains(\"배치\"))",
+              "[data-block-viewer-type=\"text\"]:has(span:-soup-contains(\"배치\")) + [data-block-viewer-type=\"text\"]"
+            ],
+            "title_selector": "[data-block-viewer-type=\"text\"]:has(span:-soup-contains(\"배치\"))",
+            "title_extract_pattern": "배치\\s*\\d+기",
+            "title_prefix": "프라이머 "
+          }
+        },
+        {
+          "slug": "primer-next-creator",
+          "name": "프라이머 크리에이터 이코노미 파운더 모집 예고",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "PAGE",
+            "url": "https://www.primer.kr/apply",
+            "detail_selectors": [
+              "[data-block-viewer-type=\"text\"]:has(span:-soup-contains(\"배치\"))",
+              "[data-block-viewer-type=\"text\"]:has(span:-soup-contains(\"배치\")) + [data-block-viewer-type=\"text\"]"
+            ],
+            "title_selector": "[data-block-viewer-type=\"text\"]:has(span:-soup-contains(\"배치\"))",
+            "title_extract_pattern": "크리에이터 이코노미 파운더\\s*\\d+기",
+            "title_prefix": "프라이머 "
+          }
+        },
+        {
+          "slug": "primer-next-mentoring",
+          "name": "프라이머 스텔스 창업 멘토링 모집 예고",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "PAGE",
+            "url": "https://www.primer.kr/apply",
+            "detail_selectors": [
+              "[data-block-viewer-type=\"text\"]:has(span:-soup-contains(\"스텔스 창업 멘토링 프로그램\"))",
+              "[data-block-viewer-type=\"text\"]:has(span:-soup-contains(\"스텔스 창업 멘토링 프로그램\")) + [data-block-viewer-type=\"text\"]"
+            ],
+            "title_selector": "[data-block-viewer-type=\"text\"]:has(span:-soup-contains(\"스텔스 창업 멘토링 프로그램\"))",
+            "title_extract_pattern": "제\\d+회 스텔스 창업 멘토링 프로그램",
+            "title_prefix": "프라이머 "
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "고정 신청 페이지 본문은 현재 프로그램 없음, 차기 기수 예고. 오래된 HTML 제목을 현재 모집으로 사용하지 않음. 여러 기수 분리 확인 필요."
+      }
     },
     {
       "slug": "futureplay",
       "name": "퓨처플레이",
       "kind": "VC",
       "homepage": "https://futureplay.co/",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체.",
+      "approved_hosts": [
+        "futureplay.co"
+      ],
+      "policy_status": "APPROVED",
+      "note": "공식 홈페이지 Submit pitch가 연결한 Contact의 공개 제출 폼을 확인. 폼을 제출하지 않으며 투자 조건·상시 여부는 미확인. 공개 비로그인 경로/robots 확인. 기관 전체 수집이나 제휴 승인을 뜻하지 않음.",
       "channels": [
         {
           "slug": "futureplay-request",
@@ -399,8 +609,29 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "futureplay-investment",
+          "name": "퓨처플레이 투자 검토 접수",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "PAGE",
+            "url": "https://futureplay.co/contact",
+            "detail_selector": "body",
+            "title_selector": "[data-radar-title]",
+            "title": "퓨처플레이 투자 검토 · 사업계획서 제출",
+            "self_application_selector": "form",
+            "official_application_page": true
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체."
+      }
     },
     {
       "slug": "antler",
@@ -434,9 +665,11 @@
       "name": "소풍벤처스",
       "kind": "VC",
       "homepage": "https://sopoong.net/?lang=ko-KR",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체.",
+      "approved_hosts": [
+        "sopoong.net"
+      ],
+      "policy_status": "APPROVED",
+      "note": "공식 홈페이지의 투자 검토 지원하기 이메일 링크를 분리 연결. 공개 배치 채널은 과거 페이지·초청제 변경·DNS 실패로 미연결. 이메일 접수가 투자 확정·상시 모집을 뜻하지 않음.",
       "channels": [
         {
           "slug": "sopoong-request",
@@ -448,8 +681,28 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "sopoong-investment",
+          "name": "소풍벤처스 투자 검토 · 이메일 접수",
+          "config": {
+            "method": "PAGE",
+            "url": "https://sopoong.net/?lang=ko-KR",
+            "detail_selector": "div.align-items-center:has(> a[href=\"mailto:info@sopoong.net\"])",
+            "email_application_selector": "a[href=\"mailto:info@sopoong.net\"]",
+            "title_selector": "[data-radar-title]",
+            "title": "소풍벤처스 투자 검토 · 이메일 접수",
+            "max_pages": 1,
+            "max_records": 5,
+            "single_page_scope": true
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체."
+      }
     },
     {
       "slug": "naver-d2sf",
@@ -544,9 +797,11 @@
       "name": "카카오벤처스",
       "kind": "VC",
       "homepage": "https://www.kakao.vc/",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체.",
+      "approved_hosts": [
+        "www.kakao.vc"
+      ],
+      "policy_status": "APPROVED",
+      "note": "공식 Contact의 사업계획서 제출 구역과 직접 연결 Google Form 확인. 마감·상시 여부 미명시이므로 확인 불가, 투자 확정 아님. 공개 비로그인 경로/robots 확인. 기관 전체 수집이나 제휴 승인을 뜻하지 않음.",
       "channels": [
         {
           "slug": "kakao-ventures-request",
@@ -558,17 +813,39 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "kakao-investment",
+          "name": "카카오벤처스 사업계획서 · 투자 검토 접수",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "PAGE",
+            "url": "https://www.kakao.vc/contact",
+            "detail_selector": ".div-block-2073",
+            "title_selector": "[data-radar-title]",
+            "title": "카카오벤처스 투자 검토 · 사업계획서 접수",
+            "official_application_page": true
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체."
+      }
     },
     {
       "slug": "samsung-clab",
       "name": "삼성 C-Lab Outside",
       "kind": "CORPORATE",
       "homepage": "https://www.samsungclab.com/apply2027",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체.",
+      "approved_hosts": [
+        "news.samsung.com"
+      ],
+      "policy_status": "APPROVED",
+      "note": "C-Lab 앱 이미지 대신 삼성전자 공식 뉴스룸의 C랩 아웃사이드 모집 공고를 연결. 직접 제작 기사 이용 안내 확인. 공고의 게시 연도를 모집 문장의 생략 연도 근거로 함께 저장. 태그 첫 페이지 한정.",
       "channels": [
         {
           "slug": "samsung-clab-request",
@@ -580,8 +857,32 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "samsung-clab-newsroom",
+          "name": "삼성전자 공식 뉴스룸 · C랩 모집",
+          "config": {
+            "method": "BOARD",
+            "url": "https://news.samsung.com/kr/tag/c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c",
+            "link_selector": "a.category_item",
+            "list_title_selector": ".category_title",
+            "detail_selector": ".single_contents",
+            "title_selector": "h1.single-title",
+            "period_year_selector": ".single-date",
+            "application_link_selector": "a[href*=\"samsungclab.com/apply\"]",
+            "required_title_pattern": "(?:C랩|C-Lab).*모집",
+            "submission_path_prefix": "/kr/",
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체."
+      }
     },
     {
       "slug": "hyundai-zer01ne",
@@ -590,7 +891,7 @@
       "homepage": "https://zer01ne.zone/",
       "approved_hosts": [],
       "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 사이트 접근 정책/응답 확인 실패: ROBOTS_UNAVAILABLE. 우회하지 않음. 공공 API 재게시 또는 공식 링크 수동 검토.",
+      "note": "원래 사이트는 TLS 인증서 검증 실패. 대체 현대차그룹 뉴스룸과 공식 연결 Slashpage는 읽기 성공했으나 확인한 모집은 2025년 상반기이며 일정은 이미지 중심. 신규 모집 탐색·일정 파서 연결 전에는 정상 자동 수집으로 표시하지 않음.",
       "channels": [
         {
           "slug": "hyundai-zer01ne-request",
@@ -610,9 +911,11 @@
       "name": "롯데벤처스",
       "kind": "CVC",
       "homepage": "https://www.lotteventures.com/",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "일반 HTML에 모집 본문 없음. 브라우저 렌더링 또는 공식 뉴스레터 연결 검토 필요.",
+      "approved_hosts": [
+        "www.lotteventures.com"
+      ],
+      "policy_status": "APPROVED",
+      "note": "이동용 첫 주소 대신 /main의 최신 모집 링크 사용. /news/notice는 경영공시이므로 수집하지 않음. 모집 여러 트랙이 한 공고에 있으면 검토 필요. 공개 비로그인 경로/robots 확인. 기관 전체 수집이나 제휴 승인을 뜻하지 않음.",
       "channels": [
         {
           "slug": "lotte-ventures-request",
@@ -624,17 +927,42 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "lotte-recruitment",
+          "name": "롯데벤처스 L-CAMP · 해외 진출 모집",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "BOARD",
+            "url": "https://www.lotteventures.com/main",
+            "link_selector": "a[href*=\"/news/news?\"][href*=\"code=\"]",
+            "detail_selector": ".board-conts--fc",
+            "title_selector": "article.board-view--fc h1",
+            "required_title_pattern": "모집|참가.*신청",
+            "application_link_selector": "a[href*=\"forms.gle/\"], a[href*=\"docs.google.com/forms/\"]",
+            "submission_path_prefix": "/news/news",
+            "list_title_selector": ".gallery-title--fc"
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "일반 HTML에 모집 본문 없음. 브라우저 렌더링 또는 공식 뉴스레터 연결 검토 필요."
+      }
     },
     {
       "slug": "orangeplanet",
       "name": "오렌지플래닛 창업재단",
       "kind": "FOUNDATION",
       "homepage": "https://www.orangeplanet.or.kr/main",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체.",
+      "approved_hosts": [
+        "www.orangeplanet.or.kr"
+      ],
+      "policy_status": "APPROVED",
+      "note": "신청 경로 robots 제한은 유지. 공개 프로그램 설명의 오렌지팜 상시 모집만 분리 연결. 프로그램 진행 시 상시라는 조건부 소개·현재 모집 기간 아님은 모집으로 게시하지 않음. 공개 비로그인 경로/robots 확인. 기관 전체 수집이나 제휴 승인을 뜻하지 않음.",
       "channels": [
         {
           "slug": "orangeplanet-request",
@@ -646,17 +974,39 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "orange-farm",
+          "name": "오렌지플래닛 오렌지팜 상시 모집",
+          "config": {
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true,
+            "method": "PAGE",
+            "url": "https://www.orangeplanet.or.kr/program/step",
+            "detail_selector": "#org-farm",
+            "title_selector": "[data-radar-title]",
+            "title": "오렌지플래닛 오렌지팜 초기 스타트업 입주 모집"
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "공식 홈페이지 확인. 현재 모집 전용 채널과 파서 검토 필요; 운영자 공식 링크 제보로 대체."
+      }
     },
     {
       "slug": "startupall",
       "name": "한국청년기업가정신재단·창업유망팀300",
       "kind": "FOUNDATION",
       "homepage": "https://u300.kr",
-      "approved_hosts": [],
-      "policy_status": "REVIEW_REQUIRED",
-      "note": "일반 HTML에 모집 본문 없음. 브라우저 렌더링 또는 공식 뉴스레터 연결 검토 필요.",
+      "approved_hosts": [
+        "www.koef.or.kr",
+        "koef.or.kr"
+      ],
+      "policy_status": "APPROVED",
+      "note": "U300 플랫폼의 크롤링 제한은 유지. 운영 재단의 별도 공식 공지 게시판에서 모집·기업가정신 프로그램 수집. 외부 재게시·유공 포상·채용은 제외. 공동 운영 기관은 원문 본문에서 확인해야 함.",
       "channels": [
         {
           "slug": "startupall-request",
@@ -668,8 +1018,29 @@
             "max_records": 20,
             "single_page_scope": true
           }
+        },
+        {
+          "slug": "koef-recruitment",
+          "name": "한국청년기업가정신재단 공식 모집 공지",
+          "config": {
+            "method": "BOARD",
+            "url": "https://www.koef.or.kr/board/notice_list.php",
+            "link_selector": "a[href*=\"notice_view.php?ARTICLE_SEQ=\"]",
+            "detail_selector": "#CONTENT",
+            "title_selector": "[data-radar-title]",
+            "required_title_pattern": "^\\[모집\\]|학생.*창업.*모집",
+            "submission_path_prefix": "/board/notice_view.php",
+            "max_pages": 1,
+            "max_records": 30,
+            "single_page_scope": true
+          }
         }
-      ]
+      ],
+      "previous_review": {
+        "policy_status": "REVIEW_REQUIRED",
+        "approved_hosts": [],
+        "note": "일반 HTML에 모집 본문 없음. 브라우저 렌더링 또는 공식 뉴스레터 연결 검토 필요."
+      }
     }
   ]
 }

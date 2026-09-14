@@ -72,5 +72,6 @@ def catalog_collection(db):
             return {'id':str(latest['id']),'status':'FAILED','sources':[],'weekly_programs':[]}
         rows=c.execute("select o.program_id,o.base_version_id version_id,o.facts||o.editorial snapshot,startup_radar.opportunity_status(o.facts||o.editorial) status "
             "from startup_radar.opportunity_records o where o.confirmed and o.included and o.duplicate_of is null and not o.editorial_conflict "
+            "and (not ('PAST_NOTICE_DEADLINE_UNKNOWN'=any(o.review_reasons)) or nullif(o.editorial->>'application_end_at','') is not null) "
             "and o.last_verified_at>now()-interval '8 days'").fetchall()
     return {'id':str(latest['id']),'status':latest['status'],'sources':latest['summary'].get('sources',[]),'weekly_programs':[dict(r) for r in rows]}

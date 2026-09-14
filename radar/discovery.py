@@ -37,7 +37,7 @@ def run_discovery(db,at=None,scheduled=False,collector=None):
             with db.transaction() as c:
                 for outcome in result.get('sources',[]):
                     reason=next(iter(outcome.get('failures',[])),{}).get('reason_code')
-                    state='CONNECTED' if outcome['status']=='SUCCESS' else 'PARTIAL' if outcome.get('parsed') else 'ACCESS_RESTRICTED' if reason in ('ROBOTS_DISALLOWED','HTTP_4XX','POLICY_REVIEW') else 'CONFIGURATION_REQUIRED' if reason in ('NOT_CONFIGURED','CONFIGURATION','DETAIL_PARSE','LIST_PARSE') else 'TEMPORARY_ERROR'
+                    state='CONNECTED' if outcome['status']=='SUCCESS' else 'PARTIAL' if outcome.get('parsed') else 'ACCESS_RESTRICTED' if reason in ('ROBOTS_DISALLOWED','HTTP_4XX','POLICY_REVIEW') else 'CONFIGURATION_REQUIRED' if reason in ('NOT_CONFIGURED','CONFIGURATION','DETAIL_PARSE','LIST_PARSE','DEPENDENCY','UNAPPROVED_HOST') else 'TEMPORARY_ERROR'
                     c.execute('update startup_radar.source_channels set connection_state=%s,last_checked_at=now(),last_reason=%s,proof=%s where source_id=%s',
                         (state,reason,Jsonb({'run_id':result['id'],'status':outcome['status'],'parsed':outcome.get('parsed',0),'coverage':outcome.get('coverage',{})}),outcome['source_id']))
             resolve_collected_submissions(db)

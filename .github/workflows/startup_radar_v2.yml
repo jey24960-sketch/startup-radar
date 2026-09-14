@@ -39,6 +39,11 @@ jobs:
             requirements-v2.lock.txt
             requirements-ocr.lock.txt
       - run: pip install -r requirements-v2.lock.txt
+      - name: Prepare optional public browser reader
+        if: vars.RADAR_BROWSER_ENABLED == 'true'
+        run: |
+          pip install -r requirements-browser.txt
+          python -m playwright install --with-deps chromium
       - name: Prepare verified evidence runtime
         if: inputs.kind == 'INGEST'
         run: |

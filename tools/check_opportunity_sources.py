@@ -25,7 +25,10 @@ def main():
         # Intentionally small, explicit samples of the three listing channels.
         for slug,selector in [('snu-home','a[href*="bo_table=sub4_1"][href*="wr_id=129"]'),('kaist-home','a[href*="/boards/view/board_event/2191"]'),('asan-notices','a[href*="/notice/2026-anf-maru-open-h2/"]')]:
             c.execute("update startup_radar.sources set config=config||%s where slug=%s",(Jsonb({'link_selector':selector,'max_records':2,'sample_only':True}),slug))
-        c.execute("update startup_radar.sources set enabled=true where config->>'policy_status'='APPROVED' and config->>'method'<>'REQUEST'")
+        # Freeze this historical nine-recruitment sample as the catalogue grows.
+        baseline=['snu-home','kaist-home','asan-notices','sparklabs-batch','antler-residency',
+                  'd2sf-space','d2sf-campus','d2sf-investment','d2sf-defense','d2sf-coffee']
+        c.execute("update startup_radar.sources set enabled=true where slug=any(%s) and config->>'policy_status'='APPROVED'",(baseline,))
     result=run_discovery(db)
     with db.transaction() as c:
         records=c.execute('select program_id id,facts,confirmed,review_reasons,last_verified_at,startup_radar.opportunity_status(facts) status from startup_radar.opportunity_records order by facts->>\'title\'').fetchall()

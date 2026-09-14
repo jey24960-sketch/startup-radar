@@ -24,7 +24,7 @@ def main(argv=None):
     calendar=commands.add_parser('calendar',help='Check independent daily discovery and weekly publication calendars')
     calendar.add_argument('--deliver',action='store_true')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
-    institutions=commands.add_parser('seed-institutions');institutions.add_argument('--file',default='institutions.json')
+    institutions=commands.add_parser('seed-institutions');institutions.add_argument('--file',default='institutions.json');institutions.add_argument('--update-reviewed',action='store_true',help='Apply only unchanged, previously shipped institution reviews; never enable channels')
     bootstrap=commands.add_parser('bootstrap-team');bootstrap.add_argument('--user-id',type=UUID,required=True)
     bootstrap.add_argument('--name',default='GFC');bootstrap.add_argument('--admin',action='store_true')
     run=commands.add_parser('run');run.add_argument('--kind',choices=['INGEST','DIGEST','REMINDER','HIGH_FIT','TICK','REFRESH'],default='TICK')
@@ -78,7 +78,7 @@ def main(argv=None):
         result=recover_execution(db,args.execution_id,args.note,args.confirm_stopped)
     elif args.command=='seed-institutions':
         from radar.institutions import seed_institutions
-        result=seed_institutions(db,args.file)
+        result=seed_institutions(db,args.file,update_reviewed=args.update_reviewed)
     elif args.command=='seed-sources':
         rows=json.loads(Path(args.file).read_text(encoding='utf-8'))
         for row in rows:

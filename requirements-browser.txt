@@ -1,0 +1,2 @@
+# Optional public-page rendering. Kept separate from API-only installations.
+playwright==1.58.0

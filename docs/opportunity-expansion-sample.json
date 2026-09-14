@@ -1,0 +1,869 @@
+{
+  "scope": "BOUNDED_PUBLIC_READS_AND_LOCAL_DB_REPLAY_NOT_PRODUCTION",
+  "checked_date_seoul": "2026-09-15",
+  "candidate_institutions": 25,
+  "previous_read_verified_institutions": 6,
+  "previous_read_verified_channels": 10,
+  "new_read_verified_institutions": 14,
+  "new_read_verified_channels": 16,
+  "note": "First-page / selected-section samples, at most 1 to 5 details per channel; not a completeness or nationwide coverage measurement. One previous institution (SparkLabs) is introduction monitoring only. Hanyang has a partial detail failure.",
+  "sample": {
+    "attempted_details": 36,
+    "read_details": 35,
+    "failed_details": 1,
+    "known_unread_detail": {
+      "url": "https://startup.hanyang.ac.kr/board/notice/view/4393",
+      "reason": "Image-only recruitment text; DETAIL_PARSE; OCR/manual review not connected"
+    }
+  },
+  "local_pipeline": {
+    "status": "PARTIAL_SUCCESS",
+    "stored": 35,
+    "confirmed_member_records": 34,
+    "member_details_checked": 3,
+    "confirmed_statuses": {
+      "CLOSED": 12,
+      "UNKNOWN": 16,
+      "OPEN": 2,
+      "ROLLING": 1,
+      "UPCOMING": 3
+    },
+    "deadline_verified": {
+      "numerator": 17,
+      "denominator": 34
+    },
+    "application_link_verified": {
+      "numerator": 16,
+      "denominator": 34
+    },
+    "weekly_items": 18,
+    "weekly_new": 18,
+    "weekly_changed": 0,
+    "repeat_same_briefing": true,
+    "repeat_unchanged": true,
+    "telegram_rows": 0,
+    "telegram_transport_used": false
+  },
+  "channels": [
+    {
+      "institution": "bluepoint",
+      "channel": "bluepoint-investment",
+      "checked_at": "2026-09-15T02:57:21.228536+09:00",
+      "discovered": 1,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 0,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "블루포인트",
+      "url": "https://bluepoint.ac/contact/apply",
+      "method": "BROWSER",
+      "parsed_count": 1,
+      "records": [
+        {
+          "title": "블루포인트 투자 검토 · 이메일 접수",
+          "official_url": "https://bluepoint.ac/contact/apply",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN",
+            "EMAIL_APPLICATION_ONLY",
+            "DEADLINE_UNKNOWN",
+            "COHORT_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "hanyang",
+      "channel": "hanyang-notices",
+      "checked_at": "2026-09-15T02:57:28.703618+09:00",
+      "discovered": 5,
+      "sample_status": "PARTIAL",
+      "failures": [
+        {
+          "kind": "DETAIL_PARSE",
+          "reason_code": "DETAIL_PARSE",
+          "message": "Official page has insufficient readable text; rendering or document review needed",
+          "retryable": false
+        }
+      ],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 5,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 11,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "한양대학교 창업지원단",
+      "url": "https://startup.hanyang.ac.kr/",
+      "method": "BOARD",
+      "parsed_count": 4,
+      "records": [
+        {
+          "title": "[2026년 창업중심대학] 2026 대학창업 페스티벌 참가 신청 (~9/11(금) 오전 11시까지, 교통편/숙박 지원)",
+          "official_url": "https://startup.hanyang.ac.kr/board/notice/view/4391",
+          "application_url": "https://forms.gle/zoXHdrM3qpiTrqh8A",
+          "application_start_at": null,
+          "application_end_at": "2026-09-11T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "PARTICIPATION_UNKNOWN"
+          ]
+        },
+        {
+          "title": "2026년 Campus Lab Start-up Bridge Program 참가자 모집",
+          "official_url": "https://startup.hanyang.ac.kr/board/notice/view/4389",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": "2026-09-21T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        },
+        {
+          "title": "▶모두의 창업 2차◀  지원자 모집 (~9/17)!  ※지원 인증하면 한양대x모두의창업 콜라보 키캡 증정",
+          "official_url": "https://startup.hanyang.ac.kr/board/notice/view/4382",
+          "application_url": "https://www.modoo.or.kr/",
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "DEADLINE_UNKNOWN"
+          ]
+        },
+        {
+          "title": "2026년 하반기 창업동아리 모집(~9/17(목)까지)",
+          "official_url": "https://startup.hanyang.ac.kr/board/notice/view/4358",
+          "application_url": "https://hylu-s.hanyang.ac.kr/ko/program/all/view/2707",
+          "application_start_at": null,
+          "application_end_at": "2026-09-17T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": []
+        }
+      ]
+    },
+    {
+      "institution": "postech",
+      "channel": "postech-aif-notices",
+      "checked_at": "2026-09-15T02:43:47.472668+09:00",
+      "discovered": 3,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 3,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 7,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "POSTECH 창업지원팀",
+      "url": "https://aif.postech.ac.kr/kor/support/notice.do",
+      "method": "BOARD",
+      "parsed_count": 3,
+      "records": [
+        {
+          "title": "[창업지원팀] 초기창업기업의 인적관리 및 조직문화 교육 참가자 모집 안내 (~9/9)",
+          "official_url": "https://aif.postech.ac.kr/kor/support/notice.do?mode=view&articleNo=17631&article.offset=0&articleLimit=10",
+          "application_url": "https://forms.gle/jFo5EKqjiZej7endA",
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "DEADLINE_UNKNOWN"
+          ]
+        },
+        {
+          "title": "[창업지원팀] 초기창업기업 성장을 위한 세무•재무 실무 교육 참가자 모집 안내 (~8/12)",
+          "official_url": "https://aif.postech.ac.kr/kor/support/notice.do?mode=view&articleNo=17517&article.offset=0&articleLimit=10",
+          "application_url": "https://forms.gle/jFo5EKqjiZej7endA",
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "DEADLINE_UNKNOWN"
+          ]
+        },
+        {
+          "title": "[창업지원팀] 2026 MSSA 예비, 초기 창업팀 대상 비즈니스 컨설팅 지원 참가자 모집(~9/1)",
+          "official_url": "https://aif.postech.ac.kr/kor/support/notice.do?mode=view&articleNo=17496&article.offset=0&articleLimit=10",
+          "application_url": null,
+          "application_start_at": "2026-07-25T00:00:00+09:00",
+          "application_end_at": "2026-09-01T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "yonsei",
+      "channel": "yonsei-notices",
+      "checked_at": "2026-09-15T02:43:51.710065+09:00",
+      "discovered": 11,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 11,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 6,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "연세대학교 창업지원단",
+      "url": "https://venture.yonsei.ac.kr/community/notice",
+      "method": "BOARD",
+      "parsed_count": 3,
+      "records": [
+        {
+          "title": "[선착순 모집] 캠퍼스타운 AI 기초 소양 프로그램「AI First Step @ CampusTown (2026·2학기)」",
+          "official_url": "https://venture.yonsei.ac.kr/community/notice/334",
+          "application_url": "https://forms.gle/gPZoXYs1XxFf55A47",
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "DEADLINE_UNKNOWN"
+          ]
+        },
+        {
+          "title": "실험실 창업 컨퍼런스  2026 「Lab to Market을 선도하다 & 연세 Tech Fair」개최 (10.01.목. 14시)",
+          "official_url": "https://venture.yonsei.ac.kr/community/notice/333",
+          "application_url": "https://forms.gle/57gQr9AFPgTvTsRV8",
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "PARTICIPATION_UNKNOWN",
+            "DEADLINE_UNKNOWN"
+          ]
+        },
+        {
+          "title": "☆2026 학생창업 법인설립·사업장 주소지 제공 프로그램(~11.30 모집)☆",
+          "official_url": "https://venture.yonsei.ac.kr/community/notice/199",
+          "application_url": "https://forms.gle/n1ZfVD12c9pbhQzs8",
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "DEADLINE_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "korea",
+      "channel": "korea-opportunity-board",
+      "checked_at": "2026-09-15T02:57:35.663210+09:00",
+      "discovered": 5,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 5,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 15,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "고려대학교 세종 창업교육센터",
+      "url": "https://startup.korea.ac.kr/",
+      "method": "BOARD",
+      "parsed_count": 5,
+      "records": [
+        {
+          "title": "2026학년도 고려대학교 세종캠퍼스 KUS창업동아리 추가모집",
+          "official_url": "https://startup.korea.ac.kr/program/%ec%b0%bd%ec%97%85%eb%a9%98%ed%86%a0%eb%a7%81/?mod=document&uid=2268",
+          "application_url": null,
+          "application_start_at": "2026-08-16T00:00:00+09:00",
+          "application_end_at": "2026-09-11T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        },
+        {
+          "title": "2026학년도 고려대학교 세종캠퍼스 KUS창업동아리 모집 안내",
+          "official_url": "https://startup.korea.ac.kr/program/%ec%b0%bd%ec%97%85%eb%a9%98%ed%86%a0%eb%a7%81/?mod=document&uid=1864",
+          "application_url": null,
+          "application_start_at": "2026-03-16T00:00:00+09:00",
+          "application_end_at": "2026-04-10T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        },
+        {
+          "title": "2025학년도 동계 실전 창업 체험 캠프 참가자 모집",
+          "official_url": "https://startup.korea.ac.kr/program/%ec%b0%bd%ec%97%85%eb%a9%98%ed%86%a0%eb%a7%81/?mod=document&uid=1792",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN",
+            "DEADLINE_UNKNOWN"
+          ]
+        },
+        {
+          "title": "창업교육센터 정부지원사업 대비반 사업계획서 작성 특강 & 팀별 멘토링 참여자 모집 안내",
+          "official_url": "https://startup.korea.ac.kr/program/%ec%b0%bd%ec%97%85%eb%a9%98%ed%86%a0%eb%a7%81/?mod=document&uid=1788",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN",
+            "DEADLINE_UNKNOWN"
+          ]
+        },
+        {
+          "title": "Maker 3D프린터 경진대회 시상 결과 안내",
+          "official_url": "https://startup.korea.ac.kr/news/%eb%89%b4%ec%8a%a4%ea%b0%a4%eb%9f%ac%eb%a6%ac/?mod=document&uid=1779",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": false,
+          "review_reasons": [
+            "RECRUITMENT_UNCONFIRMED",
+            "APPLICATION_LINK_UNKNOWN",
+            "DEADLINE_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "primer",
+      "channel": "primer-next-batch",
+      "checked_at": "2026-09-15T02:44:05.933346+09:00",
+      "discovered": 1,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 0,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "프라이머",
+      "url": "https://www.primer.kr/apply",
+      "method": "PAGE",
+      "parsed_count": 1,
+      "records": [
+        {
+          "title": "프라이머 배치 30기",
+          "official_url": "https://www.primer.kr/apply",
+          "application_url": null,
+          "application_start_at": "2026-12-01T00:00:00+09:00",
+          "application_end_at": "2026-12-31T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "primer",
+      "channel": "primer-next-creator",
+      "checked_at": "2026-09-15T02:44:06.595128+09:00",
+      "discovered": 1,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 0,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "프라이머",
+      "url": "https://www.primer.kr/apply",
+      "method": "PAGE",
+      "parsed_count": 1,
+      "records": [
+        {
+          "title": "프라이머 크리에이터 이코노미 파운더 3기",
+          "official_url": "https://www.primer.kr/apply",
+          "application_url": null,
+          "application_start_at": "2026-12-01T00:00:00+09:00",
+          "application_end_at": "2026-12-31T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "PARTICIPATION_UNKNOWN",
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "primer",
+      "channel": "primer-next-mentoring",
+      "checked_at": "2026-09-15T02:44:07.329600+09:00",
+      "discovered": 1,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 0,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "프라이머",
+      "url": "https://www.primer.kr/apply",
+      "method": "PAGE",
+      "parsed_count": 1,
+      "records": [
+        {
+          "title": "프라이머 제11회 스텔스 창업 멘토링 프로그램",
+          "official_url": "https://www.primer.kr/apply",
+          "application_url": null,
+          "application_start_at": "2026-10-05T00:00:00+09:00",
+          "application_end_at": "2026-10-25T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "PARTICIPATION_UNKNOWN",
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "futureplay",
+      "channel": "futureplay-investment",
+      "checked_at": "2026-09-15T02:44:07.936380+09:00",
+      "discovered": 1,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 0,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "퓨처플레이",
+      "url": "https://futureplay.co/contact",
+      "method": "PAGE",
+      "parsed_count": 1,
+      "records": [
+        {
+          "title": "퓨처플레이 투자 검토 · 사업계획서 제출",
+          "official_url": "https://futureplay.co/contact",
+          "application_url": "https://futureplay.co/contact",
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "DEADLINE_UNKNOWN",
+            "COHORT_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "kakao-ventures",
+      "channel": "kakao-investment",
+      "checked_at": "2026-09-15T02:44:08.633412+09:00",
+      "discovered": 1,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 0,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "카카오벤처스",
+      "url": "https://www.kakao.vc/contact",
+      "method": "PAGE",
+      "parsed_count": 1,
+      "records": [
+        {
+          "title": "카카오벤처스 투자 검토 · 사업계획서 접수",
+          "official_url": "https://www.kakao.vc/contact",
+          "application_url": "https://docs.google.com/forms/d/e/1FAIpQLSc3kW9k8QWQeT_CAEHubaZbOgo231LyEhxeWlH21UalebHv3g/viewform",
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "DEADLINE_UNKNOWN",
+            "COHORT_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "lotte-ventures",
+      "channel": "lotte-recruitment",
+      "checked_at": "2026-09-15T02:57:49.796540+09:00",
+      "discovered": 5,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 5,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 0,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "롯데벤처스",
+      "url": "https://www.lotteventures.com/main",
+      "method": "BOARD",
+      "parsed_count": 5,
+      "records": [
+        {
+          "title": "2026 L-CAMP 14기 & L-CAMP : 미래식단 6기 참여기업 모집!",
+          "official_url": "https://www.lotteventures.com/news/news?tpf=board/view&board_code=8&code=579",
+          "application_url": null,
+          "application_start_at": "2026-02-23T00:00:00+09:00",
+          "application_end_at": "2026-03-31T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        },
+        {
+          "title": "'롯데벤처스 2025 L-CAMP JAPAN 3기' 모집 (~9/14)",
+          "official_url": "https://www.lotteventures.com/news/news?tpf=board/view&board_code=8&code=577",
+          "application_url": "https://bit.ly/4mvyEzZ",
+          "application_start_at": "2025-08-22T00:00:00+09:00",
+          "application_end_at": "2025-09-14T23:00:00+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": []
+        },
+        {
+          "title": "2025 L-CAMP Silicon Valley 4기 모집(~3/16)",
+          "official_url": "https://www.lotteventures.com/news/news?tpf=board/view&board_code=8&code=573",
+          "application_url": "https://docs.google.com/forms/d/11i5d7Dh4E2haj8l1L1WehxPdViwrj_5G5IEKbufO_6I/viewform?edit_requested=true",
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "DEADLINE_UNKNOWN"
+          ]
+        },
+        {
+          "title": "2025 L-CAMP 13기 & 부산 7기 참여기업 모집!",
+          "official_url": "https://www.lotteventures.com/news/news?tpf=board/view&board_code=8&code=572",
+          "application_url": "https://forms.gle/4VSEq2pMn2x8wWXp7",
+          "application_start_at": "2025-02-14T00:00:00+09:00",
+          "application_end_at": "2025-03-17T00:00:00+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": []
+        },
+        {
+          "title": "2025 미래식:단 5기 참여기업 모집!",
+          "official_url": "https://www.lotteventures.com/news/news?tpf=board/view&board_code=8&code=571",
+          "application_url": "https://forms.gle/x4c5Z1iEifCjvfSR9",
+          "application_start_at": "2025-02-14T00:00:00+09:00",
+          "application_end_at": "2025-03-17T00:00:00+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": []
+        }
+      ]
+    },
+    {
+      "institution": "orangeplanet",
+      "channel": "orange-farm",
+      "checked_at": "2026-09-15T02:44:13.568564+09:00",
+      "discovered": 1,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 0,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "오렌지플래닛 창업재단",
+      "url": "https://www.orangeplanet.or.kr/program/step",
+      "method": "PAGE",
+      "parsed_count": 1,
+      "records": [
+        {
+          "title": "오렌지플래닛 오렌지팜 초기 스타트업 입주 모집",
+          "official_url": "https://www.orangeplanet.or.kr/program/step",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "ROLLING",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "sopoong",
+      "channel": "sopoong-investment",
+      "checked_at": "2026-09-15T02:50:34.571969+09:00",
+      "discovered": 1,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 1,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 0,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "소풍벤처스",
+      "url": "https://sopoong.net/?lang=ko-KR",
+      "method": "PAGE",
+      "parsed_count": 1,
+      "records": [
+        {
+          "title": "소풍벤처스 투자 검토 · 이메일 접수",
+          "official_url": "https://sopoong.net/?lang=ko-KR",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN",
+            "EMAIL_APPLICATION_ONLY",
+            "DEADLINE_UNKNOWN",
+            "COHORT_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "samsung-clab",
+      "channel": "samsung-clab-newsroom",
+      "checked_at": "2026-09-15T02:50:35.262511+09:00",
+      "discovered": 2,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 2,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 7,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "삼성 C-Lab Outside",
+      "url": "https://news.samsung.com/kr/tag/c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c",
+      "method": "BOARD",
+      "parsed_count": 2,
+      "records": [
+        {
+          "title": "삼성전자, ‘C랩 아웃사이드’ 9기 스타트업 모집",
+          "official_url": "https://news.samsung.com/kr/%ec%82%bc%ec%84%b1%ec%a0%84%ec%9e%90-c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c-9%ea%b8%b0-%ec%8a%a4%ed%83%80%ed%8a%b8%ec%97%85-%eb%aa%a8%ec%a7%91",
+          "application_url": "https://www.samsungclab.com/apply2027",
+          "application_start_at": "2026-06-15T00:00:00+09:00",
+          "application_end_at": "2026-06-26T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": []
+        },
+        {
+          "title": "삼성전자, 8기 C랩 아웃사이드 스타트업 모집",
+          "official_url": "https://news.samsung.com/kr/%ec%82%bc%ec%84%b1%ec%a0%84%ec%9e%90-8%ea%b8%b0-c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c-%ec%8a%a4%ed%83%80%ed%8a%b8%ec%97%85-%eb%aa%a8%ec%a7%91",
+          "application_url": "https://www.samsungclab.com/apply2026",
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "DEADLINE_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "startupall",
+      "channel": "koef-recruitment",
+      "checked_at": "2026-09-15T02:50:38.345059+09:00",
+      "discovered": 3,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 3,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 7,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "한국청년기업가정신재단·창업유망팀300",
+      "url": "https://www.koef.or.kr/board/notice_list.php",
+      "method": "BOARD",
+      "parsed_count": 3,
+      "records": [
+        {
+          "title": "[모집] 2026년 한국지역난방공사 상생형 창업·벤처기업 지원사업 참여기업 모집",
+          "official_url": "https://www.koef.or.kr/board/notice_view.php?ARTICLE_SEQ=5494&page=1&SEARCH_COND=&SEARCH_WORD=&CATEGORY_SEQ=",
+          "application_url": null,
+          "application_start_at": "2026-08-19T00:00:00+09:00",
+          "application_end_at": "2026-08-28T23:00:00+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        },
+        {
+          "title": "[모집] AI시대 청소년 기업가정신 부트캠프 개최 안내",
+          "official_url": "https://www.koef.or.kr/board/notice_view.php?ARTICLE_SEQ=5491&page=1&SEARCH_COND=&SEARCH_WORD=&CATEGORY_SEQ=",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN",
+            "DEADLINE_UNKNOWN"
+          ]
+        },
+        {
+          "title": "[모집] 바이브코딩 활용「2026 기업가정신 챌린지」참가자 모집(~9/1)",
+          "official_url": "https://www.koef.or.kr/board/notice_view.php?ARTICLE_SEQ=5492&page=1&SEARCH_COND=&SEARCH_WORD=&CATEGORY_SEQ=",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": null,
+          "deadline_type": "UNKNOWN",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "APPLICATION_LINK_UNKNOWN",
+            "DEADLINE_UNKNOWN"
+          ]
+        }
+      ]
+    },
+    {
+      "institution": "ccei-gyeonggi",
+      "channel": "gyeonggi-unicornbridge",
+      "checked_at": "2026-09-15T02:57:24.417741+09:00",
+      "discovered": 2,
+      "sample_status": "SUCCESS",
+      "failures": [],
+      "coverage": {
+        "scope": "CONFIGURED_CHANNEL",
+        "pages_requested": 1,
+        "page_cap": 1,
+        "fetched_unique_records": 2,
+        "pagination_complete": true,
+        "active_detail_rechecks": 0,
+        "non_recruitment_excluded": 0,
+        "scope_note": "Configured listing pages and capped active-detail watchlist only; not institution-wide coverage"
+      },
+      "institution_name": "경기창조경제혁신센터",
+      "url": "https://www.unicornbridge.kr/",
+      "method": "BOARD",
+      "parsed_count": 2,
+      "records": [
+        {
+          "title": "2026 유니콘 브릿지 with 아이티센",
+          "official_url": "https://unicornbridge.kr/itcen26/",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": "2026-05-22T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "PARTICIPATION_UNKNOWN",
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        },
+        {
+          "title": "2026 오픈이노베이션 5기",
+          "official_url": "https://unicornbridge.kr/innox5/",
+          "application_url": null,
+          "application_start_at": null,
+          "application_end_at": "2026-03-31T23:59:59+09:00",
+          "deadline_type": "FIXED_DATE",
+          "recruitment_confirmed": true,
+          "review_reasons": [
+            "PARTICIPATION_UNKNOWN",
+            "APPLICATION_LINK_UNKNOWN"
+          ]
+        }
+      ]
+    }
+  ]
+}
