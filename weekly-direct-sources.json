@@ -229,7 +229,7 @@
     "slug": "weekly-samsung-clab-newsroom",
     "name": "삼성전자 공식 뉴스룸 · C랩 모집",
     "adapter": "HTML",
-    "enabled": true,
+    "enabled": false,
     "config": {
       "method": "BOARD",
       "url": "https://news.samsung.com/kr/tag/c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c",
@@ -248,6 +248,33 @@
       "organization_type": "CORPORATE",
       "allowed_hosts": [
         "news.samsung.com"
+      ],
+      "policy_status": "DEFERRED",
+      "weekly_direct": true,
+      "validated_at": "2026-09-15",
+      "deferred_reason": "GitHub production ROBOTS_FETCH_TIMEOUT on 2026-09-15; local sample passed, robots check not bypassed"
+    }
+  },
+  {
+    "slug": "weekly-asan-notices",
+    "name": "아산나눔재단·MARU 공식 모집 공지",
+    "adapter": "HTML",
+    "enabled": true,
+    "config": {
+      "method": "BOARD",
+      "url": "https://asan-nanum.org/news/notice/",
+      "max_pages": 1,
+      "max_records": 20,
+      "single_page_scope": true,
+      "link_selector": "a[href*=\"asan-nanum.org/notice/\"]",
+      "detail_selector": "article.content",
+      "title_selector": "article.title h3",
+      "require_detail_title": true,
+      "required_title_pattern": "(?=.*(?:모집|참가\\s*신청|마루투어))(?=.*(?:MARU|마루|스타트업|창업|정주영))",
+      "organization": "아산나눔재단",
+      "organization_type": "FOUNDATION",
+      "allowed_hosts": [
+        "asan-nanum.org"
       ],
       "policy_status": "APPROVED",
       "weekly_direct": true,

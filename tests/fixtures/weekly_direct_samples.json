@@ -166,34 +166,23 @@
     }
   },
   {
-    "slug": "weekly-samsung-clab-newsroom",
+    "slug": "weekly-asan-notices",
     "candidate": {
-      "source": "weekly-samsung-clab-newsroom",
-      "source_program_id": "ac7b15ca582a7eb6c41ced10c562470918522728fde366a14ee88d5429a57c2c",
-      "discovery_url": "https://news.samsung.com/kr/tag/c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c",
-      "official_detail_url": "https://news.samsung.com/kr/%ec%82%bc%ec%84%b1%ec%a0%84%ec%9e%90-c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c-9%ea%b8%b0-%ec%8a%a4%ed%83%80%ed%8a%b8%ec%97%85-%eb%aa%a8%ec%a7%91",
-      "title": "삼성전자, ‘C랩 아웃사이드’ 9기 스타트업 모집",
+      "source": "weekly-asan-notices",
+      "source_program_id": "b306b204bfd830e7c8ac44a2bb20eac611f915281214535dd6709e94bcc70f69",
+      "discovery_url": "https://asan-nanum.org/news/notice/",
+      "official_detail_url": "https://asan-nanum.org/notice/2026-anf-maru-open-h2/",
+      "title": "[모집] 2026 하반기 MARU 배치 스타트업 모집 (~8.28. 오후 1시)",
       "raw_metadata": {},
-      "discovered_at": "2026-09-15T16:02:07.324811+09:00"
+      "discovered_at": "2026-09-15T16:41:44.461161+09:00"
     },
     "detail": {
-      "url": "https://news.samsung.com/kr/%ec%82%bc%ec%84%b1%ec%a0%84%ec%9e%90-c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c-9%ea%b8%b0-%ec%8a%a4%ed%83%80%ed%8a%b8%ec%97%85-%eb%aa%a8%ec%a7%91",
-      "text": "삼성전자가 성장 가능성과 차별화된 역량을 갖춘 스타트업을 발굴하기 위해 ‘C랩 아웃사이드(C-Lab Outside)’ 9기를 공개 모집한다.\n접수 기간은 6월 15일부터 26일까지이며, ▲AI ▲디지털헬스 ▲콘텐츠&서비스 ▲로봇 ▲소재∙부품 ▲IoT ▲모빌리티 ▲ESG 등 총 8개 분야에서 30개사를 선발한다.\nC랩 아웃사이드 9기 모집은 서울, 대구, 경북, 광주 4개 지역에서 동시에 진행되며, 국내에 법인이 등록돼 있고 투자 단계가 시리즈 B 이하인 스타트업이 지원할 수 있다.\n참가를 원하는 기업은 ‘삼성전자 C랩 홈페이지'(",
-      "title": "삼성전자, ‘C랩 아웃사이드’ 9기 스타트업 모집",
+      "url": "https://asan-nanum.org/notice/2026-anf-maru-open-h2/",
+      "text": "2026 하반기 MARU 배치 스타트업 모집\n아산나눔재단이 운영하는 기업가정신 플랫폼 ‘MARU’는 스타트업의 성장을 지원하는 인큐베이터로 창업에 필요한 공간 인프라, 네트워크, 교육 등을 폭넓게 지원합니다.\n이번 2026 하반기 배치 스타트업은 최대 1년 6개월간 창업 허브인 ‘MARU180’과 ‘MARU360’에 입주하며, 사무공간 뿐만 아니라 성장과 커뮤니티에 대한 다양한 지원 혜택을 제공받습니다.\n창업생태계 중심 MARU에서 마음껏 도전하고 성장하며 페이잇포워드를 실천할 스타트업의 많은 지원 바랍니다.\n● 모집 일정\n– 지원 기간: 8.4(화) ~ 8.28(금) 13:00\n– 서류 결과: 9.10.(목)\n– 온라인 면접: 9.17.(목)\n– 대면 면접: 9.30.(수)\n– 결과 발표: 10.2.(금)\n– 입주 시기: 11.2.(월) ~\n● 지원 자격\n– MARU 공간, 성장 프로그램, 커뮤니티를 적극적으로 활용하여 성장할 수 있는 국내 스타트업\n",
+      "title": "[모집] 2026 하반기 MARU 배치 스타트업 모집 (~8.28. 오후 1시)",
       "document_urls": [],
       "raw_metadata": {
-        "official_application_links": [
-          {
-            "url": "https://www.samsungclab.com/apply2027",
-            "text": "https://www.samsungclab.com/apply2027",
-            "linked_from": "https://news.samsung.com/kr/%ec%82%bc%ec%84%b1%ec%a0%84%ec%9e%90-c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c-9%ea%b8%b0-%ec%8a%a4%ed%83%80%ed%8a%b8%ec%97%85-%eb%aa%a8%ec%a7%91"
-          }
-        ],
-        "period_year_context": {
-          "year": 2026,
-          "text": "2026/06/15",
-          "url": "https://news.samsung.com/kr/%ec%82%bc%ec%84%b1%ec%a0%84%ec%9e%90-c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c-9%ea%b8%b0-%ec%8a%a4%ed%83%80%ed%8a%b8%ec%97%85-%eb%aa%a8%ec%a7%91"
-        }
+        "official_application_links": []
       },
       "evidence_warning": null
     }

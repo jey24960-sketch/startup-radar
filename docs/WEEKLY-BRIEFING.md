@@ -105,7 +105,7 @@ Adapters/date parsing are selectively reused from draft PR #9; the draft itself 
 | OrangePlanet OrangeFarm | Only the OrangeFarm section of the official program page | Explicit year-round recruitment, not other tracks |
 | Antler Korea | Only the official paragraph explicitly accepting individual residency applications year-round | Explicit rolling application; no invented deadline or guaranteed investment |
 | Lotte Ventures | Homepage recruitment news links, up to 30 | 3 readable notices; prior cohorts closed or held for unknown timing |
-| Samsung C-Lab Outside | Official Samsung Newsroom C-Lab Outside tag, first page, recruitment titles only, up to 30 | 2 readable recruitment notices; dated ninth cohort closed, uncertain older timing held |
+| Asan Nanum Foundation / MARU | First official notice page, startup/MARU recruitment titles only, up to 20 | 3 readable notices; August 28 13:00 batch deadline closed, two uncertain items held |
 
 This is 8 additional channels, not 8 currently open programs. A healthy source can yield zero current
 opportunities. Listing scope is one page or one fixed section, not the entire institution or archive.
@@ -143,11 +143,14 @@ python -m radar.cli weekly --check-sources
 ```
 
 The sample validator has no database writes or announcements. The seed command changes only the named
-source settings (eight active and Korea Sejong explicitly deferred). Normal weekly scheduling and
+source settings (eight active; Korea Sejong and Samsung Newsroom explicitly deferred). Normal weekly scheduling and
 K-Startup/BizInfo settings are unchanged.
 
 Deferred: Korea University Sejong (local HTML sample succeeded, but GitHub production returned
-LIST_PARSE; disabled without a scraping/access workaround). Other candidates remain deferred based
+LIST_PARSE; disabled without a scraping/access workaround); Samsung Newsroom (local sample passed,
+but GitHub production robots fetch timed out, so no robots bypass or repeated retries); SNU (public
+recruitment pages exist, but published terms restrict reuse without consent).
+Other candidates remain deferred based
 on PR #9 evidence: Hanyang (public-board adapter/image variability), Bluepoint (browser-only route),
 Primer (upcoming cohorts), SparkLabs (introduction/newsletter), FuturePlay/Sopoong/Kakao Ventures
 (uncertain current acceptance), restricted CCEI

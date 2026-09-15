@@ -49,9 +49,9 @@ def test_one_real_official_sample_per_channel(sample):
         assert program.application_end_at==datetime(2026,11,30,23,59,59,tzinfo=SEOUL)
     if source['slug']=='weekly-lotte-recruitment':
         assert reason=='CLOSED'
-    if source['slug']=='weekly-samsung-clab-newsroom':
+    if source['slug']=='weekly-asan-notices':
         assert reason=='CLOSED'
-        assert program.application_end_at==datetime(2026,6,26,23,59,59,tzinfo=SEOUL)
+        assert program.application_end_at==datetime(2026,8,28,13,tzinfo=SEOUL)
 
 
 def test_direct_config_is_explicit_bounded_html_and_kept_separate_from_api_scope():
@@ -64,6 +64,7 @@ def test_direct_config_is_explicit_bounded_html_and_kept_separate_from_api_scope
     assert collection_completed([capped_source(),capped_source()]+[success]*8)
     assert not collection_completed([capped_source(),capped_source(),{'status':'FAILED'}])
     assert next(s for s in REGISTRY if s['slug']=='weekly-korea-opportunity-board')['enabled'] is False
+    assert next(s for s in REGISTRY if s['slug']=='weekly-samsung-clab-newsroom')['enabled'] is False
 
 
 def test_yonsei_scope_does_not_misattribute_external_cross_posts():
