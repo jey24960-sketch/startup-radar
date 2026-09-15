@@ -1,7 +1,7 @@
 # GFC Weekly Briefing
 
 This supersedes the production-hardening completion priorities on 2026-09-14.
-Normal production is official APIs -> one weekly publication -> one Telegram announcement.
+Normal production is official APIs + approved direct official channels -> one weekly publication -> one Telegram announcement.
 Personalization, OCR, archives of original binaries and scale benchmarks are deferred, not deleted.
 
 ## Schedule and Operations
@@ -28,6 +28,7 @@ A published week is stable: ordinary reruns return its existing ID and do not re
 An explicit `--check-sources` (manual workflow input `check_sources`) rechecks and persists official
 source observations without modifying an already published issue, its first publication time or audit.
 It reports the current check's status separately from `published_collection_status`.
+Source checks never send Telegram, even when `--deliver` is also supplied.
 Only an explicit `--revision-note` revises the current issue. Prior item snapshots and version links
 remain in `admin_audit`, the briefing ID/first publication time remain stable, and announcement uniqueness
 does not reset. This is for verified corrections, never a blanket scheduled retry.
@@ -46,8 +47,8 @@ Items retain a version FK and immutable editorial snapshot. Snapshot comparison 
 URLs when advertised, not unverified content hashes. An unchanged URL with silently replaced bytes cannot be
 detected without fetching the binary; full attachment processing is deferred.
 
-Weekly acquisition uses existing official API discovery/pagination/normalization, not portal scraping,
-AI, OCR, eligibility, ranking or team refresh. Program facts can be incomplete without blocking a post.
+Weekly acquisition uses existing official API discovery/pagination/normalization and approved bounded
+official HTML channels. It does not use AI, OCR, eligibility, ranking or team refresh. Program facts can be incomplete without blocking a post.
 Unknown fields remain unknown; the Korean member view asks readers to check the official notice.
 API-only new versions do not certify eligibility and do not delete older evidence/versions.
 
@@ -79,8 +80,8 @@ and [BizInfo](https://www.bizinfo.go.kr/apiDetail.do?id=bizinfoApi), checked 202
 
 Operational success is distinct from full source coverage: a `PAGE_LIMIT` alone is acceptable only
 for this explicit one-page window after all obtained unique records have been fetched and persisted,
-with no rejected identities, failed records, stalled pagination or other errors. Both sources must
-meet that contract for a green execution. Raw source/ingestion `PARTIAL_SUCCESS`, advertised counts,
+with no rejected identities, failed records, stalled pagination or other errors. Both backbone sources
+and every active direct channel must meet their declared window for a green execution. Raw source/ingestion `PARTIAL_SUCCESS`, advertised counts,
 `pagination_complete=false` and `coverage_warning=BOUNDED_WEEKLY_SCOPE` remain visible in the run.
 Weekly query completion never advances the source's full-scan timestamp; an API-advertised count
 is labeled `BOUNDED_WEEKLY_QUERY`, not a nationwide or historical denominator.
@@ -88,6 +89,68 @@ Authentication, HTTP, network, JSON/schema and persistence failures never receiv
 Historical published one-page samples (including the initial 20-row window) may be recognized on
 ordinary no-write reruns using the same strict persisted evidence, with
 `coverage_warning=PUBLISHED_BOUNDED_COLLECTION`; their stored status and content remain unchanged.
+
+## Direct Official Channels
+
+The reviewed registry is `weekly-direct-sources.json`. These eight channels run only as part of the
+existing weekly execution. No institution tables, browser dependencies or new member routes were added.
+Adapters/date parsing are selectively reused from draft PR #9; the draft itself is not merged.
+
+| Channel | Exact weekly window | Representative validation on 2026-09-15 |
+| --- | --- | --- |
+| Yonsei startup support | First internal notice page, up to 30 recruitment/application/conference links | 3 readable notices; explicit 2026 corporation/address-support period parsed |
+| Korea University Sejong | Homepage program board links, up to 30 matching recruitment/participation notices | 3 readable notices; September 11 deadline correctly closed |
+| POSTECH startup team | First AIF notice page, only startup-team titles, up to 30 | 3 readable notices; unknown dates held, September 1 deadline closed |
+| Gyeonggi CCEI UnicornBridge | Visible desktop homepage program links only, up to 10; hidden archives excluded | 2 readable recruitment pages, both correctly closed |
+| KOEF | First official notice page, matching recruitment titles, up to 30 | 3 readable notices; unknown/image timing held, August 28 deadline closed |
+| OrangePlanet OrangeFarm | Only the OrangeFarm section of the official program page | Explicit year-round recruitment, not other tracks |
+| Antler Korea | Only the official paragraph explicitly accepting individual residency applications year-round | Explicit rolling application; no invented deadline or guaranteed investment |
+| Lotte Ventures | Homepage recruitment news links, up to 30 | 3 readable notices; prior cohorts closed or held for unknown timing |
+
+This is 8 additional channels, not 8 currently open programs. A healthy source can yield zero current
+opportunities. Listing scope is one page or one fixed section, not the entire institution or archive.
+The configured record cap is a declared scope boundary; `record_cap_reached` retains the limitation.
+HTTP/robots/redirect/host checks remain mandatory. Maximum HTML size is 3 MB; details are bounded
+to 120,000 characters, with one-second spacing and a 60-request/240-second per-channel budget.
+No login, CAPTCHA handling, private APIs or access-restriction workaround is used.
+Gyeonggi's separate official program site is corroborated by the
+[Gyeonggi government announcement](https://gnews.gg.go.kr/briefing/brief_gongbo_view.do?BS_CODE=s017&number=69742).
+
+Direct records use the same `programs`, `program_versions`, `program_sources` and source snapshots.
+Automatic inclusion requires explicit current recruitment with a reliable application period or
+explicit rolling acceptance. An event date is not a deadline; a year is never inferred from today's
+clock. Short dates inherit only the notice's explicit year or an explicitly dated range.
+Closed/upcoming/cancelled/result notices are excluded; uncertain timing or competing application
+links go to a small operator review bucket in `source_run_results.coverage.decisions`, with raw evidence
+retained in source snapshots. Missing eligibility/support/application-link information does not alone
+block a dated recruitment. Member-facing missing values remain "공식 공고 확인 필요".
+
+Canonical notice IDs ignore reviewed pagination/search query keys. Cross-source matching retains the
+existing publisher-ID/canonical-URL checks and adds exact organization + title + full application-period
+agreement when at least one source is a reviewed direct channel. Conflicting publisher IDs are never
+overridden, multiple exact candidates are held, and fuzzy candidates are not automatically merged.
+
+Per-source diagnostics retain name, last attempt/success, status, discovered/persisted/accepted/review/
+excluded counts and failure reasons. A direct-source failure remains visible as an honest partial
+execution; useful records from other sources may still publish. All-source failure never publishes.
+
+Operator activation and bounded read-only revalidation:
+
+```text
+python tools/check_weekly_direct.py --sample 3
+python -m radar.cli seed-sources --file weekly-direct-sources.json
+python -m radar.cli weekly --check-sources
+```
+
+The sample validator has no database writes or announcements. The seed command changes only the eight
+named sources. Normal weekly scheduling and K-Startup/BizInfo settings are unchanged.
+
+Deferred: Hanyang (public-board adapter/image variability), Bluepoint (browser-only route),
+Primer (upcoming cohorts), SparkLabs (introduction/newsletter), FuturePlay/Sopoong/Kakao Ventures
+(uncertain current acceptance), Samsung C-Lab (historical recruitment samples), restricted CCEI
+common boards/U300/dcamp and other difficult channels. These are not enabled by this registry.
+Draft StartupRadar PR #9 and GFC PR #11 remain unmerged; daily discovery, institution UI and
+`/opportunities` are outside the weekly product.
 
 `gfc_radar_weekly_briefings` and `gfc_radar_weekly_briefing` are SECURITY INVOKER RPCs.
 RLS and existing `public.my_role()` require verified GFC member/admin status. A team/profile is unnecessary.

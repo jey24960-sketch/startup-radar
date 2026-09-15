@@ -13,10 +13,10 @@ from radar.scheduler import run_job
 def main(argv=None):
     parser=argparse.ArgumentParser(description='StartupRadar V2 PostgreSQL operations')
     commands=parser.add_subparsers(dest='command',required=True)
-    weekly=commands.add_parser('weekly',help='Collect official APIs and publish one Seoul-week briefing; no AI, OCR or team calculation')
+    weekly=commands.add_parser('weekly',help='Collect approved weekly official sources and publish one Seoul-week briefing; no AI, OCR or team calculation')
     weekly.add_argument('--draft',action='store_true',help='Regenerate unpublished draft only')
     weekly.add_argument('--deliver',action='store_true',help='Announce a published briefing to existing enabled subscribers only')
-    weekly.add_argument('--check-sources',action='store_true',help='Recheck the bounded official sources without rewriting an already published issue')
+    weekly.add_argument('--check-sources',action='store_true',help='Recheck bounded official sources without rewriting a published issue or sending Telegram')
     weekly.add_argument('--revision-note',help='Explicitly recollect and revise the current published issue, keeping its ID and prior-item audit; never duplicates announcements')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
     bootstrap=commands.add_parser('bootstrap-team');bootstrap.add_argument('--user-id',type=UUID,required=True)

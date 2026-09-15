@@ -14,6 +14,9 @@ ADAPTERS={'KSTARTUP':KStartupApiAdapter,'BIZINFO':BizInfoApiAdapter,'RSS':RssAda
 
 
 def build_adapter(source):
+    if source['config'].get('weekly_direct') is True:
+        from radar.adapters.weekly_direct import OfficialChannelAdapter
+        return OfficialChannelAdapter(source,SafeHttp(source['config'].get('allowed_hosts',[]),max_bytes=3_000_000))
     return ADAPTERS[source['adapter']](source,SafeHttp(source['config'].get('allowed_hosts',[])))
 
 
@@ -22,9 +25,11 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
     with db.transaction() as c:
         run=c.execute("insert into startup_radar.ingestion_runs(status,trigger_type) values('RUNNING',%s) returning id",(trigger,)).fetchone()['id']
         if sources is None:sources=c.execute('select * from startup_radar.sources where enabled=true order by slug').fetchall()
-    outcomes=[];weekly_programs=[];new_programs=updated_programs=cache_hits=0
+    outcomes=[];weekly_programs=[];excluded_program_ids=set();new_programs=updated_programs=cache_hits=0
     for source in sources:
         started=time.monotonic();discovered=fetched=parsed=0;failures=[];adapter=None
+        direct=structured_only and source['config'].get('weekly_direct') is True
+        decisions=[];accepted=0
         with db.transaction() as c:c.execute('update startup_radar.sources set last_attempted_at=now() where id=%s',(source['id'],))
         try:
             adapter=adapter_factory(source)
@@ -33,8 +38,11 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                 try:
                     if structured_only:
                         from radar.weekly import weekly_detail
-                        if source['adapter'] not in ('KSTARTUP','BIZINFO'):raise ValueError('Weekly collection accepts official APIs only')
-                        detail=weekly_detail(candidate);documents=[]
+                        if direct:
+                            detail=adapter.fetch_detail(candidate);documents=[]
+                        else:
+                            if source['adapter'] not in ('KSTARTUP','BIZINFO'):raise ValueError('Unapproved weekly source')
+                            detail=weekly_detail(candidate);documents=[]
                     else:
                         detail=adapter.fetch_detail(candidate)
                         documents=adapter.fetch_documents(detail)
@@ -46,6 +54,12 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                     program=adapter.normalize(candidate,detail,documents)
                     extraction_metadata={'provider':'structured_api_weekly' if structured_only else 'anthropic' if isinstance(extractor,RequirementExtractor) else 'injected',
                         'model':getattr(extractor,'model',None),'schema_version':getattr(extractor,'version',None),'status':'SUCCESS'}
+                    decision='ACCEPTED'
+                    if direct:
+                        from radar.opportunity_facts import weekly_decision
+                        decision,reason=weekly_decision(program,candidate.raw_metadata['weekly_direct_facts'])
+                        extraction_metadata.update(provider='official_html_weekly',weekly_decision=decision,weekly_reason=reason)
+                        candidate.raw_metadata['weekly_decision']=decision
                     try:
                         if detail.evidence_warning:
                             extraction_metadata.update(provider='structured_api',model=None)
@@ -66,8 +80,16 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                     cache_hits+=bool(extraction_metadata.get('cache_hit'))
                     parsed+=1
                     if structured_only:
+                        if saved.get('duplicate_conflict'):
+                            decision,reason='REVIEW','DUPLICATE_IDENTITY_CONFLICT'
+                        if direct:
+                            decisions.append({'program_id':str(saved['program_id']),'title':program.title,
+                                'url':program.official_url,'decision':decision,'reason':reason})
+                            if reason in ('CLOSED','NOT_RECRUITMENT'):excluded_program_ids.add(str(saved['program_id']))
+                        if decision!='ACCEPTED':continue
                         from radar.weekly import snapshot
                         from radar.dates import program_status
+                        accepted+=1
                         weekly_programs.append({**saved,'snapshot':snapshot(program,candidate.raw_metadata),'status':program_status(program)})
                 except SourceFailure as error:failures.append(error.record(url=candidate.official_detail_url))
                 except Exception as error:failures.append(SourceFailure('NORMALIZE_OR_PERSIST',type(error).__name__).record(url=candidate.official_detail_url))
@@ -76,7 +98,11 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
         state=('PARTIAL' if parsed else 'FAILED') if failures else 'SUCCESS'
         coverage=adapter.pagination.report() if getattr(adapter,'pagination',None) else {'scope':'CONFIGURED_LIST','pagination_complete':not any(f.get('stage') not in ('DOCUMENT','EXTRACTION') for f in failures)}
         coverage.update(persisted_records=parsed,failed_records=discovered-parsed)
-        outcome=dict(source_id=str(source['id']),status=state,discovered=discovered,fetched=fetched,parsed=parsed,failures=failures,coverage=coverage)
+        if direct:
+            coverage.update(accepted_records=accepted,review_records=sum(r['decision']=='REVIEW' for r in decisions),
+                excluded_records=sum(r['decision']=='EXCLUDED' for r in decisions),decisions=decisions)
+        outcome=dict(source_id=str(source['id']),source_name=source['name'],source_slug=source['slug'],adapter=source['adapter'],
+            status=state,discovered=discovered,fetched=fetched,parsed=parsed,failures=failures,coverage=coverage)
         with db.transaction() as c:
             c.execute('insert into startup_radar.source_run_results(run_id,source_id,status,discovered_count,fetched_count,parsed_count,failures,latency_ms,coverage) '
                       'values(%s,%s,%s,%s,%s,%s,%s,%s,%s)',(run,source['id'],state,discovered,fetched,parsed,Jsonb(failures),int((time.monotonic()-started)*1000),Jsonb(coverage)))
@@ -93,4 +119,5 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
     with db.transaction() as c:
         c.execute('update startup_radar.ingestion_runs set status=%s,finished_at=now(),summary=%s where id=%s',
                   (status,Jsonb({'sources':outcomes,'new_programs':new_programs,'updated_programs':updated_programs,'analysis_cache_hits':cache_hits,'message':'No enabled sources' if not outcomes else None}),run))
+    weekly_programs=[p for p in weekly_programs if str(p['program_id']) not in excluded_program_ids]
     return {'id':str(run),'status':status,'sources':outcomes,**({'weekly_programs':weekly_programs} if structured_only else {})}

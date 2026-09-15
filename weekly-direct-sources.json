@@ -1,0 +1,227 @@
+[
+  {
+    "slug": "weekly-gyeonggi-unicornbridge",
+    "name": "경기창조경제혁신센터 유니콘브릿지",
+    "adapter": "HTML",
+    "enabled": true,
+    "config": {
+      "method": "BOARD",
+      "url": "https://www.unicornbridge.kr/",
+      "link_selector": "#portfolio .pc-block > .marquee-container:not([style*=\"display:none\"]) a[href*=\"unicornbridge.kr/\"]",
+      "detail_selector": "main",
+      "title_selector": ".key-vs h2",
+      "max_pages": 1,
+      "max_records": 10,
+      "single_page_scope": true,
+      "require_detail_title": true,
+      "organization": "경기창조경제혁신센터",
+      "organization_type": "PUBLIC_INSTITUTION",
+      "allowed_hosts": [
+        "www.unicornbridge.kr",
+        "unicornbridge.kr"
+      ],
+      "policy_status": "APPROVED",
+      "weekly_direct": true,
+      "validated_at": "2026-09-15"
+    }
+  },
+  {
+    "slug": "weekly-postech-aif-notices",
+    "name": "POSTECH 산학협력단 · 창업지원팀 공지",
+    "adapter": "HTML",
+    "enabled": true,
+    "config": {
+      "max_pages": 1,
+      "max_records": 30,
+      "single_page_scope": true,
+      "method": "BOARD",
+      "url": "https://aif.postech.ac.kr/kor/support/notice.do",
+      "link_selector": ".b-title-box a[href*=\"mode=view\"]",
+      "detail_selector": ".b-content-box",
+      "title_selector": ".b-title",
+      "required_title_pattern": "창업지원팀",
+      "application_link_selector": "a[href*=\"forms.gle/\"]",
+      "submission_path_prefix": "/kor/support/notice.do",
+      "organization": "POSTECH 창업지원팀",
+      "organization_type": "UNIVERSITY",
+      "allowed_hosts": [
+        "aif.postech.ac.kr"
+      ],
+      "policy_status": "APPROVED",
+      "weekly_direct": true,
+      "identity_query_keys": [
+        "mode",
+        "articleNo"
+      ],
+      "validated_at": "2026-09-15"
+    }
+  },
+  {
+    "slug": "weekly-yonsei-notices",
+    "name": "연세대 내부 모집 공지",
+    "adapter": "HTML",
+    "enabled": true,
+    "config": {
+      "max_pages": 1,
+      "max_records": 30,
+      "single_page_scope": true,
+      "method": "BOARD",
+      "url": "https://venture.yonsei.ac.kr/community/notice",
+      "link_selector": "a[href*=\"/community/notice/\"]",
+      "detail_selector": ".covi-post-view__contents",
+      "title_selector": ".covi-post-view__header-title",
+      "required_title_pattern": "모집|신청|컨퍼런스",
+      "application_link_selector": "a[href*=\"forms.gle/\"]",
+      "submission_path_prefix": "/community/notice/",
+      "organization": "연세대학교 창업지원단",
+      "organization_type": "UNIVERSITY",
+      "allowed_hosts": [
+        "venture.yonsei.ac.kr"
+      ],
+      "policy_status": "APPROVED",
+      "weekly_direct": true,
+      "validated_at": "2026-09-15"
+    }
+  },
+  {
+    "slug": "weekly-korea-opportunity-board",
+    "name": "고려대 세종 프로그램 모집",
+    "adapter": "HTML",
+    "enabled": true,
+    "config": {
+      "max_pages": 1,
+      "max_records": 30,
+      "single_page_scope": true,
+      "method": "BOARD",
+      "url": "https://startup.korea.ac.kr/",
+      "link_selector": "a[href*=\"startup.korea.ac.kr/?kboard_content_redirect=\"]",
+      "detail_selector": ".kboard-content",
+      "title_selector": ".kboard-title h1",
+      "required_title_pattern": "모집|참여|참가|경진대회",
+      "submission_path_prefix": "/program/",
+      "organization": "고려대학교 세종 창업교육센터",
+      "organization_type": "UNIVERSITY",
+      "allowed_hosts": [
+        "startup.korea.ac.kr"
+      ],
+      "policy_status": "APPROVED",
+      "weekly_direct": true,
+      "identity_query_keys": [
+        "mod",
+        "uid"
+      ],
+      "validated_at": "2026-09-15"
+    }
+  },
+  {
+    "slug": "weekly-antler-residency",
+    "name": "앤틀러코리아 개인 레지던시 상시 접수",
+    "adapter": "HTML",
+    "enabled": true,
+    "config": {
+      "method": "PAGE",
+      "url": "https://www.antler.co/location/korea",
+      "max_pages": 1,
+      "max_records": 20,
+      "single_page_scope": true,
+      "detail_selector": "p:-soup-contains(\"Applications for the Antler residency are accepted year-round\")",
+      "title_selector": "[data-radar-title-not-present]",
+      "title": "Antler Korea founder residency",
+      "organization": "앤틀러코리아",
+      "organization_type": "VC",
+      "allowed_hosts": [
+        "www.antler.co"
+      ],
+      "policy_status": "APPROVED",
+      "weekly_direct": true,
+      "validated_at": "2026-09-15"
+    }
+  },
+  {
+    "slug": "weekly-lotte-recruitment",
+    "name": "롯데벤처스 L-CAMP · 해외 진출 모집",
+    "adapter": "HTML",
+    "enabled": true,
+    "config": {
+      "max_pages": 1,
+      "max_records": 30,
+      "single_page_scope": true,
+      "method": "BOARD",
+      "url": "https://www.lotteventures.com/main",
+      "link_selector": "a[href*=\"/news/news?\"][href*=\"code=\"]",
+      "detail_selector": ".board-conts--fc",
+      "title_selector": "article.board-view--fc h1",
+      "required_title_pattern": "모집|참가.*신청",
+      "application_link_selector": "a[href*=\"forms.gle/\"], a[href*=\"docs.google.com/forms/\"]",
+      "submission_path_prefix": "/news/news",
+      "list_title_selector": ".gallery-title--fc",
+      "organization": "롯데벤처스",
+      "organization_type": "CVC",
+      "allowed_hosts": [
+        "www.lotteventures.com"
+      ],
+      "policy_status": "APPROVED",
+      "weekly_direct": true,
+      "identity_query_keys": [
+        "tpf",
+        "board_code",
+        "code"
+      ],
+      "validated_at": "2026-09-15"
+    }
+  },
+  {
+    "slug": "weekly-orange-farm",
+    "name": "오렌지플래닛 오렌지팜 상시 모집",
+    "adapter": "HTML",
+    "enabled": true,
+    "config": {
+      "max_pages": 1,
+      "max_records": 30,
+      "single_page_scope": true,
+      "method": "PAGE",
+      "url": "https://www.orangeplanet.or.kr/program/step",
+      "detail_selector": "#org-farm",
+      "title_selector": "[data-radar-title]",
+      "title": "오렌지플래닛 오렌지팜 초기 스타트업 입주 모집",
+      "organization": "오렌지플래닛 창업재단",
+      "organization_type": "FOUNDATION",
+      "allowed_hosts": [
+        "www.orangeplanet.or.kr"
+      ],
+      "policy_status": "APPROVED",
+      "weekly_direct": true,
+      "validated_at": "2026-09-15"
+    }
+  },
+  {
+    "slug": "weekly-koef-recruitment",
+    "name": "한국청년기업가정신재단 공식 모집 공지",
+    "adapter": "HTML",
+    "enabled": true,
+    "config": {
+      "method": "BOARD",
+      "url": "https://www.koef.or.kr/board/notice_list.php",
+      "link_selector": "a[href*=\"notice_view.php?ARTICLE_SEQ=\"]",
+      "detail_selector": "#CONTENT",
+      "title_selector": "[data-radar-title]",
+      "required_title_pattern": "^\\[모집\\]|학생.*창업.*모집",
+      "submission_path_prefix": "/board/notice_view.php",
+      "max_pages": 1,
+      "max_records": 30,
+      "single_page_scope": true,
+      "organization": "한국청년기업가정신재단",
+      "organization_type": "FOUNDATION",
+      "allowed_hosts": [
+        "www.koef.or.kr",
+        "koef.or.kr"
+      ],
+      "policy_status": "APPROVED",
+      "weekly_direct": true,
+      "identity_query_keys": [
+        "ARTICLE_SEQ"
+      ],
+      "validated_at": "2026-09-15"
+    }
+  }
+]

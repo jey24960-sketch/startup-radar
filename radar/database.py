@@ -81,12 +81,16 @@ class Database:
             # One transaction-scoped lock serializes canonical matching/versioning.
             # Ingestion stays concurrent outside this short database critical section.
             c.execute('select pg_advisory_xact_lock(782394201)')
-            existing=c.execute('select p.* from startup_radar.program_sources s join startup_radar.programs p on p.id=s.program_id '
+            existing=c.execute("select p.*,s.raw_metadata->'weekly_duplicate_conflict'='true'::jsonb as weekly_duplicate_conflict "
+                'from startup_radar.program_sources s join startup_radar.programs p on p.id=s.program_id '
                 'where s.source_id=%s and s.source_program_id=%s',
                 (source_id,source_program_id)).fetchone() if source_program_id is not None else c.execute(
-                'select p.* from startup_radar.program_sources s join startup_radar.programs p on p.id=s.program_id '
+                "select p.*,s.raw_metadata->'weekly_duplicate_conflict'='true'::jsonb as weekly_duplicate_conflict "
+                'from startup_radar.program_sources s join startup_radar.programs p on p.id=s.program_id '
                 'where s.source_id=%s and s.source_program_id is null and s.discovery_url=%s',
                 (source_id,discovery_url)).fetchone()
+            if existing and existing.get('weekly_duplicate_conflict'):
+                raw_metadata['weekly_duplicate_conflict']=True
             url_candidates=[]
             if not existing:
                 url_candidates=c.execute('select p.* from startup_radar.programs p where exists '
@@ -102,6 +106,28 @@ class Database:
                     if not conflict and same_notice:matches.append(candidate)
                 # A shared URL is only corroboration, never an override of publisher IDs.
                 if len(matches)==1:existing=matches[0]
+                elif len(matches)>1 and raw_metadata.get('weekly_direct_facts'):
+                    raw_metadata['weekly_duplicate_conflict']=True
+            if not existing and program.application_start_at and program.application_end_at:
+                # Direct cross-posts require exact organization/title AND the complete
+                # application period. Similar names never establish shared identity.
+                exact=c.execute('select p.* from startup_radar.programs p where '
+                    'p.application_start_at=%s and p.application_end_at=%s and '
+                    '(%s or exists(select 1 from startup_radar.program_sources ps '
+                    'join startup_radar.sources s on s.id=ps.source_id '
+                    "where ps.program_id=p.id and s.config->'weekly_direct'='true'::jsonb))",
+                    (program.application_start_at,program.application_end_at,
+                     bool(raw_metadata.get('weekly_direct_facts')))).fetchall()
+                matches=[]
+                for candidate in exact:
+                    if (normalize_text(candidate['title'])!=normalize_text(program.title)
+                        or normalize_text(candidate['organization'])!=normalize_text(program.organization)):continue
+                    conflict=c.execute('select 1 from startup_radar.program_sources where program_id=%s '
+                        'and source_id=%s and source_program_id is distinct from %s limit 1',
+                        (candidate['id'],source_id,source_program_id)).fetchone()
+                    if not conflict:matches.append(candidate)
+                if len(matches)==1:existing=matches[0]
+                elif len(matches)>1:raw_metadata['weekly_duplicate_conflict']=True
             candidates=[]
             if not existing:
                 # No fuzzy auto-merge. Keep possible relationships for human review.
@@ -127,7 +153,8 @@ class Database:
                 c.execute('update startup_radar.programs set status=%s,updated_at=now() where id=%s',(program_status(program),pid))
                 self._snapshot(c,pid,previous['id'],source_id,source_program_id,discovery_url,program.official_url,raw_metadata,raw_text,extraction_metadata,source_observed_at)
                 save_assessment(c,previous['id'],program,documents,extraction_metadata,raw_text)
-                return {'program_id':pid,'version_id':previous['id'],'event':None}
+                return {'program_id':pid,'version_id':previous['id'],'event':None,
+                    'duplicate_conflict':bool(raw_metadata.get('weekly_duplicate_conflict'))}
             version=c.execute('insert into startup_radar.program_versions(program_id,version,content_hash,normalized,raw_text,evidence_complete) '
                 'values(%s,%s,%s,%s,%s,%s) returning *',(pid,previous['version']+1 if previous else 1,fingerprint,Jsonb(normal),raw_text,program.evidence_complete)).fetchone()
             vid=version['id']
@@ -159,7 +186,8 @@ class Database:
                     c.execute('insert into startup_radar.possible_duplicates(program_id,candidate_program_id,confidence,reason) values(%s,%s,%s,%s) on conflict do nothing',
                               (pid,candidate['id'],confidence,'Shared URL or similar title/organization; publisher IDs and ambiguity require review'))
             save_assessment(c,vid,program,documents,extraction_metadata,raw_text)
-            return {'program_id':pid,'version_id':vid,'event':event if changed else None}
+            return {'program_id':pid,'version_id':vid,'event':event if changed else None,
+                'duplicate_conflict':bool(raw_metadata.get('weekly_duplicate_conflict'))}
 
     @staticmethod
     def _snapshot(c,pid,vid,source_id,source_program_id,discovery_url,detail_url,raw_metadata,raw_text,extraction_metadata,source_observed_at=_CURRENT_OBSERVATION):

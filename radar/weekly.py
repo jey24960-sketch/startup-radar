@@ -64,7 +64,7 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
     sources = collection.get('sources',[])
     useful = [s for s in sources if s['status']=='SUCCESS' or s.get('parsed',0)>0]
     complete = collection_completed(sources)
-    collection_status = 'SUCCESS' if len(sources)==2 and all(s['status']=='SUCCESS' for s in sources) else 'PARTIAL_SUCCESS'
+    collection_status = 'SUCCESS' if len(sources)>=2 and all(s['status']=='SUCCESS' for s in sources) else 'PARTIAL_SUCCESS'
     if not useful:return {'status':'FAILED','reason':'ALL_SOURCES_FAILED','published':False}
     with db.transaction() as c:
         c.execute('select pg_advisory_xact_lock(782394203)')
@@ -171,10 +171,12 @@ def run_weekly(db, transport=None, at=None, publish=True, collector=None, revisi
     try:
         with db.transaction() as c:
             existing=c.execute("select id,collection_status,ingestion_run_id from startup_radar.weekly_briefings where week_start=%s and status='PUBLISHED'",(start,)).fetchone()
-            sources=c.execute("select * from startup_radar.sources where enabled and adapter in ('KSTARTUP','BIZINFO') order by slug").fetchall()
+            sources=c.execute("select * from startup_radar.sources where enabled and "
+                "(adapter in ('KSTARTUP','BIZINFO') or config->'weekly_direct'='true'::jsonb) "
+                "order by case when adapter in ('KSTARTUP','BIZINFO') then 0 else 1 end,slug").fetchall()
             result=published_result(c,existing) if existing and not revision_note else None
         if result is None or check_sources:
-            if {s['adapter'] for s in sources}!={'KSTARTUP','BIZINFO'}:raise ValueError('Both official sources must be configured')
+            if not {'KSTARTUP','BIZINFO'}<={s['adapter'] for s in sources}:raise ValueError('Both official sources must be configured')
             collection=(collector or ingest)(db,weekly_sources(sources),trigger='weekly',structured_only=True)
             if result is None:result=build_briefing(db,collection,at,publish,revision_note)
             else:
@@ -188,7 +190,7 @@ def run_weekly(db, transport=None, at=None, publish=True, collector=None, revisi
             if collection_completed(collection['sources']) and collection['status']=='PARTIAL_SUCCESS':
                 result['coverage_warning']='BOUNDED_WEEKLY_SCOPE'
         if result.get('published') and result['status']!='FAILED':
-            result['announcement']=announce(db,result['briefing_id'],transport)
+            result['announcement']=announce(db,result['briefing_id'],None if check_sources else transport)
             states=result['announcement'].get('states',{})
             if states.get('SENDING') or states.get('UNCERTAIN'):result['status']='UNCERTAIN'
             elif states.get('FAILED') or states.get('PENDING'):result['status']='PARTIAL_SUCCESS'

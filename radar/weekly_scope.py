@@ -7,7 +7,8 @@ def weekly_sources(sources):
     return [{**source, 'config': {**source['config'],
         'scope': 'OPEN' if source['adapter']=='KSTARTUP' else 'API_DEFAULT',
         'page_size': 100, 'max_pages': 1, 'weekly_policy': POLICY}}
-        for source in sources]
+        if source['adapter'] in ('KSTARTUP','BIZINFO') else
+        {**source,'config':{**source['config']}} for source in sources]
 
 
 def source_completed(source, legacy=False):
@@ -37,4 +38,4 @@ def source_completed(source, legacy=False):
 
 
 def collection_completed(sources, legacy=False):
-    return len(sources)==2 and all(source_completed(s,legacy) for s in sources)
+    return len(sources)>=2 and all(source_completed(s,legacy) for s in sources)
