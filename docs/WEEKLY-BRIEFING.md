@@ -98,14 +98,14 @@ Adapters/date parsing are selectively reused from draft PR #9; the draft itself 
 
 | Channel | Exact weekly window | Representative validation on 2026-09-15 |
 | --- | --- | --- |
-| Yonsei startup support | First internal notice page, up to 30 recruitment/application/conference links | 3 readable notices; explicit 2026 corporation/address-support period parsed |
-| Korea University Sejong | Homepage program board links, up to 30 matching recruitment/participation notices | 3 readable notices; September 11 deadline correctly closed |
+| Yonsei startup support | First internal notice page, up to 30 matching Yonsei/CampusTown/student-startup/lab-startup/lecturing recruitment titles; external cross-posts excluded | 3 readable samples; explicit 2026 corporation/address-support period parsed |
 | POSTECH startup team | First AIF notice page, only startup-team titles, up to 30 | 3 readable notices; unknown dates held, September 1 deadline closed |
 | Gyeonggi CCEI UnicornBridge | Visible desktop homepage program links only, up to 10; hidden archives excluded | 2 readable recruitment pages, both correctly closed |
 | KOEF | First official notice page, matching recruitment titles, up to 30 | 3 readable notices; unknown/image timing held, August 28 deadline closed |
 | OrangePlanet OrangeFarm | Only the OrangeFarm section of the official program page | Explicit year-round recruitment, not other tracks |
 | Antler Korea | Only the official paragraph explicitly accepting individual residency applications year-round | Explicit rolling application; no invented deadline or guaranteed investment |
 | Lotte Ventures | Homepage recruitment news links, up to 30 | 3 readable notices; prior cohorts closed or held for unknown timing |
+| Samsung C-Lab Outside | Official Samsung Newsroom C-Lab Outside tag, first page, recruitment titles only, up to 30 | 2 readable recruitment notices; dated ninth cohort closed, uncertain older timing held |
 
 This is 8 additional channels, not 8 currently open programs. A healthy source can yield zero current
 opportunities. Listing scope is one page or one fixed section, not the entire institution or archive.
@@ -142,12 +142,15 @@ python -m radar.cli seed-sources --file weekly-direct-sources.json
 python -m radar.cli weekly --check-sources
 ```
 
-The sample validator has no database writes or announcements. The seed command changes only the eight
-named sources. Normal weekly scheduling and K-Startup/BizInfo settings are unchanged.
+The sample validator has no database writes or announcements. The seed command changes only the named
+source settings (eight active and Korea Sejong explicitly deferred). Normal weekly scheduling and
+K-Startup/BizInfo settings are unchanged.
 
-Deferred: Hanyang (public-board adapter/image variability), Bluepoint (browser-only route),
+Deferred: Korea University Sejong (local HTML sample succeeded, but GitHub production returned
+LIST_PARSE; disabled without a scraping/access workaround). Other candidates remain deferred based
+on PR #9 evidence: Hanyang (public-board adapter/image variability), Bluepoint (browser-only route),
 Primer (upcoming cohorts), SparkLabs (introduction/newsletter), FuturePlay/Sopoong/Kakao Ventures
-(uncertain current acceptance), Samsung C-Lab (historical recruitment samples), restricted CCEI
+(uncertain current acceptance), restricted CCEI
 common boards/U300/dcamp and other difficult channels. These are not enabled by this registry.
 Draft StartupRadar PR #9 and GFC PR #11 remain unmerged; daily discovery, institution UI and
 `/opportunities` are outside the weekly product.

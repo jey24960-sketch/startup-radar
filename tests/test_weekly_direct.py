@@ -18,7 +18,8 @@ from test_weekly import collection
 from test_weekly_scope import capped_source
 
 ROOT=Path(__file__).resolve().parents[1]
-SOURCES=json.loads((ROOT/'weekly-direct-sources.json').read_text(encoding='utf-8'))
+REGISTRY=json.loads((ROOT/'weekly-direct-sources.json').read_text(encoding='utf-8'))
+SOURCES=[s for s in REGISTRY if s['enabled']]
 SAMPLES=json.loads((ROOT/'tests/fixtures/weekly_direct_samples.json').read_text(encoding='utf-8'))
 AT=datetime(2026,9,15,15,tzinfo=SEOUL)
 DB=pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Explicit test database required')
@@ -48,6 +49,9 @@ def test_one_real_official_sample_per_channel(sample):
         assert program.application_end_at==datetime(2026,11,30,23,59,59,tzinfo=SEOUL)
     if source['slug']=='weekly-lotte-recruitment':
         assert reason=='CLOSED'
+    if source['slug']=='weekly-samsung-clab-newsroom':
+        assert reason=='CLOSED'
+        assert program.application_end_at==datetime(2026,6,26,23,59,59,tzinfo=SEOUL)
 
 
 def test_direct_config_is_explicit_bounded_html_and_kept_separate_from_api_scope():
@@ -59,6 +63,15 @@ def test_direct_config_is_explicit_bounded_html_and_kept_separate_from_api_scope
     success={'status':'SUCCESS','failures':[],'coverage':{'pagination_complete':True}}
     assert collection_completed([capped_source(),capped_source()]+[success]*8)
     assert not collection_completed([capped_source(),capped_source(),{'status':'FAILED'}])
+    assert next(s for s in REGISTRY if s['slug']=='weekly-korea-opportunity-board')['enabled'] is False
+
+
+def test_yonsei_scope_does_not_misattribute_external_cross_posts():
+    import re
+    pattern=next(s for s in SOURCES if s['slug']=='weekly-yonsei-notices')['config']['required_title_pattern']
+    assert re.search(pattern,'2026 학생창업 법인설립 프로그램 모집')
+    assert not re.search(pattern,'[글로벌창업이민센터] 2026 OASIS-2 프로그램 모집 홍보')
+    assert not re.search(pattern,'[서울창조경제혁신센터] 2026 영등포 청년 창업 도약 아카데미 교육생 모집 안내')
 
 
 @pytest.mark.parametrize('text,year,expected',[

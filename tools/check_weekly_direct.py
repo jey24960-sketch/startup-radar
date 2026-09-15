@@ -22,6 +22,8 @@ def main():
     args = parser.parse_args()
     reports = []
     for source in json.loads(Path(args.sources).read_text(encoding='utf-8')):
+        if not source.get('enabled',True) and not args.slug:
+            continue
         if args.slug and source['slug'] != args.slug:
             continue
         adapter = OfficialChannelAdapter(source, SafeHttp(source['config']['allowed_hosts'],max_bytes=3_000_000))

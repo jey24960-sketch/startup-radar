@@ -70,7 +70,7 @@
       "link_selector": "a[href*=\"/community/notice/\"]",
       "detail_selector": ".covi-post-view__contents",
       "title_selector": ".covi-post-view__header-title",
-      "required_title_pattern": "모집|신청|컨퍼런스",
+      "required_title_pattern": "(?=.*(?:모집|신청|컨퍼런스))(?=.*(?:연세|캠퍼스타운|학생창업|실험실\\s*창업|START-UP\\s*렉토링))",
       "application_link_selector": "a[href*=\"forms.gle/\"]",
       "submission_path_prefix": "/community/notice/",
       "organization": "연세대학교 창업지원단",
@@ -87,7 +87,7 @@
     "slug": "weekly-korea-opportunity-board",
     "name": "고려대 세종 프로그램 모집",
     "adapter": "HTML",
-    "enabled": true,
+    "enabled": false,
     "config": {
       "max_pages": 1,
       "max_records": 30,
@@ -104,13 +104,14 @@
       "allowed_hosts": [
         "startup.korea.ac.kr"
       ],
-      "policy_status": "APPROVED",
+      "policy_status": "DEFERRED",
       "weekly_direct": true,
       "identity_query_keys": [
         "mod",
         "uid"
       ],
-      "validated_at": "2026-09-15"
+      "validated_at": "2026-09-15",
+      "deferred_reason": "GitHub production LIST_PARSE on 2026-09-15; local response differs, no access workaround attempted"
     }
   },
   {
@@ -221,6 +222,35 @@
       "identity_query_keys": [
         "ARTICLE_SEQ"
       ],
+      "validated_at": "2026-09-15"
+    }
+  },
+  {
+    "slug": "weekly-samsung-clab-newsroom",
+    "name": "삼성전자 공식 뉴스룸 · C랩 모집",
+    "adapter": "HTML",
+    "enabled": true,
+    "config": {
+      "method": "BOARD",
+      "url": "https://news.samsung.com/kr/tag/c%eb%9e%a9-%ec%95%84%ec%9b%83%ec%82%ac%ec%9d%b4%eb%93%9c",
+      "link_selector": "a.category_item",
+      "list_title_selector": ".category_title",
+      "detail_selector": ".single_contents",
+      "title_selector": "h1.single-title",
+      "period_year_selector": ".single-date",
+      "application_link_selector": "a[href*=\"samsungclab.com/apply\"]",
+      "required_title_pattern": "(?:C랩|C-Lab).*모집",
+      "submission_path_prefix": "/kr/",
+      "max_pages": 1,
+      "max_records": 30,
+      "single_page_scope": true,
+      "organization": "삼성 C-Lab Outside",
+      "organization_type": "CORPORATE",
+      "allowed_hosts": [
+        "news.samsung.com"
+      ],
+      "policy_status": "APPROVED",
+      "weekly_direct": true,
       "validated_at": "2026-09-15"
     }
   }
