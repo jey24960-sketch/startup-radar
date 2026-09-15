@@ -68,11 +68,12 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
     if not useful:return {'status':'FAILED','reason':'ALL_SOURCES_FAILED','published':False}
     with db.transaction() as c:
         c.execute('select pg_advisory_xact_lock(782394203)')
-        old = c.execute('select * from startup_radar.weekly_briefings where week_start=%s for update',(start,)).fetchone()
+        old = c.execute("select * from startup_radar.weekly_briefings where week_start=%s and publication_kind='WEEKLY' for update",(start,)).fetchone()
         if old and old['status']=='PUBLISHED' and not revision_note:return published_result(c,old)
         previous = c.execute("select distinct on(i.program_id) i.program_id,i.material_hash from startup_radar.weekly_briefing_items i "
-            "join startup_radar.weekly_briefings b on b.id=i.briefing_id where b.status='PUBLISHED' and b.week_start<%s "
-            "order by i.program_id,b.week_start desc",(start,)).fetchall()
+            "join startup_radar.weekly_briefings b on b.id=i.briefing_id where b.status='PUBLISHED' "
+            "and (b.week_start<%s or b.publication_kind='INITIAL_BASELINE') "
+            "order by i.program_id,b.week_start desc,b.publication_kind desc",(start,)).fetchall()
         known = {str(row['program_id']):row['material_hash'] for row in previous}
         items = {}
         for row in collection.get('weekly_programs',[]):
@@ -91,10 +92,12 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
                     'replacement_ingestion_run_id':collection['id'],'actor':'PRIVILEGED_WEEKLY_OPERATOR'})))
         ordered = sorted(items.values(),key=lambda row:(row['snapshot'].get('application_end_at') or '9999',row['snapshot']['title'],str(row['program_id'])))
         new_count = sum(row['change_type']=='NEW' for row in ordered)
-        title = f'{start:%m.%d} ~ {end:%m.%d} \uc8fc\uac04 \uc9c0\uc6d0\uc0ac\uc5c5 \uacf5\uc9c0'
+        display_start = (old or {}).get('display_start') or start
+        display_end = (old or {}).get('display_end') or end
+        title = f'{display_start:%m.%d} ~ {display_end:%m.%d} \uc8fc\uac04 \uc9c0\uc6d0\uc0ac\uc5c5 \uacf5\uc9c0'
         summary = f'\uc774\ubc88 \uc8fc \ud655\uc778\ub41c \uc2e0\uaddc {new_count}\uac74 \u00b7 \ubcc0\uacbd {len(ordered)-new_count}\uac74\uc785\ub2c8\ub2e4.' if ordered else '\uc774\ubc88 \uc8fc \uc2e0\uaddc\u00b7\ubcc0\uacbd \uc9c0\uc6d0\uc0ac\uc5c5 \uc5c6\uc74c'
         row = c.execute("insert into startup_radar.weekly_briefings(week_start,week_end,title,status,item_count,new_count,updated_count,summary,collection_status,ingestion_run_id) "
-            "values(%s,%s,%s,'DRAFT',%s,%s,%s,%s,%s,%s) on conflict(week_start) do update set "
+            "values(%s,%s,%s,'DRAFT',%s,%s,%s,%s,%s,%s) on conflict(week_start,publication_kind) do update set "
             "title=excluded.title,item_count=excluded.item_count,new_count=excluded.new_count,updated_count=excluded.updated_count,summary=excluded.summary,"
             "collection_status=excluded.collection_status,ingestion_run_id=excluded.ingestion_run_id,revision=weekly_briefings.revision+1,generated_at=now(),updated_at=now() returning id",
             (start,end,title,len(ordered),new_count,len(ordered)-new_count,summary,collection_status,collection['id'])).fetchone()
@@ -130,6 +133,8 @@ def announce(db, briefing_id, transport=None):
     with db.transaction() as c:
         briefing=c.execute("select * from startup_radar.weekly_briefings where id=%s and status='PUBLISHED'",(briefing_id,)).fetchone()
         if not briefing:raise ValueError('Weekly announcement requires a published briefing')
+        if briefing['publication_kind']=='INITIAL_BASELINE':
+            return {'state':'BASELINE_ARCHIVE','planned':0,'delivered':0}
         subscriptions=c.execute("select distinct on(s.chat_id) s.id,s.chat_id from startup_radar.telegram_subscriptions s "
             "left join startup_radar.team_notification_preferences p on p.team_id=s.team_id "
             "where s.enabled and s.digest_enabled and s.channel_health='HEALTHY' and coalesce(p.enabled,true) and coalesce(p.digest_enabled,true) order by s.chat_id,s.id").fetchall()
@@ -170,7 +175,7 @@ def run_weekly(db, transport=None, at=None, publish=True, collector=None, revisi
     if 'execution_id' not in claim:return claim
     try:
         with db.transaction() as c:
-            existing=c.execute("select id,collection_status,ingestion_run_id from startup_radar.weekly_briefings where week_start=%s and status='PUBLISHED'",(start,)).fetchone()
+            existing=c.execute("select id,collection_status,ingestion_run_id from startup_radar.weekly_briefings where week_start=%s and publication_kind='WEEKLY' and status='PUBLISHED'",(start,)).fetchone()
             sources=c.execute("select * from startup_radar.sources where enabled and "
                 "(adapter in ('KSTARTUP','BIZINFO') or config->'weekly_direct'='true'::jsonb) "
                 "order by case when adapter in ('KSTARTUP','BIZINFO') then 0 else 1 end,slug").fetchall()

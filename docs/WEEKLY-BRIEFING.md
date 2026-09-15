@@ -33,10 +33,39 @@ Only an explicit `--revision-note` revises the current issue. Prior item snapsho
 remain in `admin_audit`, the briefing ID/first publication time remain stable, and announcement uniqueness
 does not reset. This is for verified corrections, never a blanket scheduled retry.
 
-Weeks are Monday-Sunday in Seoul, with exact dates shown in the title/article.
-The first briefing includes currently obtained opportunities; later issues compare each opportunity
-against its latest previously published snapshot, not just the immediately preceding (possibly empty) issue.
+Operational week identity remains Monday-Sunday in Seoul. The initial publication can display
+the seven completed Seoul calendar days immediately before its original publication date.
+Later issues compare each opportunity against its latest published snapshot, including the
+one-time initial baseline archive, not just the immediately preceding (possibly empty) issue.
 Only material changes reappear. Already closed opportunities are excluded.
+
+### First Publication Correction
+
+Migration `20260915090925_first_publication_baseline.sql` adds an operator-only
+`startup_radar.split_initial_publication(briefing_id, reason, expected_count)` function.
+It operates only on an existing first published NEW-only snapshot and stored version-linked
+source observations. It does not collect sources, edit programs/versions, or call Telegram.
+
+- The recent window is the seven completed Seoul dates before the original publication date.
+  A 2026-09-15 publication therefore displays 2026-09-08 through 2026-09-14.
+- Official BizInfo `creatPnttm` (portal publication date) takes precedence when present in
+  provenance stored by publication time. Otherwise use the normalized official application
+  start, only with DATE/DATETIME precision. Missing/invalid dates go to the baseline.
+  Crawler observation, insertion and version timestamps never determine official recency.
+- Move all other original item rows into one `INITIAL_BASELINE` article, keeping the existing
+  deadline order, facts, material hashes and version links. No duplicate live item copies.
+- Preserve the weekly ID, operational week and first publication time; increment revision.
+  `INITIAL_PUBLICATION_SPLIT` audit records retain the original briefing/items, reason,
+  per-program date evidence and both resulting IDs/counts.
+- A unique index permits only one initial baseline. Repeating the same correction returns
+  its existing result. Other publications or any prior announcement prevent a fresh split.
+- Both outputs remain member-only. The baseline uses the same grouped article route with
+  an initial-material label and snapshot date, not weekly NEW/UPDATE badges.
+- Both outputs establish known program history; the baseline cannot be sent by `announce`.
+  Future normal weekly publications retain existing duplicate-protected Telegram behavior.
+
+For this publication-only correction, do not run `weekly --check-sources` or
+`weekly --revision-note`: those commands intentionally recollect.
 
 ## Data and Safety
 
