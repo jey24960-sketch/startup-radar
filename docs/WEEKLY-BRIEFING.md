@@ -41,7 +41,7 @@ Only material changes reappear. Already closed opportunities are excluded.
 
 ### First Publication Correction
 
-Migration `20260915090925_first_publication_baseline.sql` adds an operator-only
+Migration `20260915091742_first_publication_baseline.sql` adds an operator-only
 `startup_radar.split_initial_publication(briefing_id, reason, expected_count)` function.
 It operates only on an existing first published NEW-only snapshot and stored version-linked
 source observations. It does not collect sources, edit programs/versions, or call Telegram.
