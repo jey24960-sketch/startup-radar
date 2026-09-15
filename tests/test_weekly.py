@@ -11,6 +11,8 @@ from radar.models import Program
 from radar.adapters.base import Candidate, SourceFailure
 from radar.adapters.official import KStartupApiAdapter, BizInfoApiAdapter
 from test_database import db
+from test_weekly_scope import capped_source
+from psycopg.types.json import Jsonb
 
 pytestmark=pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Explicit test database required')
 AT=datetime(2026,9,14,15,tzinfo=SEOUL)
@@ -166,3 +168,75 @@ def test_weekly_rerun_does_not_recollect_published_week(db):
     assert second['status']=='SUCCESS' and second['briefing_id']==first['briefing_id']
     assert second['announcement']['state']=='NO_SUBSCRIBERS'
     assert not collector.called
+
+
+def test_bounded_publication_is_healthy_but_keeps_partial_coverage_and_stable_rerun(db):
+    acquired=collection(db)
+    acquired['status']='PARTIAL_SUCCESS'
+    acquired['sources']=[capped_source(),capped_source()]
+    with db.transaction() as c:
+        c.execute('update startup_radar.ingestion_runs set status=%s,summary=%s where id=%s',
+            (acquired['status'],Jsonb({'sources':acquired['sources']}),acquired['id']))
+    first=build_briefing(db,acquired,AT)
+    assert first['status']=='SUCCESS' and first['collection_status']=='PARTIAL_SUCCESS'
+    second=run_weekly(db,at=AT,collector=Mock(side_effect=AssertionError('No recollection')))
+    assert second['status']=='SUCCESS' and second['briefing_id']==first['briefing_id']
+    assert second['collection_status']=='PARTIAL_SUCCESS' and second['unchanged']
+    with db.transaction() as c:
+        row=c.execute('select * from startup_radar.weekly_briefings').fetchone()
+        assert row['revision']==1 and row['collection_status']=='PARTIAL_SUCCESS'
+
+
+@pytest.mark.parametrize('failed_sources',[0,1,2])
+def test_explicit_source_check_keeps_article_and_real_failures_visible(db,failed_sources):
+    acquired=collection(db)
+    first=build_briefing(db,acquired,AT)
+    db.upsert_source('weekly-b','BizInfo','BIZINFO',{})
+    with db.transaction() as c:
+        before=c.execute('select to_jsonb(b) data from startup_radar.weekly_briefings b').fetchone()['data']
+    acquired['sources']=[capped_source(),capped_source()]
+    for i in range(failed_sources):
+        acquired['sources'][i]={'status':'FAILED','parsed':0,'failures':[{'kind':'HTTP_401'}]}
+    acquired['status']='FAILED' if failed_sources==2 else 'PARTIAL_SUCCESS'
+    acquired['weekly_programs'][0]['snapshot']['title']='Must not rewrite current issue'
+    collector=Mock(return_value=acquired);transport=Mock()
+    result=run_weekly(db,transport,at=AT,collector=collector,check_sources=True)
+    assert result['status']==['SUCCESS','PARTIAL_SUCCESS','FAILED'][failed_sources]
+    assert result['briefing_id']==first['briefing_id'] and result['unchanged']
+    assert collector.call_count==1 and not transport.send.called
+    if failed_sources==2:assert 'announcement' not in result
+    assert all(s['config']['max_pages']==1 for s in collector.call_args.args[1])
+    with db.transaction() as c:
+        assert c.execute('select to_jsonb(b) data from startup_radar.weekly_briefings b').fetchone()['data']==before
+        assert c.execute('select count(*) n from startup_radar.admin_audit').fetchone()['n']==0
+
+
+def test_published_real_source_failure_does_not_turn_green_on_rerun(db):
+    acquired=collection(db)
+    acquired['sources'][1]={'status':'FAILED','parsed':0,'failures':[{'kind':'NETWORK'}]}
+    with db.transaction() as c:
+        c.execute('update startup_radar.ingestion_runs set summary=%s where id=%s',
+            (Jsonb({'sources':acquired['sources']}),acquired['id']))
+    build_briefing(db,acquired,AT)
+    result=run_weekly(db,at=AT)
+    assert result['status']=='PARTIAL_SUCCESS'
+
+
+def test_real_adapter_contract_through_ingestion_and_weekly_publication(db,monkeypatch):
+    from test_official_pagination import adapter,page
+    from radar.weekly_scope import weekly_sources
+    sources=weekly_sources([db.upsert_source(kind,kind,kind.upper(),{})
+        for kind in ('kstartup','bizinfo')])
+    def factory(source):
+        kind=source['slug']
+        a,_=adapter(kind,[page(kind,[1,2],10)],monkeypatch,**source['config'])
+        a.source=source
+        return a
+    acquired=ingest(db,sources,adapter_factory=factory,structured_only=True)
+    assert acquired['status']=='PARTIAL_SUCCESS'
+    assert all(s['parsed']==2 and s['failures'][0]['kind']=='PAGE_LIMIT' for s in acquired['sources'])
+    result=build_briefing(db,acquired,AT)
+    assert result['status']=='SUCCESS' and result['published']
+    assert result['collection_status']=='PARTIAL_SUCCESS'
+    with db.transaction() as c:
+        assert c.execute('select count(*) n from startup_radar.sources where last_successful_full_scan_at is not null').fetchone()['n']==0

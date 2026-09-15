@@ -19,6 +19,10 @@ on:
       revision_note:
         description: Optional explicit reason to revise the published current-week issue
         type: string
+      check_sources:
+        description: Recheck official sources without revising an already published weekly issue
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -57,6 +61,7 @@ jobs:
           SOURCE_SLUG: ${{ inputs.source_slug }}
           JOB_ID: ${{ inputs.job_id }}
           REVISION_NOTE: ${{ inputs.revision_note }}
+          CHECK_SOURCES: ${{ inputs.check_sources }}
           DELIVERY_ENABLED: ${{ vars.RADAR_V2_DELIVERY_ENABLED }}
           RADAR_OCR_MODEL_DIR: work/tessdata
           RADAR_OCR_CACHE_DIR: work/ocr-cache
@@ -65,6 +70,7 @@ jobs:
         run: |
           if [ "$KIND" = 'WEEKLY' ]; then
             args=()
+            if [ "$CHECK_SOURCES" = 'true' ]; then args+=(--check-sources); fi
             if [ -n "$REVISION_NOTE" ]; then args+=(--revision-note "$REVISION_NOTE"); fi
             if [ "$DELIVERY_ENABLED" = 'true' ]; then args+=(--deliver); fi
             python -m radar.cli weekly "${args[@]}"

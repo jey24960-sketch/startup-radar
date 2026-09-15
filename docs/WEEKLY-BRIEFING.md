@@ -18,13 +18,17 @@ Privileged operator commands, with the existing server credentials:
 python -m radar.cli weekly --draft
 python -m radar.cli weekly
 python -m radar.cli weekly --deliver
+python -m radar.cli weekly --check-sources
 python -m radar.cli weekly --revision-note "Reason for verified correction"
 python -m radar.cli execution-status
 ```
 
 `--draft` rebuilds only an unpublished current-week draft. The normal command publishes.
 A published week is stable: ordinary reruns return its existing ID and do not recollect or rewrite it.
-Only an explicit `--revision-note` recollects/revises the current issue. Prior item snapshots and version links
+An explicit `--check-sources` (manual workflow input `check_sources`) rechecks and persists official
+source observations without modifying an already published issue, its first publication time or audit.
+It reports the current check's status separately from `published_collection_status`.
+Only an explicit `--revision-note` revises the current issue. Prior item snapshots and version links
 remain in `admin_audit`, the briefing ID/first publication time remain stable, and announcement uniqueness
 does not reset. This is for verified corrections, never a blanket scheduled retry.
 
@@ -47,10 +51,43 @@ AI, OCR, eligibility, ranking or team refresh. Program facts can be incomplete w
 Unknown fields remain unknown; the Korean member view asks readers to check the official notice.
 API-only new versions do not certify eligibility and do not delete older evidence/versions.
 
-Successful complete empty acquisition may publish a no-new-or-changed-opportunities issue.
-All-source failure never publishes an empty issue. Partial acquisition may publish valid useful items,
-retaining `PARTIAL_SUCCESS` internally and a nonzero CLI exit for operator visibility.
-An incomplete empty result does not publish. Existing safety caps remain explicit limits, not national coverage.
+Successful acquisition of the defined weekly window may publish a no-new-or-changed-opportunities issue.
+All-source failure never publishes an empty issue or sends a publication announcement. Actual partial
+source failures may publish valid useful items, retaining `PARTIAL_SUCCESS` and a nonzero CLI exit.
+An incomplete empty result does not publish. Previous published posts are never erased by failure.
+
+## Exact Weekly Collection Scope
+
+Policy `GFC_WEEKLY_V1` is applied only in the weekly worker, without changing the source registry:
+
+- K-Startup: the official announcement API with `cond[rcrt_prgs_yn::EQ]=Y` (recruitment in progress),
+  `page=1`, `perPage=100`. Existing operator-configured title supplements use the same open filter
+  and one 100-row page per title (at most five title queries); repeated publisher IDs are deduplicated.
+  The current three supplements are 모두의 창업 프로젝트, SVC Seoul and 베트남 테크페스트.
+- BizInfo: its official latest-support-information API with `dataType=json`, `searchCnt=100`,
+  `pageUnit=100`, `pageIndex=1`, no category/region restriction. Its documented contract has no
+  exact date/change/open filter, so this is the bounded recent official result set, in API order.
+- Closed records are excluded from the weekly article using reliable official application end dates.
+  Unknown dates/eligibility remain unknown. This window does not guarantee detection of changes to
+  older entries outside the returned results, all open programs, or every result matching a title.
+  No historical backfill, complete national archive, browser collection, AI, OCR or daily collection.
+
+StartupRadar checks a bounded set of current/recent official opportunities each week.
+It is not a complete archive of all historical Korean support programs.
+Official contracts: [K-Startup](https://www.data.go.kr/data/15125364/openapi.do)
+and [BizInfo](https://www.bizinfo.go.kr/apiDetail.do?id=bizinfoApi), checked 2026-09-15.
+
+Operational success is distinct from full source coverage: a `PAGE_LIMIT` alone is acceptable only
+for this explicit one-page window after all obtained unique records have been fetched and persisted,
+with no rejected identities, failed records, stalled pagination or other errors. Both sources must
+meet that contract for a green execution. Raw source/ingestion `PARTIAL_SUCCESS`, advertised counts,
+`pagination_complete=false` and `coverage_warning=BOUNDED_WEEKLY_SCOPE` remain visible in the run.
+Weekly query completion never advances the source's full-scan timestamp; an API-advertised count
+is labeled `BOUNDED_WEEKLY_QUERY`, not a nationwide or historical denominator.
+Authentication, HTTP, network, JSON/schema and persistence failures never receive this exception.
+Historical published one-page samples (including the initial 20-row window) may be recognized on
+ordinary no-write reruns using the same strict persisted evidence, with
+`coverage_warning=PUBLISHED_BOUNDED_COLLECTION`; their stored status and content remain unchanged.
 
 `gfc_radar_weekly_briefings` and `gfc_radar_weekly_briefing` are SECURITY INVOKER RPCs.
 RLS and existing `public.my_role()` require verified GFC member/admin status. A team/profile is unnecessary.

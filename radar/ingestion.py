@@ -82,7 +82,7 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                       'values(%s,%s,%s,%s,%s,%s,%s,%s,%s)',(run,source['id'],state,discovered,fetched,parsed,Jsonb(failures),int((time.monotonic()-started)*1000),Jsonb(coverage)))
             if state=='SUCCESS':c.execute('update startup_radar.sources set last_successful_at=now() where id=%s',(source['id'],))
             if parsed:c.execute('update startup_radar.sources set last_persisted_at=now(),last_source_observation_at=now() where id=%s',(source['id'],))
-            if coverage['pagination_complete'] and parsed==discovered and not coverage.get('rejected_records') and not any(f.get('stage') not in ('DOCUMENT','EXTRACTION') for f in failures):
+            if coverage['pagination_complete'] and not coverage.get('weekly_policy') and parsed==discovered and not coverage.get('rejected_records') and not any(f.get('stage') not in ('DOCUMENT','EXTRACTION') for f in failures):
                 c.execute('update startup_radar.sources set last_successful_full_scan_at=now() where id=%s',(source['id'],))
             if failures:c.execute('update startup_radar.sources set last_failure_at=now(),last_failure_reason=%s where id=%s',(failures[0].get('reason_code') or failures[0]['kind'],source['id']))
         outcomes.append(outcome)

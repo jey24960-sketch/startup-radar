@@ -9,6 +9,7 @@ from radar.dates import korean_date
 from radar.models import Program
 from radar.documents import html_text
 from core.clock import now
+from radar.weekly_scope import POLICY
 
 
 class Pagination:
@@ -19,6 +20,7 @@ class Pagination:
             raise SourceFailure('CONFIGURATION','Page size and cap must be integers in 1..1000')
         self.seen=set();self.queries=[];self.rejected=0;self.duplicates=0
         self.scope=config.get('scope','API_DEFAULT')
+        self.weekly_policy=config.get('weekly_policy')
         if self.scope not in ('API_DEFAULT','OPEN'):raise SourceFailure('CONFIGURATION','Unknown official scope')
 
     def start(self,label):
@@ -59,12 +61,14 @@ class Pagination:
         return done
 
     def finish(self):
+        if self.rejected:raise SourceFailure('API_SCHEMA',f'{self.rejected} source records rejected because identity fields were invalid')
         if not all(q['pagination_complete'] for q in self.queries):
             raise SourceFailure('PAGE_LIMIT','Configured safety cap reached before source scope completed')
-        if self.rejected:raise SourceFailure('API_SCHEMA',f'{self.rejected} source records rejected because identity fields were invalid')
 
     def report(self):
-        return {'scope':self.scope,'advertised_scope':'PRIMARY_QUERY','page_cap':self.maximum,'page_size':self.size,
+        return {'scope':self.scope,'weekly_policy':self.weekly_policy,
+                'advertised_scope':'BOUNDED_WEEKLY_QUERY' if self.weekly_policy==POLICY else 'PRIMARY_QUERY',
+                'page_cap':self.maximum,'page_size':self.size,
                 'pages_requested':sum(q['pages_requested'] for q in self.queries),
                 'records_returned':sum(q['records_returned'] for q in self.queries),
                 'advertised_records':self.queries[0]['advertised_records'] if self.queries else None,
@@ -202,7 +206,8 @@ class BizInfoApiAdapter(HtmlAdapter):
         self.pagination.start('PRIMARY')
         for page in range(1,maximum+1):
             self.pagination.requested()
-            data,_,_=self.http.get(self.endpoint,params={'crtfcKey':key,'dataType':'json','pageUnit':size,'pageIndex':page,'searchCnt':0})
+            data,_,_=self.http.get(self.endpoint,params={'crtfcKey':key,'dataType':'json','pageUnit':size,'pageIndex':page,
+                'searchCnt':size*maximum if self.pagination.weekly_policy==POLICY else 0})
             payload=parse_json(data)
             envelope=payload.get('jsonArray') if isinstance(payload,dict) else None
             if isinstance(envelope,dict):rows=envelope.get('item')
