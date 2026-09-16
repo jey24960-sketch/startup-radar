@@ -7,7 +7,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from radar.models import TeamProfile, Program
-from radar.identity import normalize_url,normalize_text,digest,changed_fields,duplicate_confidence
+from radar.identity import normalize_url,normalize_text,digest,changed_fields,duplicate_confidence,cross_source_key
 from radar.dates import program_status
 
 _CURRENT_OBSERVATION=object()
@@ -128,6 +128,29 @@ class Database:
                     if not conflict:matches.append(candidate)
                 if len(matches)==1:existing=matches[0]
                 elif len(matches)>1:raw_metadata['weekly_duplicate_conflict']=True
+            if not existing:
+                # The two national portals republish one notice under different
+                # publisher IDs, hosts and responsible organizations, so tiers
+                # above cannot link them. Require an identical normalized title
+                # that is specific enough to be safe AND the identical official
+                # application period AND that the candidate was never seen from
+                # this same source. Organization is deliberately not compared:
+                # ministry vs executing agency is the normal disagreement here.
+                key=cross_source_key(program.title,program.application_start_at,program.application_end_at)
+                if key is not None:
+                    exact=c.execute('select p.* from startup_radar.programs p where '
+                        'p.application_start_at=%s and p.application_end_at=%s',
+                        (program.application_start_at,program.application_end_at)).fetchall()
+                    matches=[]
+                    for candidate in exact:
+                        if cross_source_key(candidate['title'],candidate['application_start_at'],
+                                            candidate['application_end_at'])!=key:continue
+                        # Already carried by this source: publisher identity governs, not this rule.
+                        if c.execute('select 1 from startup_radar.program_sources where program_id=%s '
+                            'and source_id=%s limit 1',(candidate['id'],source_id)).fetchone():continue
+                        matches.append(candidate)
+                    if len(matches)==1:existing=matches[0]
+                    elif len(matches)>1:raw_metadata['weekly_duplicate_conflict']=True
             candidates=[]
             if not existing:
                 # No fuzzy auto-merge. Keep possible relationships for human review.

@@ -33,11 +33,86 @@ Only an explicit `--revision-note` revises the current issue. Prior item snapsho
 remain in `admin_audit`, the briefing ID/first publication time remain stable, and announcement uniqueness
 does not reset. This is for verified corrections, never a blanket scheduled retry.
 
+## Publication Filters (GFC Relevance v1.1, 2026-09-16)
+
+Collection stays broad; publication is selective. After a program is stored and versioned, the
+weekly article applies, in this order: cross-source dedup -> material NEW/UPDATE -> actionability
+-> GFC relevance. Nothing here deletes or edits a program, a version or any source fact.
+
+**Actionability.** `radar/actionability.py`, `MINIMUM_APPLICATION_LEAD_TIME = 72 hours`, measured
+against the publication reference timestamp, not today's clock. Withheld: already closed
+(`CLOSED`), under 72 hours remaining (`NEAR_DEADLINE`), announced but not yet open (`UPCOMING`),
+and no end date without a trusted `ROLLING`/`UNTIL_BUDGET_EXHAUSTED` type (`DEADLINE_UNKNOWN`).
+The existing end-of-Seoul-day normalization of a date-only deadline is unchanged and is a
+comparison aid only; precision fields are never rewritten, so the member view still shows exactly
+the precision the source stated.
+
+**GFC relevance.** `radar/relevance.py`, version `gfc-v1.1`, deterministic rules only — the weekly
+path still uses no AI, OCR, eligibility or team calculation. Two axes: startup leverage
+(HIGH/LOW), then applicability (BROAD/RESTRICTED) only when HIGH.
+`HIGH+BROAD -> GFC_RELEVANT`, `HIGH+RESTRICTED -> CONDITIONAL`, `LOW -> OUT_OF_SCOPE`,
+conflicting or evidence-thin -> `REVIEW_REQUIRED`. Only `GFC_RELEVANT` and `CONDITIONAL` are ever
+published. Audience words (중소기업, 소상공인, 스타트업, 창업벤처, 청년, 대학생, AI, 글로벌) are
+never evidence on their own; the rules match the action a program enables and the deliverable it
+produces. An early-stage window (창업 3년 이내) is the audience, not a restriction; a minimum
+maturity requirement (업력 7년 이상) is.
+
+Classifications live in `startup_radar.program_relevance`, keyed by `(program_version_id,
+relevance_version)`. This is deliberately **outside** `weekly.MATERIAL`: MATERIAL drives the
+NEW/UPDATE fingerprint, so folding an editorial judgement into it would make every stored program
+look materially changed whenever the classifier version moves. Withheld outcomes are stored too,
+so an operator can audit why a stored opportunity never reached members.
+`supabase/migrations/20260916121000_gfc_relevance_backfill_function.sql` is a SQL mirror generated
+by `tools/export_relevance_sql.py`, used to classify already-stored versions without re-running
+collection; `tests/test_relevance_sql_mirror.py` fails if it drifts from the Python rules.
+
+**Cross-source dedup.** One notice is routinely carried by both national portals under different
+publisher IDs, hosts and responsible organizations, so the existing identity tiers cannot link
+them. `identity.cross_source_key` requires all of: an identical normalized title of at least 20
+characters, an identical official application start, and an identical end. Organization is
+deliberately not compared, because ministry vs executing agency is the normal disagreement.
+Anything less specific yields no key and therefore no claim. Still no fuzzy merge; multiple
+candidates set `weekly_duplicate_conflict` instead of merging.
+
+**Member view.** Two sections: `이번 주 주요 기회` (GFC_RELEVANT) and
+`특정 조건 해당 시 검토할 기회` (CONDITIONAL, with its key restriction shown inline). Internal NEW
+renders as `새로 확인`, not `신규`: it means StartupRadar saw the opportunity for the first time,
+which is **not** a claim that the institution posted it that week. Internal NEW/UPDATE semantics
+are otherwise unchanged.
+
+**Telegram.** One message per weekly briefing, counting published GFC_RELEVANT + CONDITIONAL only;
+examples follow display order, which puts GFC_RELEVANT first. The baseline still cannot be
+announced and zero subscribers remains a successful no-op.
+
+### 2026-09-16 publication correction
+
+`startup_radar.apply_publication_correction(briefing_id, reason, summary, visible)` is
+operator-only (`service_role`). It reorders, annotates and withdraws visible items; it never
+collects sources, edits programs/versions/provenance, creates a briefing or calls Telegram. The
+briefing ID, first `published_at`, display window and `snapshot_date` are preserved and the
+revision increments. Prior item snapshots go to `admin_audit` as `WEEKLY_PUBLICATION_CORRECTION`
+before anything is removed.
+
+Applied once, verified as of 2026-09-16, judging each article at its **own** original publication
+time rather than a later clock:
+
+| | before | duplicates | not actionable | out of scope / review | visible after |
+| --- | --- | --- | --- | --- | --- |
+| WEEKLY `3a9278b5` | 83 | 1 | 15 (10 near, 4 unknown, 1 upcoming, 0 expired) | 46 / 6 | **15** (9 + 6) |
+| INITIAL_BASELINE `954bd243` | 123 | 0 | 30 (24 near, 6 unknown) | 43 / 3 | **47** (34 + 13) |
+
+Both kept their IDs and their 2026-09-15T08:35:11Z first publication time; WEEKLY is revision 3
+and keeps 09.08~09.14, the baseline is revision 2 and keeps snapshot date 2026-09-15. All 289
+stored programs and 433 versions remain, nothing was recollected, and no Telegram was sent
+(`weekly_announcements` is still empty). A pre-correction recovery snapshot of both articles and
+all 206 original items is in `admin_audit` as `PRE_CORRECTION_RECOVERY_SNAPSHOT`.
+
 Operational week identity remains Monday-Sunday in Seoul. The initial publication can display
 the seven completed Seoul calendar days immediately before its original publication date.
 Later issues compare each opportunity against its latest published snapshot, including the
 one-time initial baseline archive, not just the immediately preceding (possibly empty) issue.
-Only material changes reappear. Already closed opportunities are excluded.
+Only material changes reappear. Opportunities that fail actionability or GFC relevance are
+excluded from the article; see Publication Filters above.
 
 ### First Publication Correction
 
@@ -97,7 +172,8 @@ Policy `GFC_WEEKLY_V1` is applied only in the weekly worker, without changing th
 - BizInfo: its official latest-support-information API with `dataType=json`, `searchCnt=100`,
   `pageUnit=100`, `pageIndex=1`, no category/region restriction. Its documented contract has no
   exact date/change/open filter, so this is the bounded recent official result set, in API order.
-- Closed records are excluded from the weekly article using reliable official application end dates.
+- Closed records, and records with under 72 hours of application lead time, are excluded from the
+  weekly article using reliable official application end dates.
   Unknown dates/eligibility remain unknown. This window does not guarantee detection of changes to
   older entries outside the returned results, all open programs, or every result matching a title.
   No historical backfill, complete national archive, browser collection, AI, OCR or daily collection.

@@ -24,7 +24,9 @@ def collection(db, count=3):
         run=c.execute("insert into startup_radar.ingestion_runs(status,trigger_type,finished_at) values('SUCCESS','weekly-test',now()) returning id").fetchone()['id']
     rows=[]
     for i in range(count):
-        p=Program(title=f'Official program {i}',organization='Agency',official_url=f'https://example.org/{i}',
+        # Broadly applicable early-founder programs: actionable and GFC_RELEVANT,
+        # so these fixtures exercise publication rather than the relevance gate.
+        p=Program(title=f'예비창업자 액셀러레이팅 프로그램 {i}',organization='Agency',official_url=f'https://example.org/{i}',
             support_summary='Official support',application_end_at=datetime(2027,1,1,tzinfo=SEOUL),application_end_precision='DATE',deadline_type='FIXED_DATE')
         saved=db.save_program(p,source['id'],str(i),p.official_url,{},'Official structured fields')
         rows.append({**saved,'snapshot':snapshot(p,{}),'status':'OPEN'})
@@ -55,7 +57,9 @@ def test_unchanged_not_repeated_material_update_and_archive(db):
     acquired=collection(db)
     first=build_briefing(db,acquired,AT)
     acquired['weekly_programs'][0]['snapshot']['application_end_at']='2027-01-10T00:00:00+09:00'
-    acquired['weekly_programs'][1]['status']='CLOSED'
+    # Actionability now reads the official end date against the publication
+    # reference, so a closed notice is expressed as a past deadline.
+    acquired['weekly_programs'][1]['snapshot']['application_end_at']='2026-09-01T23:59:59+09:00'
     second=build_briefing(db,acquired,AT+timedelta(days=7))
     assert (second['item_count'],second['new_count'],second['updated_count'])==(1,0,1)
     third=build_briefing(db,acquired,AT+timedelta(days=14))

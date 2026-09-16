@@ -5,16 +5,39 @@ from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 from psycopg.types.json import Jsonb
 from core.clock import now, SEOUL
+from radar.actionability import actionability
 from radar.adapters.base import AcquiredDetail
 from radar.documents import html_text
-from radar.identity import digest
+from radar.identity import digest,deduplicate_publication
 from radar.notifications import safe_link
+from radar.relevance import classify,PUBLISHABLE_STATUSES,RELEVANCE_VERSION
 from radar.weekly_scope import weekly_sources,collection_completed
 
 FALLBACK = '\uacf5\uc2dd \uacf5\uace0 \ud655\uc778 \ud544\uc694'
+# Relevance is deliberately NOT part of MATERIAL. MATERIAL drives the NEW/UPDATE
+# fingerprint, so folding an editorial judgement into it would make every stored
+# program look materially changed the moment the classifier version moves.
 MATERIAL = ('title','organization','support_summary','applicant_summary','application_start_at',
             'application_end_at','application_start_precision','application_end_precision',
             'deadline_type','official_url','application_url','attachments')
+# GFC_RELEVANT is presented before CONDITIONAL; the member view renders the two
+# as separate sections and relies on this ordering.
+SECTION_RANK = {'GFC_RELEVANT':0,'CONDITIONAL':1}
+
+
+def record_relevance(c, version_id, decision):
+    """Persist the classification for audit, including hidden outcomes."""
+    c.execute('insert into startup_radar.program_relevance(program_version_id,relevance_version,'
+        'relevance_status,startup_leverage,applicability,startup_leverage_reason,restriction_summary,'
+        'classification_method,evidence) values(%s,%s,%s,%s,%s,%s,%s,%s,%s) '
+        'on conflict(program_version_id,relevance_version) do update set '
+        'relevance_status=excluded.relevance_status,startup_leverage=excluded.startup_leverage,'
+        'applicability=excluded.applicability,startup_leverage_reason=excluded.startup_leverage_reason,'
+        'restriction_summary=excluded.restriction_summary,classification_method=excluded.classification_method,'
+        'evidence=excluded.evidence,classified_at=now()',
+        (version_id,decision['relevance_version'],decision['relevance_status'],decision['startup_leverage'],
+         decision['applicability'],decision['startup_leverage_reason'],decision['restriction_summary'],
+         decision['classification_method'],Jsonb(decision['evidence'])))
 
 
 def weekly_detail(candidate):
@@ -75,13 +98,28 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
             "and (b.week_start<%s or b.publication_kind='INITIAL_BASELINE') "
             "order by i.program_id,b.week_start desc,b.publication_kind desc",(start,)).fetchall()
         known = {str(row['program_id']):row['material_hash'] for row in previous}
+        # Order is deliberate: dedup -> material change -> actionability -> relevance.
+        collected,duplicates = deduplicate_publication(collection.get('weekly_programs',[]))
         items = {}
-        for row in collection.get('weekly_programs',[]):
+        withheld = {'DUPLICATE':len(duplicates)}
+        for row in collected:
             pid = str(row['program_id']); facts = row['snapshot']
-            if row['status']=='CLOSED' or not facts.get('official_url'):continue
+            if not facts.get('official_url'):continue
             fingerprint = digest({key:facts.get(key) for key in MATERIAL})
             if known.get(pid)==fingerprint:continue
-            items.setdefault(pid,{**row,'material_hash':fingerprint,'change_type':'UPDATE' if pid in known else 'NEW'})
+            # Classified and retained even when withheld, so an operator can audit
+            # why a stored opportunity never reached members.
+            decision = classify(facts)
+            record_relevance(c,row['version_id'],decision)
+            publishable,reason = actionability(facts,at)
+            if not publishable:
+                withheld[reason] = withheld.get(reason,0)+1;continue
+            if decision['relevance_status'] not in PUBLISHABLE_STATUSES:
+                withheld[decision['relevance_status']] = withheld.get(decision['relevance_status'],0)+1;continue
+            items.setdefault(pid,{**row,'material_hash':fingerprint,
+                'change_type':'UPDATE' if pid in known else 'NEW',
+                'relevance_status':decision['relevance_status'],
+                'restriction_summary':decision['restriction_summary']})
         if not items and not complete:
             return {'status':'FAILED','reason':'INCOMPLETE_EMPTY_COLLECTION','published':False}
         if old and old['status']=='PUBLISHED':
@@ -90,12 +128,15 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
                 (str(old['id']),Jsonb({'reason':revision_note.strip(),'previous_revision':old['revision'],
                     'previous_ingestion_run_id':str(old['ingestion_run_id']),'items':[row['item'] for row in before],
                     'replacement_ingestion_run_id':collection['id'],'actor':'PRIVILEGED_WEEKLY_OPERATOR'})))
-        ordered = sorted(items.values(),key=lambda row:(row['snapshot'].get('application_end_at') or '9999',row['snapshot']['title'],str(row['program_id'])))
+        ordered = sorted(items.values(),key=lambda row:(SECTION_RANK[row['relevance_status']],
+            row['snapshot'].get('application_end_at') or '9999',row['snapshot']['title'],str(row['program_id'])))
         new_count = sum(row['change_type']=='NEW' for row in ordered)
         display_start = (old or {}).get('display_start') or start
         display_end = (old or {}).get('display_end') or end
         title = f'{display_start:%m.%d} ~ {display_end:%m.%d} \uc8fc\uac04 \uc9c0\uc6d0\uc0ac\uc5c5 \uacf5\uc9c0'
-        summary = f'\uc774\ubc88 \uc8fc \ud655\uc778\ub41c \uc2e0\uaddc {new_count}\uac74 \u00b7 \ubcc0\uacbd {len(ordered)-new_count}\uac74\uc785\ub2c8\ub2e4.' if ordered else '\uc774\ubc88 \uc8fc \uc2e0\uaddc\u00b7\ubcc0\uacbd \uc9c0\uc6d0\uc0ac\uc5c5 \uc5c6\uc74c'
+        # "\uc0c8\ub85c \ud655\uc778" states what is actually known: StartupRadar saw it for the
+        # first time. It does not claim the institution posted it this week.
+        summary = f'\uc0c8\ub85c \ud655\uc778 {new_count}\uac74 \u00b7 \ubcc0\uacbd {len(ordered)-new_count}\uac74\uc785\ub2c8\ub2e4.' if ordered else '\uc774\ubc88 \uc8fc \uc0c8\ub85c \ud655\uc778\u00b7\ubcc0\uacbd\ub41c \uc9c0\uc6d0\uc0ac\uc5c5 \uc5c6\uc74c'
         row = c.execute("insert into startup_radar.weekly_briefings(week_start,week_end,title,status,item_count,new_count,updated_count,summary,collection_status,ingestion_run_id) "
             "values(%s,%s,%s,'DRAFT',%s,%s,%s,%s,%s,%s) on conflict(week_start,publication_kind) do update set "
             "title=excluded.title,item_count=excluded.item_count,new_count=excluded.new_count,updated_count=excluded.updated_count,summary=excluded.summary,"
@@ -104,11 +145,13 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
         bid = row['id']
         c.execute('delete from startup_radar.weekly_briefing_items where briefing_id=%s',(bid,))
         for index,item in enumerate(ordered):
-            c.execute('insert into startup_radar.weekly_briefing_items(briefing_id,program_id,program_version_id,change_type,display_order,snapshot,material_hash) values(%s,%s,%s,%s,%s,%s,%s)',
-                (bid,item['program_id'],item['version_id'],item['change_type'],index,Jsonb(item['snapshot']),item['material_hash']))
+            c.execute('insert into startup_radar.weekly_briefing_items(briefing_id,program_id,program_version_id,change_type,display_order,snapshot,material_hash,relevance_status,restriction_summary,relevance_version) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                (bid,item['program_id'],item['version_id'],item['change_type'],index,Jsonb(item['snapshot']),item['material_hash'],
+                 item['relevance_status'],item['restriction_summary'],RELEVANCE_VERSION))
         if publish:c.execute("update startup_radar.weekly_briefings set status='PUBLISHED',published_at=coalesce(published_at,now()),updated_at=now() where id=%s",(bid,))
     return {'status':'SUCCESS' if complete else 'PARTIAL_SUCCESS','collection_status':collection_status,
-            'briefing_id':str(bid),'published':publish,'item_count':len(ordered),'new_count':new_count,'updated_count':len(ordered)-new_count}
+            'briefing_id':str(bid),'published':publish,'item_count':len(ordered),'new_count':new_count,'updated_count':len(ordered)-new_count,
+            'withheld':{reason:count for reason,count in withheld.items() if count}}
 
 
 def briefing_url(briefing_id):
@@ -121,7 +164,7 @@ def briefing_url(briefing_id):
 
 def announcement_text(briefing, items):
     lines = ['[GFC StartupRadar]',briefing['title']+'\uac00 \uac8c\uc2dc\ub418\uc5c8\uc2b5\ub2c8\ub2e4.',
-             f"\uc774\ubc88 \uc8fc \uc2e0\uaddc\u00b7\ubcc0\uacbd \uc9c0\uc6d0\uc0ac\uc5c5: {briefing['item_count']}\uac74"]
+             f"\uc774\ubc88 \uc8fc \uc0c8\ub85c \ud655\uc778\u00b7\ubcc0\uacbd \uc9c0\uc6d0\uc0ac\uc5c5: {briefing['item_count']}\uac74"]
     for item in items[:3]:
         facts=item['snapshot']; deadline=(facts.get('application_end_at') or FALLBACK)[:10]
         lines.append(f"\u2022 {facts['title'][:100]} / \ub9c8\uac10: {deadline}")
