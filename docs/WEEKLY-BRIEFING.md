@@ -39,9 +39,9 @@ Collection stays broad; publication is selective. After a program is stored and 
 weekly article applies, in this order: cross-source dedup -> material NEW/UPDATE -> actionability
 -> GFC relevance. Nothing here deletes or edits a program, a version or any source fact.
 
-**Actionability.** `radar/actionability.py`, `MINIMUM_APPLICATION_LEAD_TIME = 72 hours`, measured
+**Actionability.** `radar/actionability.py`, `MINIMUM_APPLICATION_LEAD_TIME = 48 hours`, measured
 against the publication reference timestamp, not today's clock. Withheld: already closed
-(`CLOSED`), under 72 hours remaining (`NEAR_DEADLINE`), announced but not yet open (`UPCOMING`),
+(`CLOSED`), under 48 hours remaining (`NEAR_DEADLINE`), announced but not yet open (`UPCOMING`),
 and no end date without a trusted `ROLLING`/`UNTIL_BUDGET_EXHAUSTED` type (`DEADLINE_UNKNOWN`).
 The existing end-of-Seoul-day normalization of a date-only deadline is unchanged and is a
 comparison aid only; precision fields are never rewritten, so the member view still shows exactly
@@ -172,7 +172,7 @@ Policy `GFC_WEEKLY_V1` is applied only in the weekly worker, without changing th
 - BizInfo: its official latest-support-information API with `dataType=json`, `searchCnt=100`,
   `pageUnit=100`, `pageIndex=1`, no category/region restriction. Its documented contract has no
   exact date/change/open filter, so this is the bounded recent official result set, in API order.
-- Closed records, and records with under 72 hours of application lead time, are excluded from the
+- Closed records, and records with under 48 hours of application lead time, are excluded from the
   weekly article using reliable official application end dates.
   Unknown dates/eligibility remain unknown. This window does not guarantee detection of changes to
   older entries outside the returned results, all open programs, or every result matching a title.

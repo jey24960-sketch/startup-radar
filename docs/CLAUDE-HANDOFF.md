@@ -452,6 +452,11 @@ unless that mass-update is intended.
 Implemented on `claude/gfc-relevance-actionability-v1-1` in both repositories, based on
 `origin/main` (radar `1608344`, GFC `23644d2`).
 
+> The lead-time threshold was later relaxed to **48 hours** (2026-09-16, operator decision). The
+> figures in this section are the historical record of what the 72-hour gate produced and are left
+> as-is; `docs/WEEKLY-BRIEFING.md` holds the current value. The published articles were not
+> re-filtered when the threshold changed.
+
 **Code.** New `radar/actionability.py` (72-hour gate) and `radar/relevance.py` (deterministic
 two-axis classifier, `gfc-v1.1`). `radar/identity.py` gained `cross_source_key` and
 `deduplicate_publication`; `radar/database.py` gained a fourth, conservative cross-portal identity

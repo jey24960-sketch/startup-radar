@@ -13,8 +13,8 @@ def facts(end=None, start=None, kind='FIXED_DATE', **extra):
             'application_end_at': end.isoformat() if end else None, 'deadline_type': kind, **extra}
 
 
-def test_minimum_lead_time_is_72_hours():
-    assert MINIMUM_APPLICATION_LEAD_TIME == timedelta(hours=72)
+def test_minimum_lead_time_is_48_hours():
+    assert MINIMUM_APPLICATION_LEAD_TIME == timedelta(hours=48)
 
 
 def test_already_expired_is_never_published():
@@ -24,15 +24,17 @@ def test_already_expired_is_never_published():
     assert actionability(facts(AT), AT) == (False, 'CLOSED')
 
 
-@pytest.mark.parametrize('remaining', [timedelta(hours=24), timedelta(hours=48),
-                                       timedelta(hours=71, minutes=59)])
+@pytest.mark.parametrize('remaining', [timedelta(hours=1), timedelta(hours=24),
+                                       timedelta(hours=47, minutes=59)])
 def test_near_deadline_is_withheld(remaining):
     assert actionability(facts(AT + remaining), AT) == (False, 'NEAR_DEADLINE')
 
 
-def test_exactly_seventy_two_hours_passes():
+def test_exactly_forty_eight_hours_passes():
+    assert actionability(facts(AT + timedelta(hours=48)), AT) == (True, 'ACTIONABLE')
+    assert actionability(facts(AT + timedelta(hours=48, seconds=1)), AT) == (True, 'ACTIONABLE')
+    # Comfortably beyond the threshold stays publishable.
     assert actionability(facts(AT + timedelta(hours=72)), AT) == (True, 'ACTIONABLE')
-    assert actionability(facts(AT + timedelta(hours=72, seconds=1)), AT) == (True, 'ACTIONABLE')
 
 
 def test_unknown_deadline_without_trusted_ongoing_type_is_withheld():

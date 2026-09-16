@@ -13,8 +13,8 @@ history is judged as it stood when it was published.
 from datetime import datetime, timedelta
 
 # A member needs enough runway to read the notice, decide, prepare documents and
-# apply. Anything under three days is not a usable weekly recommendation.
-MINIMUM_APPLICATION_LEAD_TIME = timedelta(hours=72)
+# apply. Anything under two days is not a usable weekly recommendation.
+MINIMUM_APPLICATION_LEAD_TIME = timedelta(hours=48)
 
 # Only these normalized deadline types are trusted to mean "still accepting"
 # without an end date. UNKNOWN is never promoted to ongoing.

@@ -77,7 +77,7 @@ def test_out_of_scope_and_review_required_are_classified_but_never_published(db)
 
 @pytest.mark.parametrize('case,end,start,kind', [
     ('expired', AT - timedelta(days=1), None, 'FIXED_DATE'),
-    ('near', AT + timedelta(hours=71), None, 'FIXED_DATE'),
+    ('near', AT + timedelta(hours=47), None, 'FIXED_DATE'),
     ('unknown', None, None, 'UNKNOWN'),
     ('upcoming', AT + timedelta(days=60), AT + timedelta(days=5), 'FIXED_DATE'),
 ])
@@ -93,8 +93,8 @@ def test_trusted_ongoing_acceptance_still_publishes(db, kind):
     assert result['item_count'] == 1
 
 
-def test_exactly_seventy_two_hours_is_published(db):
-    result = build_briefing(db, acquire(db, program(RELEVANT, end=AT + timedelta(hours=72))), AT)
+def test_exactly_forty_eight_hours_is_published(db):
+    result = build_briefing(db, acquire(db, program(RELEVANT, end=AT + timedelta(hours=48))), AT)
     assert result['item_count'] == 1
 
 

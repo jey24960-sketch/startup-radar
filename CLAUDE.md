@@ -82,7 +82,7 @@ first and treat its repository instructions as binding.
 Collection stays broad; publication is selective. Order: cross-source dedup -> material
 NEW/UPDATE -> actionability -> GFC relevance. None of it deletes or edits stored facts.
 
-- **Actionability** (`radar/actionability.py`): `MINIMUM_APPLICATION_LEAD_TIME = 72h`, judged
+- **Actionability** (`radar/actionability.py`): `MINIMUM_APPLICATION_LEAD_TIME = 48h`, judged
   against the publication reference time. Withholds CLOSED, NEAR_DEADLINE, UPCOMING, and
   DEADLINE_UNKNOWN unless `deadline_type` is a trusted `ROLLING`/`UNTIL_BUDGET_EXHAUSTED`.
 - **Relevance** (`radar/relevance.py`, `gfc-v1.1`): deterministic rules, no AI. HIGH+BROAD →
