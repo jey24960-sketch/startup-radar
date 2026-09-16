@@ -114,3 +114,16 @@ def test_classification_never_mutates_facts():
     before = dict(row)
     classify_stage(row)
     assert row == before
+
+
+def test_tech_transfer_and_incubation_admission_count_as_initial_commercialisation():
+    # Real calibration cases: tech transfer is initial commercialisation, and an
+    # incubation admission notice is incubation even when phrased "입주 예비창업자".
+    assert 'STAGE_3' in codes('12대 국가전략기술 분야 기술이전 수요 모집', '공공기술 기술이전·사업화를 지원합니다')
+    assert 'STAGE_3' in codes('2026년 스타트업 96 입주 예비창업자 모집')
+
+
+def test_overseas_exhibitions_and_country_specific_entry_are_market_entry():
+    assert codes('[경기] 성남시 2026년 해외 전시회 개별 참가 지원 모집 공고', '해외 전시회 참가 비용을 지원합니다') == ['STAGE_4']
+    assert 'STAGE_4' in codes('글로벌 스타트업 서밋 (일본) 밋업 참여기업 모집', '일본 진출을 희망하는 기업의 PoC와 파트너십을 지원합니다')
+    assert 'STAGE_4' in codes('아시아 창업 엑스포 FLY ASIA 2026 참여 스타트업 모집', '1:1 밋업과 전시')
