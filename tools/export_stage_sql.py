@@ -23,7 +23,7 @@ def stage_block(code):
     counts = ' + '.join(
         f"(select count(*) from regexp_matches({source},'{sql_regex(compiled.pattern)}','gi'))"
         for _, compiled in stage.SIGNALS[code])
-    return f"  n:={counts};\n  if n>0 then hits:=hits||row('{code}',n,{stage.ORDER[code]})::startup_radar.stage_hit; end if;"
+    return f"  n:={counts};\n  if n>0 then found:=found||row('{code}',n,{stage.ORDER[code]})::startup_radar.stage_hit; end if;"
 
 
 def generate():
@@ -47,15 +47,15 @@ create or replace function startup_radar.gfc_stage_v1_0(
  p_title text,p_applicant text,p_support text)
 returns text[] language plpgsql immutable security invoker set search_path='' as $fn$
 declare
- t_all text; t_desc text; n bigint; hits startup_radar.stage_hit[]:='{{}}';
+ t_all text; t_desc text; n bigint; found startup_radar.stage_hit[]:='{{}}';
 begin
  -- STAGE_4 never reads the applicant summary: eligibility is not stage evidence.
  t_desc:=concat_ws(E'\\n',left(coalesce(p_title,''),{stage.TITLE_CHARS}),left(coalesce(p_support,''),{stage.SUPPORT_CHARS}));
  t_all:=concat_ws(E'\\n',left(coalesce(p_title,''),{stage.TITLE_CHARS}),left(coalesce(p_applicant,''),{stage.APPLICANT_CHARS}),left(coalesce(p_support,''),{stage.SUPPORT_CHARS}));
 {blocks}
- if cardinality(hits)=0 then return '{{}}'::text[]; end if;
+ if cardinality(found)=0 then return '{{}}'::text[]; end if;
  return coalesce((select array_agg(code order by ord) from (
-   select code,ord from unnest(hits) order by hits desc, ord asc limit {stage.MAX_STAGES}) top),'{{}}'::text[]);
+   select h.code,h.ord from unnest(found) as h order by h.hits desc, h.ord asc limit {stage.MAX_STAGES}) top),'{{}}'::text[]);
 end $fn$;
 revoke all on function startup_radar.gfc_stage_v1_0(text,text,text) from public,anon,authenticated;
 grant execute on function startup_radar.gfc_stage_v1_0(text,text,text) to service_role;

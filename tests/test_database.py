@@ -20,6 +20,8 @@ def db():
         c.execute('truncate startup_radar.telegram_updates,startup_radar.schedule_claims cascade')
         c.execute('truncate startup_radar.worker_executions cascade')
         c.execute("update startup_radar.runtime_settings set value=value || '{\"enabled\":true,\"ingestion_enabled\":true}'::jsonb where key='scheduling'")
+        # The official weekly channel is operator state, not per-test data: start every test unconfigured.
+        c.execute("update startup_radar.runtime_settings set value='{\"enabled\":false,\"chat_id\":null,\"name\":\"GFC StartupRadar\",\"join_url\":null}'::jsonb where key='weekly_telegram_channel'")
     return database
 
 

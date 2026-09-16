@@ -182,7 +182,7 @@ def test_operator_configuration_is_audited_and_validated(db):
     out = channel_admin.configure_channel(db, chat_id=CHAT, join_url='https://t.me/gfc', enabled=True, note='initial setup')
     assert out['usable'] and out['member_view']['join_url'] == 'https://t.me/gfc'
     with db.transaction() as c:
-        audit = c.execute("select detail from startup_radar.admin_audit where action='WEEKLY_TELEGRAM_CHANNEL_CONFIGURED'").fetchone()['detail']
+        audit = c.execute("select detail from startup_radar.admin_audit where action='WEEKLY_TELEGRAM_CHANNEL_CONFIGURED' order by created_at desc limit 1").fetchone()['detail']
     assert audit['after']['chat_id'] == CHAT and audit['note'] == 'initial setup'
 
 
