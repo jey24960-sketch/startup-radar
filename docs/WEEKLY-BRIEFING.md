@@ -346,6 +346,13 @@ delivery path. `/id` is not part of member onboarding.
 Every configuration change, verification and test post is written to `admin_audit`. After this,
 no per-member Telegram administration is required.
 
+Steps 3–5 are also available as the operator-only GitHub Actions workflow
+`.github/workflows/telegram_channel_setup.yml` ("Configure StartupRadar Telegram Channel",
+`workflow_dispatch` only, inputs `chat_id` + `join_url`). It runs the same CLI with the repository's
+production secrets: configure disabled → read-only verification → enable only if verification and the
+channel title match → read back. It never sends a message; the first channel post is the next normal
+Tuesday weekly run.
+
 ## Web and Validation
 
 `/notice` shows manual GFC notices and weekly Radar issues, including archived weeks.

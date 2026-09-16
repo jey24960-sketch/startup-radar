@@ -1,0 +1,141 @@
+name: Configure StartupRadar Telegram Channel
+# One-time / operator-only setup of the ONE official GFC Telegram channel.
+# Runs the existing audited `radar.cli telegram-channel` flow with the
+# production secrets that already live in this repository. It never posts the
+# weekly briefing and never sends a test message: configure disabled -> read-only
+# Telegram verification -> enable only if verification passed -> read back.
+on:
+  workflow_dispatch:
+    inputs:
+      chat_id:
+        description: Telegram channel @username (public) or -100... numeric id (private)
+        type: string
+        required: true
+      join_url:
+        description: Public https://t.me/... link shown to verified members
+        type: string
+        required: true
+      name:
+        description: Channel display name; must equal the title Telegram reports
+        type: string
+        default: GFC StartupRadar
+      note:
+        description: Operator note recorded in admin_audit
+        type: string
+        default: Initial GFC StartupRadar official channel setup
+permissions:
+  contents: read
+concurrency:
+  # Share the weekly run's lock so the channel never changes mid-publication.
+  group: startup-radar-v2-state
+  cancel-in-progress: false
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash   # explicit bash enables pipefail, so a failing CLI is not hidden by tee
+    env:
+      CHAT_ID: ${{ inputs.chat_id }}
+      JOIN_URL: ${{ inputs.join_url }}
+      CHANNEL_NAME: ${{ inputs.name }}
+      NOTE: ${{ inputs.note }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-v2.lock.txt
+      - run: pip install -r requirements-v2.lock.txt
+      - name: Validate non-secret inputs
+        shell: python
+        run: |
+          import os, re
+          from urllib.parse import urlsplit
+          chat_id, join_url = os.environ['CHAT_ID'].strip(), os.environ['JOIN_URL'].strip()
+          username = re.fullmatch(r'@([A-Za-z][A-Za-z0-9_]{4,31})', chat_id)
+          if not username and not re.fullmatch(r'-100\d{6,}', chat_id):
+              raise SystemExit(f'chat_id must be @username or a -100... channel id, got {chat_id!r}')
+          url = urlsplit(join_url)
+          if url.scheme != 'https' or url.hostname != 't.me' or url.username or url.password or url.query or url.fragment:
+              raise SystemExit(f'join_url must be a plain https://t.me/... link, got {join_url!r}')
+          if username and url.path.strip('/').lower() != username.group(1).lower():
+              raise SystemExit('join_url must point at the same public channel as chat_id')
+          if username is None and not url.path.startswith(('/+', '/joinchat/')):
+              raise SystemExit('a private channel needs a t.me/+... invite link')
+          print(f'inputs ok: chat_id={chat_id} join_url={join_url}')
+      - name: Configure channel (kept disabled)
+        env:
+          DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+        run: |
+          python -m radar.cli telegram-channel --disable --chat-id "$CHAT_ID" --join-url "$JOIN_URL" \
+            --name "$CHANNEL_NAME" --note "$NOTE" | tee configured.json
+          python - <<'PY'
+          import json, os
+          stored = json.load(open('configured.json'))['stored']
+          expected = {'enabled': False, 'chat_id': os.environ['CHAT_ID'].strip(), 'join_url': os.environ['JOIN_URL'].strip(), 'name': os.environ['CHANNEL_NAME']}
+          mismatch = {k: stored.get(k) for k, v in expected.items() if stored.get(k) != v}
+          if mismatch: raise SystemExit(f'stored configuration differs from inputs: {mismatch}')
+          print('configured while disabled')
+          PY
+      - name: Read-only Telegram verification (sends nothing)
+        env:
+          DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          # official_channel() only accepts an enabled row, so verify against the
+          # stored target directly; the database row stays disabled throughout.
+          python - <<'PY' | tee verification.json
+          import json, os
+          from radar.broadcast import safe_link, verify_channel
+          from radar.database import Database
+          from radar.notifications import TelegramTransport
+          from radar.channel_admin import read_channel
+          stored = read_channel(Database())['stored']
+          target = {'chat_id': str(stored['chat_id']).strip(), 'name': stored['name'], 'join_url': stored['join_url'] if safe_link(stored['join_url']) else None}
+          verdict = verify_channel(TelegramTransport(os.environ['TELEGRAM_BOT_TOKEN']), target)
+          print(json.dumps(verdict, ensure_ascii=False, default=str))
+          PY
+          python - <<'PY'
+          import json, os
+          verdict = json.load(open('verification.json'))
+          if not verdict.get('ok'):
+              raise SystemExit(f"Telegram verification failed: {verdict.get('reason')} - channel stays disabled")
+          title = verdict.get('chat_title')
+          if title != os.environ['CHANNEL_NAME']:
+              raise SystemExit(f'Telegram reports channel title {title!r}, expected {os.environ["CHANNEL_NAME"]!r} - channel stays disabled')
+          bot = verdict['checks']['bot']
+          print(f"verified: bot @{bot.get('username')} may post to channel {title!r} ({verdict['checks']['membership'].get('status')})")
+          PY
+      - name: Enable official weekly channel
+        env:
+          DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          # The audited CLI enables first and then verifies (writing the
+          # WEEKLY_TELEGRAM_CHANNEL_VERIFIED audit row). If that verification
+          # fails, disable again immediately so the channel never stays enabled
+          # unverified.
+          if ! python -m radar.cli telegram-channel --enable --verify \
+              --note "Enable official GFC StartupRadar weekly broadcast after read-only verification" | tee enabled.json; then
+            python -m radar.cli telegram-channel --disable --note "Rolled back: Telegram verification failed during enable"
+            echo 'enable aborted; channel disabled again' >&2
+            exit 1
+          fi
+      - name: Read back final state
+        env:
+          DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+        run: |
+          python -m radar.cli telegram-channel | tee final.json
+          python - <<'PY'
+          import json, os
+          result = json.load(open('final.json'))
+          stored, view = result['stored'], result['member_view']
+          expected = {'enabled': True, 'chat_id': os.environ['CHAT_ID'].strip(), 'join_url': os.environ['JOIN_URL'].strip(), 'name': os.environ['CHANNEL_NAME']}
+          mismatch = {k: stored.get(k) for k, v in expected.items() if stored.get(k) != v}
+          if mismatch or not result['usable']: raise SystemExit(f'final state unexpected: {mismatch or result}')
+          if view != {'enabled': True, 'name': expected['name'], 'join_url': expected['join_url']}: raise SystemExit(f'member view unexpected: {view}')
+          print('official channel enabled; members now see the join link. No message was sent.')
+          PY
