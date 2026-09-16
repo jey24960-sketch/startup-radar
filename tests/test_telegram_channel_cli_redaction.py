@@ -41,7 +41,7 @@ def stubs(monkeypatch):
                                               'user': {'id': 8711845252, 'username': 'radar_bot'}}
     monkeypatch.setattr(cli, 'Database', StubDatabase)
     monkeypatch.setattr(cli, 'TelegramTransport', lambda token: transport)
-    monkeypatch.setenv('TELEGRAM_BOT_TOKEN', '8711845252:AAFakeTokenForRedactionTestOnly_x')
+    monkeypatch.setenv('TELEGRAM_BOT_TOKEN', 'fixture-token-not-real')
     return transport
 
 
@@ -55,7 +55,7 @@ def test_verify_output_shows_operator_facts_but_no_raw_telegram_payload(stubs, c
     assert verification['chat_title'] == 'GFC StartupRadar' and verification['checks']['chat']['type'] == 'channel'
     assert verification['checks']['membership'] == {'state': 'OK', 'status': 'administrator', 'can_post_messages': True}
     assert verification['checks']['chat']['id'] == '-100…2096'
-    for leaked in ('invite_link', 't.me/+', 'VwaipXofhco1MjA9', 'description', '8711845252', '-1002961552096', 'AAFakeToken', "'user'"):
+    for leaked in ('invite_link', 't.me/+', 'VwaipXofhco1MjA9', 'description', '8711845252', '-1002961552096', 'fixture-token-not-real', "'user'"):
         assert leaked not in out, leaked
     assert not stubs.send.called
 
@@ -67,4 +67,4 @@ def test_verify_failure_exits_nonzero_with_an_actionable_reason(stubs, capsys):
     verification = json.loads(out)['verification']
     assert verification['status'] == 'FAILED' and verification['reason'] == 'CHAT_NOT_ACCESSIBLE'
     assert verification['checks']['chat'] == {'state': 'FAILED', 'error': 'Bad Request: chat not found'}
-    assert 'error_code' not in out and 'AAFakeToken' not in out
+    assert 'error_code' not in out and 'fixture-token-not-real' not in out
