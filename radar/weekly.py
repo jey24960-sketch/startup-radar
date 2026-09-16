@@ -8,6 +8,7 @@ from radar.documents import html_text
 from radar.identity import digest,deduplicate_publication
 from radar.notifications import safe_link
 from radar.broadcast import SETTING_KEY,announcement_text,briefing_url,official_channel as official_channel_config
+from radar.operation import visibility_mode
 from radar.relevance import classify,PUBLISHABLE_STATUSES,RELEVANCE_VERSION
 from radar.stage import classify_stage,STAGE_VERSION
 from radar.weekly_scope import weekly_sources,collection_completed
@@ -183,8 +184,14 @@ def announce(db, briefing_id, transport=None):
         if not briefing:raise ValueError('Weekly announcement requires a published briefing')
         if briefing['publication_kind']=='INITIAL_BASELINE':
             return {'state':'BASELINE_ARCHIVE','planned':0,'delivered':0}
+        # A withdrawn issue is hidden from members, so it is never (newly) announced.
+        # An already delivered message stays in Telegram history untouched.
+        if briefing.get('withdrawn_at') is not None:return {'state':'WITHDRAWN','planned':0,'delivered':0}
         channel=official_channel(c)
         if channel is None:return {'state':'NO_BROADCAST_CHANNEL','planned':0,'delivered':0}
+        # PRIVATE web visibility suppresses the public channel; the channel's own
+        # privacy is never changed from here.
+        if visibility_mode(c)=='PRIVATE':return {'state':'VISIBILITY_PRIVATE','planned':0,'delivered':0,'channel':channel['name']}
         if transport is None:return {'state':'DELIVERY_DISABLED','planned':0,'delivered':0,'channel':channel['name']}
         items=c.execute('select snapshot,stage_codes from startup_radar.weekly_briefing_items where briefing_id=%s order by display_order',(briefing_id,)).fetchall()
         text=announcement_text(briefing,items)
@@ -216,6 +223,8 @@ def run_weekly(db, transport=None, at=None, publish=True, collector=None, revisi
     from radar.ingestion import ingest
     from radar.executions import claim_execution,finish_execution
     at=at or now(); start,_=week_window(at)
+    # claim_execution() returns {'status':'PAUSED'} while the operator pause is
+    # on: no claim, collection, publication or send happens.
     claim=claim_execution(db,'WEEKLY')
     if 'execution_id' not in claim:return claim
     try:

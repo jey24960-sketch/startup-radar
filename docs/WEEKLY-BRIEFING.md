@@ -355,6 +355,43 @@ Tuesday weekly run. Because the repository is public, `--verify` output is redac
 username/name, channel title/type, admin status, posting permission, a masked numeric id
 (`-100…7890`) and the failure reason — never raw Telegram payloads or invite links.
 
+## Operator Controls (2026-09-17)
+
+`/radar/admin` carries a "StartupRadar 운영 제어" section backed by two `runtime_settings` rows and
+additive columns on `weekly_briefings`. Migration
+`20260917100000_radar_operation_visibility_withdrawal.sql` seeds today's behaviour (RUNNING,
+MEMBERS_ONLY) and changes nothing else.
+
+**Pause / resume** — `runtime_settings.radar_operation` `{enabled, reason, updated_by, updated_at,
+version}`. `executions.claim_execution()` reads it under the execution lock before any row is
+written, so a paused schedule (WEEKLY, INGEST, REFRESH, TICK, …) returns `{"status":"PAUSED"}`
+with exit code 0: no claim, no `ingestion_run`, no collection, no publication, no revision, no
+Telegram, only an `admin_audit` row `RADAR_RUN_SKIPPED_PAUSED`. Resume only allows the *next*
+execution; nothing is replayed. `vars.RADAR_V2_ENABLED` stays the external emergency gate and is
+neither readable nor mutable from the website.
+
+**Visibility** — `runtime_settings.radar_visibility` `{mode, …}` with `mode` exactly one of
+`PRIVATE` (admin only), `MEMBERS_ONLY` (default; verified member/admin), `PUBLIC` (anyone may
+read *published* content). The single rule is `startup_radar.can_view_published_content()`; the
+member RLS policies and the published-read RPCs all call it. `gfc_radar_weekly_briefings` /
+`gfc_radar_weekly_briefing` are now SECURITY DEFINER behind that check and are the only RPCs
+executable by `anon` besides the content-free probe `gfc_radar_visibility()`; `anon` still has no
+table access and no team/settings/admin/health RPC. `/radar/programs`, profiles, preferences,
+recommendations, health and controls stay member/admin only in every mode. PRIVATE also makes
+`announce()` return `VISIBILITY_PRIVATE` (no ledger row, nothing sent); the Telegram channel's own
+privacy is never touched.
+
+**Withdrawal** — `weekly_briefings.withdrawn_at/withdrawn_by/withdrawal_reason`. "공지 삭제" sets
+them; "복구" clears them. `status`, `published_at`, `revision`, `material_hash` and item rows are
+never changed, so a withdrawn issue remains NEW/UPDATE history and can never make its programs look
+new again. Withdrawn issues vanish from every reader RPC and the member RLS view, remain in
+`gfc_radar_admin_briefings()`, and `announce()` returns `WITHDRAWN` (an already delivered Telegram
+message is left alone; `deleteMessage` is deliberately not used).
+
+Admin RPCs (`gfc_radar_admin_control`, `_set_operation`, `_set_visibility`, `_briefings`,
+`_withdraw_briefing`, `_restore_briefing`) require `auth.uid()` + `my_role()='admin'`, resolve the
+actor from `auth.uid()` only, use compare-and-set `version`s, and write `admin_audit`.
+
 ## Web and Validation
 
 `/notice` shows manual GFC notices and weekly Radar issues, including archived weeks.

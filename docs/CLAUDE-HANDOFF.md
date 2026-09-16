@@ -515,6 +515,25 @@ to a flat list for pre-v1.1 articles; `NoticePage.jsx` shows `새로 확인 N건
   `applicant_summary`. RPC exposes `stage_fit:[{code,label}]`; web colours labels, Telegram prefixes
   `[label / label]` from the same stored codes.
 
+## 21. Added 2026-09-17: operator controls (pause, visibility, withdrawal)
+
+- `runtime_settings.radar_operation` / `radar_visibility`, seeded RUNNING / MEMBERS_ONLY by
+  `20260917100000_radar_operation_visibility_withdrawal.sql`. The worker checks the pause inside
+  `claim_execution()` (`radar/operation.py`); `announce()` returns `VISIBILITY_PRIVATE` or
+  `WITHDRAWN` before any ledger row.
+- One access rule: `startup_radar.can_view_published_content()` (admin always; PUBLIC anyone;
+  MEMBERS_ONLY member/admin; PRIVATE admin only). Weekly read RPCs are SECURITY DEFINER behind it
+  and callable by `anon`; nothing else is. Member RLS policies use the same helper.
+- Soft withdrawal columns on `weekly_briefings`; publication facts and items are immutable.
+- GFC: `src/lib/radarControl.js`, `src/components/RadarOperationControls.jsx` (top of
+  `/radar/admin`), `src/hooks/useRadarVisibility.js`; `/notice` and `/notice/weekly/:id` pick
+  locked vs. unavailable state from `gfc_radar_visibility()`. `e2e/fixture.js` now holds the shared
+  Playwright fixture; `e2e/radar-control.spec.js` drives the real RPCs through PGlite.
+- Local testing note: `node tools/test_database.mjs` (PGlite socket) runs the Python DB suites
+  without Postgres, but files that open concurrent connections (`test_database_session`,
+  `test_profile_commands`, `test_program_responses_db`, `test_web_runtime`, executions/jobs
+  concurrency) time out on it; CI's real Postgres is authoritative for those.
+
 ## 18. Open questions for the operator
 
 1. **Is `vars.RADAR_V2_ENABLED` actually `true`?** Not inspectable without `gh` (the GitHub CLI

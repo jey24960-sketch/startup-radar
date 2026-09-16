@@ -3,6 +3,7 @@ import os
 import socket
 from uuid import UUID,uuid4
 from psycopg.types.json import Jsonb
+from radar.operation import paused_result
 
 LOCK_KEY=782394202
 
@@ -22,6 +23,10 @@ def claim_execution(db,kind,source_slug=None,job_id=None):
         # remains authoritative after this short-lived connection closes.
         if not c.execute('select pg_try_advisory_xact_lock(%s) acquired',(LOCK_KEY,)).fetchone()['acquired']:
             return {'status':'FAILED','error':'Another V2 job is running; request remains pending'}
+        # Operator pause is decided here, under the same lock and before any
+        # claim, so every production job kind honours it without extra round-trips.
+        paused=paused_result(c,kind)
+        if paused:return paused
         active=c.execute('select id from startup_radar.worker_executions where finished_at is null').fetchone()
         if active:
             return {'status':'FAILED','error':'Another V2 job is running or requires verified recovery; request remains pending',

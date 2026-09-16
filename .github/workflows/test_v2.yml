@@ -1,6 +1,9 @@
 name: StartupRadar V2 verification
 on:
   pull_request:
+  # main is committed to directly; verify every deployment, not only PRs.
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

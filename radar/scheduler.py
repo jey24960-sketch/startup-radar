@@ -116,7 +116,7 @@ def tick(db,at=None,transport=None,executor=execute,execution_id=None):
 
 def run_job(db,kind,source_slug=None,job_id=None,transport=None,executor=execute):
     from radar.executions import claim_execution,finish_execution
-    claim=claim_execution(db,kind,source_slug,job_id)
+    claim=claim_execution(db,kind,source_slug,job_id)  # {'status':'PAUSED'} while the operator pause is on
     if 'execution_id' not in claim:return claim
     execution_id=claim['execution_id']
     # BaseException/abrupt process termination deliberately leaves the claim.

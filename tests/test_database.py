@@ -22,6 +22,10 @@ def db():
         c.execute("update startup_radar.runtime_settings set value=value || '{\"enabled\":true,\"ingestion_enabled\":true}'::jsonb where key='scheduling'")
         # The official weekly channel is operator state, not per-test data: start every test unconfigured.
         c.execute("update startup_radar.runtime_settings set value='{\"enabled\":false,\"chat_id\":null,\"name\":\"GFC StartupRadar\",\"join_url\":null}'::jsonb where key='weekly_telegram_channel'")
+        # Operator controls start at production defaults: running, members-only.
+        c.execute("update startup_radar.runtime_settings set value='{\"enabled\":true,\"reason\":null,\"updated_by\":null,\"updated_at\":null,\"version\":1}'::jsonb where key='radar_operation'")
+        c.execute("update startup_radar.runtime_settings set value='{\"mode\":\"MEMBERS_ONLY\",\"reason\":null,\"updated_by\":null,\"updated_at\":null,\"version\":1}'::jsonb where key='radar_visibility'")
+        c.execute('truncate startup_radar.admin_audit')
     return database
 
 

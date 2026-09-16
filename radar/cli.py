@@ -116,7 +116,8 @@ def main(argv=None):
             transport=TelegramTransport(token)
         result=run_job(db,args.kind,args.source or None,args.job_id or None,transport)
     print(json.dumps(result,ensure_ascii=False,default=str))
-    return 0 if result['status']=='SUCCESS' else 1
+    # PAUSED is an operator decision honoured by the worker, not a failure.
+    return 0 if result['status'] in ('SUCCESS','PAUSED') else 1
 
 
 if __name__=='__main__':raise SystemExit(main())

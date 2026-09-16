@@ -50,6 +50,13 @@ first and treat its repository instructions as binding.
   the ONE official GFC channel (`runtime_settings.weekly_telegram_channel`), never to per-team
   subscriptions. Members join the channel once; no ID/chat-ID submission, no operator binding.
   Schedule: `cron: '0 6 * * 2'` = Tuesday 15:00 Asia/Seoul, gated by `vars.RADAR_V2_ENABLED`.
+- **Operator controls (2026-09-17).** `runtime_settings.radar_operation` (pause: worker returns
+  `PAUSED` from `claim_execution()` with no ingestion_run/collection/publication/Telegram; resume
+  never replays) and `radar_visibility` (`PRIVATE`/`MEMBERS_ONLY`/`PUBLIC`, default MEMBERS_ONLY;
+  one rule `startup_radar.can_view_published_content()`; PRIVATE also suppresses the weekly
+  Telegram send). Withdrawal is soft (`weekly_briefings.withdrawn_at`), never a delete, and never
+  touches revision/published_at/material_hash/items. PUBLIC exposes published weekly content only;
+  never team, personal, recommendation, health, admin or chat-id data. See WEEKLY-BRIEFING.md.
 - A published week is **stable**: reruns return the existing ID and do not rewrite it. Only an
   explicit `--revision-note` revises, preserving ID, first `published_at`, and prior-item audit.
 - The weekly path uses **no AI, no OCR, no eligibility engine, no recommendations, no team
@@ -112,7 +119,9 @@ The 2026-09-15 articles were corrected once in place on 2026-09-16 (WEEKLY 83→
 `git fetch && git status` first. The local checkout has previously been found behind
 `origin/main`. `origin/main` is production.
 
-Local environment note (verified 2026-09-16): this machine blocks `libpq`, so `psycopg` cannot
-load and every database-backed Python test fails at import. Pure-logic tests
-(`test_actionability`, `test_relevance`, `test_cross_source_dedup`, `test_relevance_sql_mirror`)
-run fine. Three `test_weekly_scope` failures are pre-existing and caused by the same block.
+Local environment note (updated 2026-09-17): `psycopg` imports fine. There is no local Postgres or
+Docker; run DB-backed suites with `node tools/test_database.mjs` (PGlite socket, port 55432) and
+`TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55432/postgres?sslmode=disable`.
+That server is single-connection: restart it per batch and expect the concurrency-heavy files to
+time out locally (CI's Postgres 17 is authoritative). `gh` is not installed and no GitHub token
+is kept on this machine.
