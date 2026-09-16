@@ -90,7 +90,9 @@ EVENT_SOFT_EXCLUSION = _rules([
 # AXIS A positives: what the founder actually gets to do.
 CORE_STARTUP = _rules([
     ('액셀러레이팅·배치 선발', r'액셀러레이[팅터]|엑셀러레이[팅터]|배치\s*(프로그램|모집|선발)|\bbatch\b|accelerat|인큐베이[팅션]|레지던시|residency'),
-    ('창업 보육·입주 공간', r'창업\s*보육|보육\s*센터|입주\s*(기업|팀|기업체|공간|모집|신청)|창업\s*공간|메이커\s*스페이스'),
+    # A registered business address is the workspace a student founder actually
+    # needs to incorporate, so it belongs with incubation rather than nowhere.
+    ('창업 보육·입주 공간', r'창업\s*보육|보육\s*센터|입주\s*(기업|팀|기업체|공간|모집|신청)|창업\s*공간|메이커\s*스페이스|사업장\s*주소지|비상주\s*사무실'),
     # English is common in Korean startup programme titles ("INVESTOR DAY"),
     # so the investor track must match both languages.
     ('투자 매칭·IR·데모데이', r'\bIR\b|데모\s*데이|demo\s*day|investor\s*day|pitch(ing)?\s*day|투자\s*(매칭|연계|유치\s*지원|설명회|상담회)|피칭|피치\s*덱|투자자\s*매칭|쇼케이스'),
@@ -102,7 +104,9 @@ CORE_STARTUP = _rules([
     ('예비·초기 창업자 선발', r'예비\s*창업(자|팀|패키지)|초기\s*창업(자|패키지)|창업\s*도약|재도전\s*창업|청년\s*창업\s*사관'),
     ('기술이전·기술사업화', r'기술\s*(이전|사업화)|기술\s*실용화'),
     ('글로벌 진출 실행', r'(글로벌|해외|국제|현지)[^\n]{0,20}(진출|실증|파트너|바이어\s*매칭|투자자|액셀러|법인\s*설립)|(스타트업|창업\s*기업)[^\n]{0,15}(통합관|파빌리온|공동관)'),
-    ('창업 특화 법률·지분·IP', r'(창업|스타트업|투자)\s*(법률|계약|지분|주주간|특허|IP)|주주간\s*계약|지분\s*구조|투자\s*계약|스톡옵션'),
+    # Helping a founder incorporate is high leverage. This is the opposite of the
+    # RESTRICTION rule below, which fires when a corporation is already required.
+    ('창업 특화 법률·지분·IP', r'(창업|스타트업|투자)\s*(법률|계약|지분|주주간|특허|IP)|주주간\s*계약|지분\s*구조|투자\s*계약|스톡옵션|법인\s*설립[^\n]{0,12}(지원|대행|제공|컨설팅|안내)|사업자\s*등록[^\n]{0,10}(지원|대행)'),
 ])
 
 # The stricter subset able to rescue a talk/event: it must leave the founder

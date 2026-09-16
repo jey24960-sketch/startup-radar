@@ -115,6 +115,16 @@ def test_low_leverage_with_a_narrow_restriction_stays_out_of_scope():
     assert decision['startup_leverage'] == 'LOW'
 
 
+def test_student_founder_incorporation_and_address_support_is_relevant():
+    # Regression: a real Yonsei notice offering incorporation and a registered
+    # business address to student founders was classified OUT_OF_SCOPE, even
+    # though that is exactly the GFC audience and a concrete founder outcome.
+    assert status('☆2026 학생창업 법인설립·사업장 주소지 제공 프로그램(~11.30 모집)☆') in PUBLISHABLE_STATUSES
+    assert status('예비창업자 사업자등록 대행 지원 프로그램 참여자 모집') in PUBLISHABLE_STATUSES
+    # Requiring an existing corporation is still a restriction, not leverage.
+    assert classify(facts('액셀러레이팅 참가기업 모집', '법인 설립 필수'))['relevance_status'] == CONDITIONAL
+
+
 def test_english_investor_programme_titles_are_recognised():
     # Korean programme titles routinely use English for the investor track.
     assert status('2026 강원권 LIPS 민간운영사 연합 INVESTOR DAY 참여기업 모집') in PUBLISHABLE_STATUSES

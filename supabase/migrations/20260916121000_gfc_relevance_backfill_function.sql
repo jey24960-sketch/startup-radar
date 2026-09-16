@@ -51,7 +51,7 @@ begin
     hard:='사회적경제·공공구매'; end if;
   if t ~* '액셀러레이[팅터]|엑셀러레이[팅터]|배치\s*(프로그램|모집|선발)|\ybatch\y|accelerat|인큐베이[팅션]|레지던시|residency' and not core @> array['액셀러레이팅·배치 선발'::text] then
     core:=core||'액셀러레이팅·배치 선발'::text; end if;
-  if t ~* '창업\s*보육|보육\s*센터|입주\s*(기업|팀|기업체|공간|모집|신청)|창업\s*공간|메이커\s*스페이스' and not core @> array['창업 보육·입주 공간'::text] then
+  if t ~* '창업\s*보육|보육\s*센터|입주\s*(기업|팀|기업체|공간|모집|신청)|창업\s*공간|메이커\s*스페이스|사업장\s*주소지|비상주\s*사무실' and not core @> array['창업 보육·입주 공간'::text] then
     core:=core||'창업 보육·입주 공간'::text; end if;
   if t ~* '\yIR\y|데모\s*데이|demo\s*day|investor\s*day|pitch(ing)?\s*day|투자\s*(매칭|연계|유치\s*지원|설명회|상담회)|피칭|피치\s*덱|투자자\s*매칭|쇼케이스' and not core @> array['투자 매칭·IR·데모데이'::text] then
     core:=core||'투자 매칭·IR·데모데이'::text; end if;
@@ -71,7 +71,7 @@ begin
     core:=core||'기술이전·기술사업화'::text; end if;
   if t ~* '(글로벌|해외|국제|현지)[^\n]{0,20}(진출|실증|파트너|바이어\s*매칭|투자자|액셀러|법인\s*설립)|(스타트업|창업\s*기업)[^\n]{0,15}(통합관|파빌리온|공동관)' and not core @> array['글로벌 진출 실행'::text] then
     core:=core||'글로벌 진출 실행'::text; end if;
-  if t ~* '(창업|스타트업|투자)\s*(법률|계약|지분|주주간|특허|IP)|주주간\s*계약|지분\s*구조|투자\s*계약|스톡옵션' and not core @> array['창업 특화 법률·지분·IP'::text] then
+  if t ~* '(창업|스타트업|투자)\s*(법률|계약|지분|주주간|특허|IP)|주주간\s*계약|지분\s*구조|투자\s*계약|스톡옵션|법인\s*설립[^\n]{0,12}(지원|대행|제공|컨설팅|안내)|사업자\s*등록[^\n]{0,10}(지원|대행)' and not core @> array['창업 특화 법률·지분·IP'::text] then
     core:=core||'창업 특화 법률·지분·IP'::text; end if;
  core_reason:=left(array_to_string(core,' · '),200);
  if hard is not null and cardinality(core)>0 then

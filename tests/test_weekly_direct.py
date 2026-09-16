@@ -178,7 +178,9 @@ def test_real_samples_enter_existing_storage_and_one_weekly_post(db,monkeypatch)
 def test_exact_cross_source_period_dedup_preserves_provenance_not_fuzzy(db):
     api=db.upsert_source('test-api','API','BIZINFO',{})
     direct=db.upsert_source('test-direct','Direct','HTML',{'weekly_direct':True})
-    p=Program(title='2026 Founder Program',organization='Official Org',official_url='https://api.example/1',
+    # A publishable programme, so this exercises identity rather than the
+    # relevance gate: an unclassifiable title would be withheld for other reasons.
+    p=Program(title='2026 초기창업기업 액셀러레이팅 참가팀 모집',organization='Official Org',official_url='https://api.example/1',
         application_start_at=datetime(2026,9,1,tzinfo=SEOUL),
         application_end_at=datetime(2026,9,30,tzinfo=SEOUL),deadline_type='FIXED_DATE')
     first=db.save_program(p,api['id'],'api-1',p.official_url,{},'api')
