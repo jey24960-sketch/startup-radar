@@ -376,18 +376,20 @@ one character (`모집 공고` vs `모집공고`) and the organizations differ (
 
 ## 14. Telegram
 
-`weekly.py: announce()`. Preconditions: briefing `PUBLISHED`; `publication_kind != INITIAL_BASELINE`;
-subscription `enabled AND digest_enabled AND channel_health='HEALTHY'` and team preferences not
-disabled. `distinct on (chat_id)` plus `unique(briefing_id, chat_id)` means one chat cannot be
-posted twice through multiple teams. A committed `SENDING` claim precedes the network call;
-`FAILED`/`UNCERTAIN`/`SENDING` are never auto-resent. Message = title, count, ≤3 examples, and
-the member-only article URL (`briefing_url()` validates `RADAR_MEMBER_NOTICE_URL`, rejecting any
-query/fragment). `--deliver` is additionally gated by `vars.RADAR_V2_DELIVERY_ENABLED`.
+> **Superseded 2026-09-16.** The per-team subscription model described below was the state at
+> audit time. The normal weekly briefing now posts to **one official GFC Telegram channel**
+> (`runtime_settings.weekly_telegram_channel`) via `weekly.announce()`, which no longer reads
+> `telegram_subscriptions` or `team_notification_preferences`. Members join the channel once; there
+> is no Telegram ID/chat ID submission and no operator binding. See `docs/WEEKLY-BRIEFING.md`
+> "Telegram" for the current contract and the one-time operator setup. The legacy tables and admin
+> commands remain for advanced alerts and history.
 
-**Production state (verified as of 2026-09-16):** 2 subscriptions, **0 deliverable**, **0 rows in
-`weekly_announcements`** — no Telegram announcement has ever been sent. `NO_SUBSCRIBERS` is
-returned as a valid no-op. This is also why the baseline split's "no prior announcement"
-precondition passed.
+*Original audit record:* `weekly.py: announce()` selected `telegram_subscriptions` where
+`enabled AND digest_enabled AND channel_health='HEALTHY'` joined to team preferences;
+`distinct on (chat_id)` plus `unique(briefing_id, chat_id)`; a committed `SENDING` claim preceded
+the network call; `FAILED`/`UNCERTAIN`/`SENDING` were never auto-resent. Production had 2
+subscriptions, 0 deliverable and 0 rows in `weekly_announcements` — no announcement had ever been
+sent, which is also why the baseline split's "no prior announcement" precondition passed.
 
 ## 15. Handoff claim verification
 

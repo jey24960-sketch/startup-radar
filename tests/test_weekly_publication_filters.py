@@ -153,4 +153,4 @@ def test_correction_preserves_publication_identity_and_never_announces(db):
     assert after['revision'] == before['revision'] + 1 and after['item_count'] == 1
     # The withdrawn snapshots remain recoverable.
     assert len(audit['previous_items']) == 2 and audit['telegram_sent'] is False
-    assert announce(db, result['briefing_id'], Mock())['state'] == 'NO_SUBSCRIBERS'
+    assert announce(db, result['briefing_id'], Mock())['state'] == 'NO_BROADCAST_CHANNEL'

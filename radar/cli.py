@@ -19,6 +19,14 @@ def main(argv=None):
     weekly.add_argument('--check-sources',action='store_true',help='Recheck bounded official sources without rewriting a published issue or sending Telegram')
     weekly.add_argument('--revision-note',help='Explicitly recollect and revise the current published issue, keeping its ID and prior-item audit; never duplicates announcements')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
+    channel=commands.add_parser('telegram-channel',help='Configure and verify the ONE official GFC Telegram channel that carries every weekly briefing; never posts the briefing itself')
+    channel.add_argument('--chat-id',help='Telegram channel chat id (usually -100...) or @username')
+    channel.add_argument('--join-url',help='Public https invite/join link shown to verified members')
+    channel.add_argument('--name',help='Display name shown to members')
+    channel.add_argument('--enable',action='store_true');channel.add_argument('--disable',action='store_true')
+    channel.add_argument('--note',help='Operator note recorded in admin_audit for any configuration change')
+    channel.add_argument('--verify',action='store_true',help='Read-only Telegram check: token, channel access, bot admin/post permission. Sends nothing')
+    channel.add_argument('--test-post',action='store_true',help='Send ONE clearly labelled test message to the channel. Not a weekly announcement')
     bootstrap=commands.add_parser('bootstrap-team');bootstrap.add_argument('--user-id',type=UUID,required=True)
     bootstrap.add_argument('--name',default='GFC');bootstrap.add_argument('--admin',action='store_true')
     run=commands.add_parser('run');run.add_argument('--kind',choices=['INGEST','DIGEST','REMINDER','HIGH_FIT','TICK','REFRESH'],default='TICK')
@@ -47,6 +55,22 @@ def main(argv=None):
             if not token:raise ValueError('TELEGRAM_BOT_TOKEN is required for --deliver')
             transport=TelegramTransport(token)
         result=run_weekly(db,transport,publish=not args.draft,revision_note=args.revision_note,check_sources=args.check_sources)
+    elif args.command=='telegram-channel':
+        from radar import channel_admin
+        if args.enable and args.disable:raise ValueError('Choose --enable or --disable, not both')
+        changing=any(v is not None for v in (args.chat_id,args.join_url,args.name)) or args.enable or args.disable
+        if changing:
+            result=channel_admin.configure_channel(db,chat_id=args.chat_id,join_url=args.join_url,name=args.name,
+                enabled=True if args.enable else False if args.disable else None,note=args.note)
+        else:result={'status':'SUCCESS',**channel_admin.read_channel(db)}
+        if args.verify or args.test_post:
+            token=os.environ.get('TELEGRAM_BOT_TOKEN')
+            if not token:raise ValueError('TELEGRAM_BOT_TOKEN is required for --verify/--test-post')
+            transport=TelegramTransport(token)
+            if args.verify:result['verification']=channel_admin.verify(db,transport)
+            if args.test_post:result['test_post']=channel_admin.test_post(db,transport)
+            if result['status']=='SUCCESS' and (result.get('verification',{}).get('status')=='FAILED' or result.get('test_post',{}).get('status')=='FAILED'):
+                result['status']='FAILED'
     elif args.command=='quality-report':
         from radar.quality import refresh_quality,quality_report
         if args.refresh:refresh_quality(db)

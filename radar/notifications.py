@@ -44,6 +44,20 @@ class TelegramTransport:
         return {'state':'FAILED','error':f'Telegram rejected request (HTTP {response.status_code})',
                 'channel_health':'BLOCKED' if response.status_code==403 else None}
 
+    # Read-only Bot API calls used to verify the official weekly channel before
+    # anything is ever posted to it. None of these send a message.
+    def _read(self,method,**params):
+        try:response=requests.get(f'https://api.telegram.org/bot{self.token}/{method}',params=params,timeout=20)
+        except requests.RequestException:return {'state':'UNCERTAIN','error':'Telegram request outcome unknown'}
+        try:payload=response.json()
+        except ValueError:return {'state':'UNCERTAIN','error':'Telegram returned non-JSON response'}
+        if not isinstance(payload,dict) or not payload.get('ok') or not isinstance(payload.get('result'),dict):
+            return {'state':'FAILED','error':str(payload.get('description') if isinstance(payload,dict) else 'Invalid Telegram response')[:200]}
+        return {'state':'OK',**payload['result']}
+    def get_me(self):return self._read('getMe')
+    def get_chat(self,chat_id):return self._read('getChat',chat_id=chat_id)
+    def get_chat_member(self,chat_id,user_id):return self._read('getChatMember',chat_id=chat_id,user_id=user_id)
+
 
 def safe_link(url):
     try:

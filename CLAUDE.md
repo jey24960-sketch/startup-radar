@@ -46,7 +46,9 @@ first and treat its repository instructions as binding.
 
 ## Weekly product invariants — do not break
 
-- **One** publication per operational Seoul week (Mon–Sun), **one** Telegram announcement.
+- **One** publication per operational Seoul week (Mon–Sun), **one** Telegram announcement — posted to
+  the ONE official GFC channel (`runtime_settings.weekly_telegram_channel`), never to per-team
+  subscriptions. Members join the channel once; no ID/chat-ID submission, no operator binding.
   Schedule: `cron: '0 6 * * 2'` = Tuesday 15:00 Asia/Seoul, gated by `vars.RADAR_V2_ENABLED`.
 - A published week is **stable**: reruns return the existing ID and do not rewrite it. Only an
   explicit `--revision-note` revises, preserving ID, first `published_at`, and prior-item audit.
@@ -56,6 +58,7 @@ first and treat its repository instructions as binding.
   publish real items and keeps a nonzero CLI exit.
 - Exactly **one** `INITIAL_BASELINE` article may exist (unique index). It establishes known
   history and **cannot** send Telegram (`weekly.py` `announce()` returns `BASELINE_ARCHIVE`).
+  An unconfigured channel is `NO_BROADCAST_CHANNEL`, a valid no-op, never a publication failure.
 - Weekly/baseline rows are member-only via SECURITY INVOKER RPCs
   (`gfc_radar_weekly_briefings`, `gfc_radar_weekly_briefing`) + `public.my_role()` in
   `('member','admin')`. Preserve GFC Auth/RLS; never grant client writes.

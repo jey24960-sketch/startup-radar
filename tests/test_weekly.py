@@ -6,6 +6,7 @@ import pytest
 import psycopg
 from core.clock import SEOUL
 from radar.weekly import build_briefing, snapshot, week_window, announce, run_weekly
+from radar.broadcast import SETTING_KEY
 from radar.ingestion import ingest
 from radar.models import Program
 from radar.adapters.base import Candidate, SourceFailure
@@ -16,6 +17,12 @@ from psycopg.types.json import Jsonb
 
 pytestmark=pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Explicit test database required')
 AT=datetime(2026,9,14,15,tzinfo=SEOUL)
+
+
+def configure_official_channel(db,chat_id='-1001234567890',join_url='https://t.me/gfc_startupradar',enabled=True,name='GFC StartupRadar'):
+    with db.transaction() as c:
+        c.execute("insert into startup_radar.runtime_settings(key,value) values(%s,%s) on conflict(key) do update set value=excluded.value,updated_at=now()",
+            (SETTING_KEY,Jsonb({'enabled':enabled,'chat_id':chat_id,'join_url':join_url,'name':name})))
 
 
 def collection(db, count=3):
@@ -128,23 +135,29 @@ def test_member_rpc_requires_verified_gfc_membership_without_team(db):
 
 @pytest.mark.parametrize('state',['DELIVERED','UNCERTAIN','FAILED'])
 def test_one_weekly_announcement_and_no_duplicate_or_uncertain_resend(db,state):
+    # The normal weekly briefing goes to ONE official channel. Team subscriptions
+    # are not consulted, so an enabled team subscription alone changes nothing.
     result=build_briefing(db,collection(db),AT)
     transport=Mock();transport.send.return_value={'state':state,'receipt':{'message_id':17} if state=='DELIVERED' else None}
-    assert announce(db,result['briefing_id'],transport)['state']=='NO_SUBSCRIBERS'
+    assert announce(db,result['briefing_id'],transport)['state']=='NO_BROADCAST_CHANNEL'
     user=uuid4()
     with db.transaction() as c:c.execute('insert into auth.users(id) values(%s)',(user,))
     team=db.create_team('Weekly fixture',user)
     with db.transaction() as c:
-        c.execute("insert into startup_radar.telegram_subscriptions(team_id,chat_id,enabled,digest_enabled,channel_health) values(%s,'fixture-weekly',false,true,'HEALTHY')",(team['id'],))
-    assert announce(db,result['briefing_id'],transport)['state']=='NO_SUBSCRIBERS'
-    with db.transaction() as c:c.execute('update startup_radar.telegram_subscriptions set enabled=true')
+        c.execute("insert into startup_radar.telegram_subscriptions(team_id,chat_id,enabled,digest_enabled,channel_health) values(%s,'fixture-weekly',true,true,'HEALTHY')",(team['id'],))
+    assert announce(db,result['briefing_id'],transport)['state']=='NO_BROADCAST_CHANNEL'
+    configure_official_channel(db,chat_id='-1001234567890',join_url='https://t.me/gfc_startupradar')
     assert announce(db,result['briefing_id'])['state']=='DELIVERY_DISABLED'
     first=announce(db,result['briefing_id'],transport)
     announce(db,result['briefing_id'],transport)
     assert transport.send.call_count==1
+    assert transport.send.call_args.args[0]=='-1001234567890'
     assert '/notice/weekly/'+result['briefing_id'] in transport.send.call_args.args[1]
     assert first['states'][state]==1
-    with db.transaction() as c:assert c.execute('select count(*) n from startup_radar.notification_batches').fetchone()['n']==0
+    with db.transaction() as c:
+        assert c.execute('select count(*) n from startup_radar.notification_batches').fetchone()['n']==0
+        row=c.execute("select target_kind,subscription_id,chat_id from startup_radar.weekly_announcements").fetchone()
+        assert (row['target_kind'],row['subscription_id'],row['chat_id'])==('OFFICIAL_CHANNEL',None,'-1001234567890')
 
 
 def test_weekly_official_ingestion_never_calls_ai_documents_or_team_calculation(db,monkeypatch):
@@ -170,7 +183,7 @@ def test_weekly_rerun_does_not_recollect_published_week(db):
     collector=Mock(side_effect=AssertionError('Published week must stay stable'))
     second=run_weekly(db,at=AT,collector=collector)
     assert second['status']=='SUCCESS' and second['briefing_id']==first['briefing_id']
-    assert second['announcement']['state']=='NO_SUBSCRIBERS'
+    assert second['announcement']['state']=='NO_BROADCAST_CHANNEL'
     assert not collector.called
 
 

@@ -1,8 +1,5 @@
 """One official-source briefing per Seoul week, independent of team calculations."""
-import html
 from datetime import timedelta
-from urllib.parse import urlsplit, urlunsplit
-from uuid import UUID
 from psycopg.types.json import Jsonb
 from core.clock import now, SEOUL
 from radar.actionability import actionability
@@ -10,6 +7,7 @@ from radar.adapters.base import AcquiredDetail
 from radar.documents import html_text
 from radar.identity import digest,deduplicate_publication
 from radar.notifications import safe_link
+from radar.broadcast import SETTING_KEY,announcement_text,briefing_url,official_channel as official_channel_config
 from radar.relevance import classify,PUBLISHABLE_STATUSES,RELEVANCE_VERSION
 from radar.weekly_scope import weekly_sources,collection_completed
 
@@ -154,47 +152,39 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
             'withheld':{reason:count for reason,count in withheld.items() if count}}
 
 
-def briefing_url(briefing_id):
-    import os
-    base = os.environ.get('RADAR_MEMBER_NOTICE_URL','https://www.gfc-startup.com/notice')
-    parts = urlsplit(base)
-    if not safe_link(base) or parts.query or parts.fragment:raise ValueError('Invalid member notice base URL')
-    return urlunsplit((parts.scheme,parts.netloc,parts.path.rstrip('/')+'/weekly/'+str(UUID(str(briefing_id))),'',''))
-
-
-def announcement_text(briefing, items):
-    lines = ['[GFC StartupRadar]',briefing['title']+'\uac00 \uac8c\uc2dc\ub418\uc5c8\uc2b5\ub2c8\ub2e4.',
-             f"\uc774\ubc88 \uc8fc \uc0c8\ub85c \ud655\uc778\u00b7\ubcc0\uacbd \uc9c0\uc6d0\uc0ac\uc5c5: {briefing['item_count']}\uac74"]
-    for item in items[:3]:
-        facts=item['snapshot']; deadline=(facts.get('application_end_at') or FALLBACK)[:10]
-        lines.append(f"\u2022 {facts['title'][:100]} / \ub9c8\uac10: {deadline}")
-    text='\n\n'.join(html.escape(line) for line in lines)
-    return text+'\n\n<a href="'+html.escape(briefing_url(briefing['id']),quote=True)+'">\uc8fc\uac04 \uc9c0\uc6d0\uc0ac\uc5c5 \uc804\uccb4 \ubcf4\uae30</a>'
+def official_channel(c):
+    row = c.execute('select value from startup_radar.runtime_settings where key=%s',(SETTING_KEY,)).fetchone()
+    return official_channel_config(row['value'] if row else None)
 
 
 def announce(db, briefing_id, transport=None):
+    """Post one summary of a published WEEKLY briefing to the official GFC channel.
+
+    Recipients are no longer selected from team subscriptions or notification
+    preferences: there is exactly one target, configured by the operator in
+    runtime_settings. The ledger row is keyed by (briefing_id, chat_id), so a
+    retry can never post the same issue twice, and FAILED/UNCERTAIN/SENDING rows
+    are never picked up again without explicit operator recovery.
+    """
     with db.transaction() as c:
         briefing=c.execute("select * from startup_radar.weekly_briefings where id=%s and status='PUBLISHED'",(briefing_id,)).fetchone()
         if not briefing:raise ValueError('Weekly announcement requires a published briefing')
         if briefing['publication_kind']=='INITIAL_BASELINE':
             return {'state':'BASELINE_ARCHIVE','planned':0,'delivered':0}
-        subscriptions=c.execute("select distinct on(s.chat_id) s.id,s.chat_id from startup_radar.telegram_subscriptions s "
-            "left join startup_radar.team_notification_preferences p on p.team_id=s.team_id "
-            "where s.enabled and s.digest_enabled and s.channel_health='HEALTHY' and coalesce(p.enabled,true) and coalesce(p.digest_enabled,true) order by s.chat_id,s.id").fetchall()
-        if not subscriptions:return {'state':'NO_SUBSCRIBERS','planned':0,'delivered':0}
-        if transport is None:return {'state':'DELIVERY_DISABLED','planned':0,'delivered':0,'subscribers':len(subscriptions)}
+        channel=official_channel(c)
+        if channel is None:return {'state':'NO_BROADCAST_CHANNEL','planned':0,'delivered':0}
+        if transport is None:return {'state':'DELIVERY_DISABLED','planned':0,'delivered':0,'channel':channel['name']}
         items=c.execute('select snapshot from startup_radar.weekly_briefing_items where briefing_id=%s order by display_order',(briefing_id,)).fetchall()
         text=announcement_text(briefing,items)
-        for sub in subscriptions:
-            c.execute('insert into startup_radar.weekly_announcements(briefing_id,subscription_id,chat_id,payload) values(%s,%s,%s,%s) on conflict(briefing_id,chat_id) do nothing',
-                (briefing_id,sub['id'],sub['chat_id'],text))
-        ids=c.execute("select id from startup_radar.weekly_announcements where briefing_id=%s and state='PENDING' order by id",(briefing_id,)).fetchall()
+        c.execute("insert into startup_radar.weekly_announcements(briefing_id,subscription_id,chat_id,payload,target_kind) "
+            "values(%s,null,%s,%s,'OFFICIAL_CHANNEL') on conflict(briefing_id,chat_id) do nothing",
+            (briefing_id,channel['chat_id'],text))
+        ids=c.execute("select id from startup_radar.weekly_announcements where briefing_id=%s and chat_id=%s and state='PENDING' order by id",
+            (briefing_id,channel['chat_id'])).fetchall()
     delivered=0
     for item in ids:
         with db.transaction() as c:
-            row=c.execute("select a.* from startup_radar.weekly_announcements a join startup_radar.telegram_subscriptions s on s.id=a.subscription_id "
-                "left join startup_radar.team_notification_preferences p on p.team_id=s.team_id where a.id=%s and a.state='PENDING' "
-                "and s.chat_id=a.chat_id and s.enabled and s.digest_enabled and s.channel_health='HEALTHY' and coalesce(p.enabled,true) and coalesce(p.digest_enabled,true) for update of a skip locked",(item['id'],)).fetchone()
+            row=c.execute("select * from startup_radar.weekly_announcements where id=%s and state='PENDING' for update skip locked",(item['id'],)).fetchone()
             if not row:continue
             c.execute("update startup_radar.weekly_announcements set state='SENDING',attempted_at=now() where id=%s",(row['id'],))
         try:result=transport.send(row['chat_id'],row['payload'])
@@ -202,12 +192,12 @@ def announce(db, briefing_id, transport=None):
         state=result.get('state') if result.get('state') in ('DELIVERED','FAILED','UNCERTAIN') else 'UNCERTAIN'
         with db.transaction() as c:
             c.execute("update startup_radar.weekly_announcements set state=%s,receipt=%s,failure_reason=%s,delivered_at=case when %s='DELIVERED' then now() end where id=%s and state='SENDING'",
-                (state,Jsonb(result.get('receipt')),None if state=='DELIVERED' else 'TELEGRAM_'+state,state,row['id']))
-            if result.get('channel_health')=='BLOCKED':c.execute("update startup_radar.telegram_subscriptions set channel_health='BLOCKED',health_checked_at=now(),health_reason='WEEKLY_DELIVERY_REJECTED' where id=%s",(row['subscription_id'],))
+                (state,Jsonb(result.get('receipt')),None if state=='DELIVERED' else 'TELEGRAM_'+state+(': '+str(result.get('error'))[:160] if result.get('error') else ''),state,row['id']))
         delivered+=state=='DELIVERED'
     with db.transaction() as c:
-        states=c.execute('select state,count(*) count from startup_radar.weekly_announcements where briefing_id=%s group by state',(briefing_id,)).fetchall()
-    return {'state':'RECORDED','planned':len(ids),'delivered':delivered,'states':{row['state']:row['count'] for row in states}}
+        states=c.execute('select state,count(*) count from startup_radar.weekly_announcements where briefing_id=%s and chat_id=%s group by state',
+            (briefing_id,channel['chat_id'])).fetchall()
+    return {'state':'RECORDED','planned':len(ids),'delivered':delivered,'channel':channel['name'],'states':{row['state']:row['count'] for row in states}}
 
 
 def run_weekly(db, transport=None, at=None, publish=True, collector=None, revision_note=None, check_sources=False):
