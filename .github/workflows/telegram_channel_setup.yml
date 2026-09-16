@@ -70,6 +70,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
         run: |
+          set -euo pipefail
           python -m radar.cli telegram-channel --disable --chat-id "$CHAT_ID" --join-url "$JOIN_URL" \
             --name "$CHANNEL_NAME" --note "$NOTE" | tee configured.json
           python - <<'PY'
@@ -85,6 +86,7 @@ jobs:
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
+          set -euo pipefail
           # official_channel() only accepts an enabled row, so verify against the
           # stored target directly; the database row stays disabled throughout.
           python - <<'PY' | tee verification.json
@@ -114,6 +116,7 @@ jobs:
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
+          set -euo pipefail
           # The audited CLI enables first and then verifies (writing the
           # WEEKLY_TELEGRAM_CHANNEL_VERIFIED audit row). If that verification
           # fails, disable again immediately so the channel never stays enabled
@@ -128,6 +131,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
         run: |
+          set -euo pipefail
           python -m radar.cli telegram-channel | tee final.json
           python - <<'PY'
           import json, os

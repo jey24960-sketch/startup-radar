@@ -100,24 +100,51 @@ def announcement_text(briefing, items):
     return '\n'.join(lines)
 
 
+def mask_chat_id(value):
+    """`-1001234567890` -> `-100…7890`; an `@username` is already public and stays as is."""
+    text = str(value or '').strip()
+    if not text or text.startswith('@'):
+        return text or None
+    digits = text.lstrip('-')
+    if not digits.isdigit() or len(digits) <= 6:
+        return '…'
+    return text[:len(text) - len(digits) + 3] + '…' + text[-4:]
+
+
+def _error(response):
+    error = response.get('error')
+    return str(error)[:200] if error else None
+
+
+def _summary(**fields):
+    return {key: value for key, value in fields.items() if value is not None}
+
+
 def verify_channel(transport, channel):
     """Read-only Telegram checks: the chat exists and the bot may post there.
 
     Never sends a message. Returns a structured verdict the operator can act on.
+    The verdict is safe to print in a public CI log: it carries only the
+    operator-relevant facts (bot username/name, channel title and type, the
+    bot's admin status and posting permission, a masked numeric id and the
+    failure reason). Raw Telegram payloads, and in particular any
+    `invite_link`, never leave this function.
     """
     checks = {}
     me = transport.get_me()
-    checks['bot'] = me
+    checks['bot'] = _summary(state=me.get('state'), username=me.get('username'), name=me.get('first_name'), error=_error(me))
     if me.get('state') != 'OK':
         return {'ok': False, 'reason': 'BOT_TOKEN_INVALID', 'checks': checks}
     chat = transport.get_chat(channel['chat_id'])
-    checks['chat'] = chat
+    checks['chat'] = _summary(state=chat.get('state'), title=chat.get('title'), type=chat.get('type'),
+                              id=mask_chat_id(chat.get('id')) if chat.get('id') is not None else None, error=_error(chat))
     if chat.get('state') != 'OK':
         return {'ok': False, 'reason': 'CHAT_NOT_ACCESSIBLE', 'checks': checks}
     if chat.get('type') != 'channel':
         return {'ok': False, 'reason': 'NOT_A_CHANNEL', 'checks': checks}
     member = transport.get_chat_member(channel['chat_id'], me['id'])
-    checks['membership'] = member
+    checks['membership'] = _summary(state=member.get('state'), status=member.get('status'),
+                                    can_post_messages=member.get('can_post_messages'), error=_error(member))
     if member.get('state') != 'OK':
         return {'ok': False, 'reason': 'BOT_MEMBERSHIP_UNKNOWN', 'checks': checks}
     if member.get('status') not in ('administrator', 'creator'):

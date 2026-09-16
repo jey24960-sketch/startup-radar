@@ -20,3 +20,6 @@ work/
 !.env.example
 
 supabase/.temp/
+
+# Local Claude Code configuration (may hold operator allow-rules/tokens); never commit
+.claude/

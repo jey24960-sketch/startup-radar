@@ -351,7 +351,9 @@ Steps 3–5 are also available as the operator-only GitHub Actions workflow
 `workflow_dispatch` only, inputs `chat_id` + `join_url`). It runs the same CLI with the repository's
 production secrets: configure disabled → read-only verification → enable only if verification and the
 channel title match → read back. It never sends a message; the first channel post is the next normal
-Tuesday weekly run.
+Tuesday weekly run. Because the repository is public, `--verify` output is redacted for logs: bot
+username/name, channel title/type, admin status, posting permission, a masked numeric id
+(`-100…7890`) and the failure reason — never raw Telegram payloads or invite links.
 
 ## Web and Validation
 

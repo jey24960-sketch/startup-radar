@@ -2,7 +2,7 @@
 from unittest.mock import Mock
 
 import pytest
-from radar.broadcast import (MAX_EXAMPLES, announcement_text, member_view, official_channel,
+from radar.broadcast import (MAX_EXAMPLES, announcement_text, mask_chat_id, member_view, official_channel,
                              verify_channel)
 
 BRIEFING = {'id': '3a9278b5-f486-4a69-b65b-8369f397282c', 'title': '09.08 ~ 09.14 주간 지원사업 공지', 'item_count': 5}
@@ -97,6 +97,49 @@ def test_verification_is_read_only_and_passes_for_a_posting_admin_bot():
 def test_verification_names_the_exact_setup_problem(override, reason):
     verdict = verify_channel(transport(**override), {'chat_id': '-100', 'name': 'x'})
     assert not verdict['ok'] and verdict['reason'] == reason
+
+
+RAW_ME = {'state': 'OK', 'id': 8711845252, 'is_bot': True, 'first_name': 'StartupRadar', 'username': 'radar_bot',
+          'can_join_groups': True, 'can_read_all_group_messages': False}
+RAW_CHAT = {'state': 'OK', 'id': -1002961552096, 'title': 'GFC StartupRadar', 'username': 'gfc_startup_radar', 'type': 'channel',
+            'invite_link': 'https://t.me/+VwaipXofhco1MjA9', 'description': 'GFC 주간 창업지원사업 알림 채널',
+            'photo': {'small_file_id': 'AQAD'}, 'linked_chat_id': -1009999999999}
+RAW_MEMBER = {'state': 'OK', 'status': 'administrator', 'can_post_messages': True, 'can_edit_messages': True,
+              'user': {'id': 8711845252, 'username': 'radar_bot', 'first_name': 'StartupRadar'}}
+
+
+def test_verification_output_is_safe_for_a_public_log():
+    verdict = verify_channel(transport(me=RAW_ME, chat=RAW_CHAT, member=RAW_MEMBER), {'chat_id': '@gfc_startup_radar', 'name': 'x'})
+    dumped = repr(verdict)
+    # Operator-relevant facts stay visible…
+    assert verdict['checks']['bot'] == {'state': 'OK', 'username': 'radar_bot', 'name': 'StartupRadar'}
+    assert verdict['checks']['chat'] == {'state': 'OK', 'title': 'GFC StartupRadar', 'type': 'channel', 'id': '-100…2096'}
+    assert verdict['checks']['membership'] == {'state': 'OK', 'status': 'administrator', 'can_post_messages': True}
+    assert verdict['ok'] and verdict['reason'] == 'READY' and verdict['chat_title'] == 'GFC StartupRadar'
+    # …while raw Telegram payload fields never leave verify_channel.
+    for leaked in ('invite_link', 't.me/+', 'VwaipXofhco1MjA9', 'description', 'photo', 'linked_chat_id',
+                   'can_join_groups', 'can_edit_messages', "'user'", '8711845252', '-1002961552096', '2961552096'):
+        assert leaked not in dumped, leaked
+
+
+def test_verification_failures_keep_the_reason_and_telegram_description_only():
+    chat = {'state': 'FAILED', 'error': 'Bad Request: chat not found', 'raw': {'ok': False, 'error_code': 400}}
+    verdict = verify_channel(transport(me=RAW_ME, chat=chat), {'chat_id': '@missing', 'name': 'x'})
+    assert not verdict['ok'] and verdict['reason'] == 'CHAT_NOT_ACCESSIBLE'
+    assert verdict['checks']['chat'] == {'state': 'FAILED', 'error': 'Bad Request: chat not found'}
+    assert 'raw' not in repr(verdict) and 'error_code' not in repr(verdict)
+    member = {**RAW_MEMBER, 'status': 'administrator', 'can_post_messages': False}
+    verdict = verify_channel(transport(me=RAW_ME, chat=RAW_CHAT, member=member), {'chat_id': '@gfc_startup_radar', 'name': 'x'})
+    assert verdict['reason'] == 'BOT_CANNOT_POST' and verdict['checks']['membership']['can_post_messages'] is False
+    assert 'invite_link' not in repr(verdict)
+
+
+@pytest.mark.parametrize('value,masked', [
+    ('-1001234567890', '-100…7890'), (-1002961552096, '-100…2096'), ('987654321', '987…4321'),
+    ('@gfc_startup_radar', '@gfc_startup_radar'), ('123', '…'), (None, None), ('', None),
+])
+def test_numeric_chat_ids_are_masked_but_public_usernames_are_not(value, masked):
+    assert mask_chat_id(value) == masked
 
 
 def test_preview_shows_stage_tag_from_the_stored_item_and_two_stages_use_slash():
