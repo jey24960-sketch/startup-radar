@@ -502,6 +502,19 @@ an incidental 실증/사업화 mention.
 to a flat list for pre-v1.1 articles; `NoticePage.jsx` shows `새로 확인 N건 · 변경 M건`. The GFC
 `tests/fixtures/radar-migrations/` copy was refreshed (it had been missing the baseline migration).
 
+## 20. Added 2026-09-16 (later the same day): official channel + stage fit
+
+- **Telegram**: `weekly.announce()` posts once to the ONE official GFC channel configured in
+  `runtime_settings.weekly_telegram_channel`; team subscriptions are no longer on the weekly path.
+  Ledger rows use `target_kind='OFFICIAL_CHANNEL'`, null `subscription_id`. Members read
+  `enabled/name/join_url` via `gfc_radar_telegram_channel()` (SECURITY DEFINER + `my_role()` gate).
+  Operator setup: `python -m radar.cli telegram-channel --chat-id … --join-url … --note …`,
+  `--verify` (read-only), `--enable`, optional `--test-post`. Legacy tables/commands preserved.
+- **Stage fit**: `radar/stage.py` (`gfc-stage-v1.0`) → `program_stage_fit` +
+  `weekly_briefing_items.stage_codes`. Outside `MATERIAL`; not a gate; STAGE_4 never reads
+  `applicant_summary`. RPC exposes `stage_fit:[{code,label}]`; web colours labels, Telegram prefixes
+  `[label / label]` from the same stored codes.
+
 ## 18. Open questions for the operator
 
 1. **Is `vars.RADAR_V2_ENABLED` actually `true`?** Not inspectable without `gh` (the GitHub CLI

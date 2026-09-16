@@ -97,3 +97,21 @@ def test_verification_is_read_only_and_passes_for_a_posting_admin_bot():
 def test_verification_names_the_exact_setup_problem(override, reason):
     verdict = verify_channel(transport(**override), {'chat_id': '-100', 'name': 'x'})
     assert not verdict['ok'] and verdict['reason'] == reason
+
+
+def test_preview_shows_stage_tag_from_the_stored_item_and_two_stages_use_slash():
+    items = [{**item('오픈이노베이션 PoC'), 'stage_codes': ['STAGE_3', 'STAGE_4']},
+             {**item('MVP 지원'), 'stage_codes': ['STAGE_3']},
+             {**item('단계 미판정'), 'stage_codes': []},
+             {**item('네 번째'), 'stage_codes': ['STAGE_0']}]
+    text = announcement_text(BRIEFING, items)
+    assert '• [MVP·PoC / 사업자·법인 이후] 오픈이노베이션 PoC / 마감: 2026-10-30' in text
+    assert '• [MVP·PoC] MVP 지원 / 마감: 2026-10-30' in text
+    # Unresolved stage renders no tag rather than an invented one; max three examples unchanged.
+    assert '• 단계 미판정 / 마감:' in text and '네 번째' not in text and text.count('•') == 3
+    assert 'STAGE_' not in text
+
+
+def test_items_without_stage_metadata_still_render():
+    text = announcement_text(BRIEFING, [item('구형 항목')])
+    assert '• 구형 항목 / 마감: 2026-10-30' in text

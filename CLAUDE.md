@@ -96,6 +96,10 @@ NEW/UPDATE -> actionability -> GFC relevance. None of it deletes or edits stored
 - **Dedup** (`identity.cross_source_key`): identical normalized title ≥20 chars **and** identical
   application start **and** end. Organization is intentionally not compared. Still no fuzzy merge.
 - **Wording**: member-facing NEW is `새로 확인` (StartupRadar saw it first), never `신규`.
+- **Stage fit** (`radar/stage.py`, `gfc-stage-v1.0`): 0–2 of 아이디어 전 / 팀 구성·아이디어 /
+  랜딩·시장검증 / MVP·PoC / 사업자·법인 이후. Informational only — **never a gate, never
+  eligibility, never in `weekly.MATERIAL`**. STAGE_4 rules never read `applicant_summary`. Web and
+  Telegram both read `weekly_briefing_items.stage_codes`; there is no second classifier.
 
 `tools/export_relevance_sql.py` generates the SQL mirror used for backfilling already-stored
 versions; `tests/test_relevance_sql_mirror.py` fails if it drifts. Regenerate, never hand-edit.

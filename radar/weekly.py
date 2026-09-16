@@ -9,6 +9,7 @@ from radar.identity import digest,deduplicate_publication
 from radar.notifications import safe_link
 from radar.broadcast import SETTING_KEY,announcement_text,briefing_url,official_channel as official_channel_config
 from radar.relevance import classify,PUBLISHABLE_STATUSES,RELEVANCE_VERSION
+from radar.stage import classify_stage,STAGE_VERSION
 from radar.weekly_scope import weekly_sources,collection_completed
 
 FALLBACK = '\uacf5\uc2dd \uacf5\uace0 \ud655\uc778 \ud544\uc694'
@@ -36,6 +37,14 @@ def record_relevance(c, version_id, decision):
         (version_id,decision['relevance_version'],decision['relevance_status'],decision['startup_leverage'],
          decision['applicability'],decision['startup_leverage_reason'],decision['restriction_summary'],
          decision['classification_method'],Jsonb(decision['evidence'])))
+
+
+def record_stage(c, version_id, decision):
+    """Persist stage fit for audit. Editorial metadata only; never a gate."""
+    c.execute('insert into startup_radar.program_stage_fit(program_version_id,stage_version,method,stage_codes,reason,evidence) '
+        'values(%s,%s,%s,%s,%s,%s) on conflict(program_version_id,stage_version) do update set '
+        'method=excluded.method,stage_codes=excluded.stage_codes,reason=excluded.reason,evidence=excluded.evidence,classified_at=now()',
+        (version_id,decision['stage_version'],decision['method'],decision['stage_codes'],decision['reason'],Jsonb(decision['evidence'])))
 
 
 def weekly_detail(candidate):
@@ -109,6 +118,8 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
             # why a stored opportunity never reached members.
             decision = classify(facts)
             record_relevance(c,row['version_id'],decision)
+            stage = classify_stage(facts)
+            record_stage(c,row['version_id'],stage)
             publishable,reason = actionability(facts,at)
             if not publishable:
                 withheld[reason] = withheld.get(reason,0)+1;continue
@@ -117,7 +128,8 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
             items.setdefault(pid,{**row,'material_hash':fingerprint,
                 'change_type':'UPDATE' if pid in known else 'NEW',
                 'relevance_status':decision['relevance_status'],
-                'restriction_summary':decision['restriction_summary']})
+                'restriction_summary':decision['restriction_summary'],
+                'stage_codes':stage['stage_codes']})
         if not items and not complete:
             return {'status':'FAILED','reason':'INCOMPLETE_EMPTY_COLLECTION','published':False}
         if old and old['status']=='PUBLISHED':
@@ -143,9 +155,9 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
         bid = row['id']
         c.execute('delete from startup_radar.weekly_briefing_items where briefing_id=%s',(bid,))
         for index,item in enumerate(ordered):
-            c.execute('insert into startup_radar.weekly_briefing_items(briefing_id,program_id,program_version_id,change_type,display_order,snapshot,material_hash,relevance_status,restriction_summary,relevance_version) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+            c.execute('insert into startup_radar.weekly_briefing_items(briefing_id,program_id,program_version_id,change_type,display_order,snapshot,material_hash,relevance_status,restriction_summary,relevance_version,stage_codes,stage_version) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 (bid,item['program_id'],item['version_id'],item['change_type'],index,Jsonb(item['snapshot']),item['material_hash'],
-                 item['relevance_status'],item['restriction_summary'],RELEVANCE_VERSION))
+                 item['relevance_status'],item['restriction_summary'],RELEVANCE_VERSION,item['stage_codes'],STAGE_VERSION))
         if publish:c.execute("update startup_radar.weekly_briefings set status='PUBLISHED',published_at=coalesce(published_at,now()),updated_at=now() where id=%s",(bid,))
     return {'status':'SUCCESS' if complete else 'PARTIAL_SUCCESS','collection_status':collection_status,
             'briefing_id':str(bid),'published':publish,'item_count':len(ordered),'new_count':new_count,'updated_count':len(ordered)-new_count,
@@ -174,7 +186,7 @@ def announce(db, briefing_id, transport=None):
         channel=official_channel(c)
         if channel is None:return {'state':'NO_BROADCAST_CHANNEL','planned':0,'delivered':0}
         if transport is None:return {'state':'DELIVERY_DISABLED','planned':0,'delivered':0,'channel':channel['name']}
-        items=c.execute('select snapshot from startup_radar.weekly_briefing_items where briefing_id=%s order by display_order',(briefing_id,)).fetchall()
+        items=c.execute('select snapshot,stage_codes from startup_radar.weekly_briefing_items where briefing_id=%s order by display_order',(briefing_id,)).fetchall()
         text=announcement_text(briefing,items)
         c.execute("insert into startup_radar.weekly_announcements(briefing_id,subscription_id,chat_id,payload,target_kind) "
             "values(%s,null,%s,%s,'OFFICIAL_CHANNEL') on conflict(briefing_id,chat_id) do nothing",

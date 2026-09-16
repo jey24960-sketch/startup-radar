@@ -197,3 +197,21 @@ def test_verify_is_read_only_and_test_post_is_labelled_and_not_a_weekly_announce
     out = channel_admin.test_post(db, transport)
     assert out['status'] == 'SUCCESS' and transport.send.call_args.args[1].startswith('[GFC StartupRadar · 테스트]')
     assert ledger(db) == []
+
+
+def test_telegram_uses_the_stage_stored_on_the_published_item_not_a_second_classifier(db):
+    result = build_briefing(db, collection(db, 2), AT)
+    with db.transaction() as c:
+        # Whatever the website shows is what Telegram must say, even if it was corrected by hand.
+        c.execute("update startup_radar.weekly_briefing_items set stage_codes='{STAGE_3,STAGE_4}' where briefing_id=%s and display_order=0", (result['briefing_id'],))
+        c.execute("update startup_radar.weekly_briefing_items set stage_codes='{}' where briefing_id=%s and display_order=1", (result['briefing_id'],))
+    configure_official_channel(db, chat_id=CHAT)
+    transport = delivered_transport()
+    announce(db, result['briefing_id'], transport)
+    text = transport.send.call_args.args[1]
+    assert '• [MVP·PoC / 사업자·법인 이후] 예비창업자 액셀러레이팅 프로그램 0' in text
+    assert '• 예비창업자 액셀러레이팅 프로그램 1 /' in text
+    assert 'STAGE_' not in text
+    # Adding stage metadata never creates a second delivery.
+    announce(db, result['briefing_id'], transport)
+    assert transport.send.call_count == 1

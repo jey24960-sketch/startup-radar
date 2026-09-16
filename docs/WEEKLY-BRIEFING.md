@@ -84,6 +84,38 @@ are otherwise unchanged.
 GFC_RELEVANT + CONDITIONAL only; examples follow display order, which puts GFC_RELEVANT first. The
 baseline still cannot be announced. See the Telegram section below.
 
+**Stage fit (GFC Stage Fit v1.0, 2026-09-16).** `radar/stage.py`, version `gfc-stage-v1.0`,
+method `DETERMINISTIC_RULES_V1`. Answers "which startup stage would benefit most?" with one or two
+of exactly five member-facing labels, in this order:
+
+| code | label | meaning |
+| --- | --- | --- |
+| `STAGE_0` | 아이디어 전 | problem exploration, founder introduction, very early education |
+| `STAGE_1` | 팀 구성·아이디어 | team building, ideathon, idea validation, pre-startup founder programmes |
+| `STAGE_2` | 랜딩·시장검증 | customer discovery, landing experiments, BM/demand validation |
+| `STAGE_3` | MVP·PoC | MVP, prototype, PoC/pilot/실증, incubation, early accelerator, early IR |
+| `STAGE_4` | 사업자·법인 이후 | open innovation, investor/VC/IR, commercialisation funding, scale-up, overseas expansion |
+
+Stage fit is **editorial scanning metadata**. It is **not eligibility** and **not a publication
+gate**: an item is published because it passed dedup, actionability and relevance; stage only
+helps a member read it. "Who would benefit" is kept structurally apart from "who may apply":
+`STAGE_4` rules are never evaluated against `applicant_summary` (where restrictions live), so
+"법인사업자만" is a `restriction_summary`, never a stage, and a programme that *helps* a founder
+incorporate is `MVP·PoC`, not 사업자·법인 이후. Audience words (대학생, 청년, 스타트업, 글로벌…)
+are never stage evidence. When no activity or output is named the set is empty — nothing is
+invented to reach coverage.
+
+Stored in `startup_radar.program_stage_fit` keyed by `(program_version_id, stage_version)` and
+denormalised onto `weekly_briefing_items.stage_codes` / `stage_version`. **`stage_codes` is
+outside `weekly.MATERIAL`**, so re-classifying can never turn an unchanged programme into an
+UPDATE. Members receive `stage_fit: [{code,label}]` per item from `gfc_radar_weekly_briefing`;
+codes never render. The website shows the labels between the change badge and the title, each in
+its own text colour (violet / blue / cyan / emerald / amber) with a neutral `·` separator; the
+Telegram preview prefixes `[MVP·PoC]` or `[MVP·PoC / 사업자·법인 이후]` from the **same stored
+item**, so web and Telegram can never disagree.
+`supabase/migrations/20260916135500_gfc_stage_backfill_function.sql` is the generated SQL mirror
+(`tools/export_stage_sql.py`, guarded by `tests/test_stage_sql_mirror.py`).
+
 ### 2026-09-16 publication correction
 
 `startup_radar.apply_publication_correction(briefing_id, reason, summary, visible)` is

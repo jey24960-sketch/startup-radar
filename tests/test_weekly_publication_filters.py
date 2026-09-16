@@ -154,3 +154,41 @@ def test_correction_preserves_publication_identity_and_never_announces(db):
     # The withdrawn snapshots remain recoverable.
     assert len(audit['previous_items']) == 2 and audit['telegram_sent'] is False
     assert announce(db, result['briefing_id'], Mock())['state'] == 'NO_BROADCAST_CHANNEL'
+
+
+def test_stage_fit_is_persisted_on_items_but_never_part_of_the_material_hash(db):
+    from radar.weekly import MATERIAL
+    from radar.stage import classify_stage
+    assert not any(key.startswith('stage') for key in MATERIAL)
+    acquired = acquire(db, program('스타트업 MVP 제작 지원 프로그램 참가팀 모집', url='https://example.org/stage'))
+    first = build_briefing(db, acquired, AT)
+    with db.transaction() as c:
+        row = c.execute('select stage_codes,stage_version,material_hash from startup_radar.weekly_briefing_items where briefing_id=%s',
+                        (first['briefing_id'],)).fetchone()
+        stored = c.execute("select stage_codes,method from startup_radar.program_stage_fit where stage_version='gfc-stage-v1.0'").fetchone()
+    assert row['stage_codes'] == ['STAGE_3'] and row['stage_version'] == 'gfc-stage-v1.0'
+    assert stored['stage_codes'] == ['STAGE_3'] and stored['method'] == 'DETERMINISTIC_RULES_V1'
+    # Same material facts next week with a different stage decision: nothing is an UPDATE.
+    acquired['weekly_programs'][0]['snapshot'] = dict(acquired['weekly_programs'][0]['snapshot'])
+    with db.transaction() as c:
+        c.execute("update startup_radar.program_stage_fit set stage_codes='{STAGE_1}' where stage_version='gfc-stage-v1.0'")
+    second = build_briefing(db, acquired, AT + timedelta(days=7))
+    assert second['item_count'] == 0 and second['updated_count'] == 0
+    with db.transaction() as c:
+        assert c.execute("select count(*) n from startup_radar.program_change_events").fetchone()['n'] <= 1  # only the original NEW
+        assert c.execute('select material_hash from startup_radar.weekly_briefing_items where briefing_id=%s',
+                         (first['briefing_id'],)).fetchone()['material_hash'] == row['material_hash']
+
+
+def test_stage_and_relevance_are_recorded_independently(db):
+    result = build_briefing(db, acquire(db,
+        program(RESTRICTED + ' PoC 실증', url='https://example.org/bio', applicant='바이오 분야 법인사업자만'),
+        program('오픈이노베이션 투자 유치 액셀러레이팅 참가팀 모집', url='https://example.org/oi')), AT)
+    rows = items(db, result['briefing_id'])
+    assert [r['relevance_status'] for r in rows] == ['GFC_RELEVANT', 'CONDITIONAL']
+    with db.transaction() as c:
+        stages = {r['relevance_status']: r['stage_codes'] for r in c.execute(
+            'select relevance_status,stage_codes from startup_radar.weekly_briefing_items where briefing_id=%s', (result['briefing_id'],)).fetchall()}
+    assert 'STAGE_4' in stages['GFC_RELEVANT']
+    # "법인사업자만" in eligibility did not push the bio programme to STAGE_4.
+    assert stages['CONDITIONAL'] == ['STAGE_3']

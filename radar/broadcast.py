@@ -16,6 +16,8 @@ import os
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 
+from radar.stage import telegram_tag
+
 SETTING_KEY = 'weekly_telegram_channel'
 MAX_EXAMPLES = 3
 ONGOING_DEADLINE_TYPES = ('ROLLING', 'UNTIL_BUDGET_EXHAUSTED')
@@ -91,7 +93,9 @@ def announcement_text(briefing, items):
         lines.append('')
         for item in items[:MAX_EXAMPLES]:
             facts = item['snapshot']
-            lines.append(html.escape(f"• {str(facts.get('title') or FALLBACK)[:100]} / 마감: {_deadline(facts)}"))
+            # Stage comes from the published item, the same stored decision the website shows.
+            tag = telegram_tag(item.get('stage_codes'))
+            lines.append(html.escape(f"• {tag + ' ' if tag else ''}{str(facts.get('title') or FALLBACK)[:100]} / 마감: {_deadline(facts)}"))
     lines += ['', '주간 지원사업 전체 보기', f'<a href="{link}">{link}</a>']
     return '\n'.join(lines)
 
