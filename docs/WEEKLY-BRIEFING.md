@@ -7,7 +7,7 @@ Personalization, OCR, archives of original binaries and scale benchmarks are def
 ## Schedule and Operations
 
 The sole production calendar is `.github/workflows/startup_radar_v2.yml`:
-Tuesday 15:00 Asia/Seoul (06:00 UTC), preserving the existing weekly digest preference.
+Tuesday 09:00 Asia/Seoul (00:00 UTC), moved from 15:00 at the operator's request on 2026-09-22. This is a start target, not a publication deadline.
 GitHub may start late; this is not an exact-minute guarantee. `RADAR_V2_ENABLED` gates scheduled execution.
 Daily ingestion, high-fit, D-7/D-3 delivery and hourly team recalculation are not on this path.
 The prior `scheduling` database value is preserved in the cutover audit, then disabled.

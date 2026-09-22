@@ -1,8 +1,8 @@
 name: StartupRadar Weekly
 on:
   schedule:
-    # Single production schedule: Tuesday 15:00 Asia/Seoul, existing weekly preference.
-    - cron: '0 6 * * 2'
+    # Single production schedule: Tuesday 09:00 Asia/Seoul (00:00 UTC), approved 2026-09-22.
+    - cron: '0 0 * * 2'
   workflow_dispatch:
     inputs:
       kind:
