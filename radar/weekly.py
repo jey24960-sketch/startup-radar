@@ -74,6 +74,15 @@ def week_window(at):
     return start,start+timedelta(days=6)
 
 
+def publication_title(published_at, publication_kind='WEEKLY'):
+    """Label the first publication day, never the collection or operational week."""
+    label = '최초 지원사업 목록' if publication_kind=='INITIAL_BASELINE' else '주간 지원사업 공지'
+    if published_at is None:return f'발행 전 {label}'
+    if published_at.tzinfo is None:raise ValueError('Timezone-aware publication timestamp required')
+    day=published_at.astimezone(SEOUL).date()
+    return f'{day.month}월 {day.day}일자 {label}'
+
+
 def published_result(c, briefing):
     status=briefing['collection_status']
     result={'status':status,'collection_status':status,'briefing_id':str(briefing['id']),
@@ -142,9 +151,12 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
         ordered = sorted(items.values(),key=lambda row:(SECTION_RANK[row['relevance_status']],
             row['snapshot'].get('application_end_at') or '9999',row['snapshot']['title'],str(row['program_id'])))
         new_count = sum(row['change_type']=='NEW' for row in ordered)
-        display_start = (old or {}).get('display_start') or start
-        display_end = (old or {}).get('display_end') or end
-        title = f'{display_start:%m.%d} ~ {display_end:%m.%d} \uc8fc\uac04 \uc9c0\uc6d0\uc0ac\uc5c5 \uacf5\uc9c0'
+        # The database clock is authoritative for first publication. Explicit
+        # revisions retain that first timestamp; drafts never invent a date.
+        published_at = (old or {}).get('published_at')
+        if publish and published_at is None:
+            published_at = c.execute('select now() as published_at').fetchone()['published_at']
+        title = publication_title(published_at)
         # "\uc0c8\ub85c \ud655\uc778" states what is actually known: StartupRadar saw it for the
         # first time. It does not claim the institution posted it this week.
         summary = f'\uc0c8\ub85c \ud655\uc778 {new_count}\uac74 \u00b7 \ubcc0\uacbd {len(ordered)-new_count}\uac74\uc785\ub2c8\ub2e4.' if ordered else '\uc774\ubc88 \uc8fc \uc0c8\ub85c \ud655\uc778\u00b7\ubcc0\uacbd\ub41c \uc9c0\uc6d0\uc0ac\uc5c5 \uc5c6\uc74c'
@@ -159,7 +171,7 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
             c.execute('insert into startup_radar.weekly_briefing_items(briefing_id,program_id,program_version_id,change_type,display_order,snapshot,material_hash,relevance_status,restriction_summary,relevance_version,stage_codes,stage_version) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 (bid,item['program_id'],item['version_id'],item['change_type'],index,Jsonb(item['snapshot']),item['material_hash'],
                  item['relevance_status'],item['restriction_summary'],RELEVANCE_VERSION,item['stage_codes'],STAGE_VERSION))
-        if publish:c.execute("update startup_radar.weekly_briefings set status='PUBLISHED',published_at=coalesce(published_at,now()),updated_at=now() where id=%s",(bid,))
+        if publish:c.execute("update startup_radar.weekly_briefings set status='PUBLISHED',published_at=coalesce(published_at,%s),updated_at=now() where id=%s",(published_at,bid))
     return {'status':'SUCCESS' if complete else 'PARTIAL_SUCCESS','collection_status':collection_status,
             'briefing_id':str(bid),'published':publish,'item_count':len(ordered),'new_count':new_count,'updated_count':len(ordered)-new_count,
             'withheld':{reason:count for reason,count in withheld.items() if count}}
