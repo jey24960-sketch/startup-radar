@@ -6,8 +6,8 @@ Personalization, OCR, archives of original binaries and scale benchmarks are def
 
 ## Schedule and Operations
 
-The production calendar observed on 2026-09-22 is `.github/workflows/startup_radar_v2.yml`:
-Tuesday 09:00 Asia/Seoul (00:00 UTC), an execution target rather than a documented publication deadline.
+The active production calendar is `.github/workflows/startup_radar_v2.yml`:
+Tuesday 09:00 Asia/Seoul (00:00 UTC), moved from 15:00 at the operator's request on 2026-09-22. This is a start target, not a publication deadline.
 GitHub may start late; this is not an exact-minute guarantee. `RADAR_V2_ENABLED` gates scheduled execution.
 The independent Supabase Cron coordinator defaults to disabled; code deployment does not activate it.
 Its reviewed cutover uses `RADAR_WEEKLY_SCHEDULER=supabase`; this disables the legacy schedule job

@@ -21,4 +21,3 @@ end $$;
 commit;
 -- Afterwards set RADAR_WEEKLY_SCHEDULER=github in GitHub to restore the legacy
 -- next schedule. Existing dispatches remain correlated and idempotent.
-

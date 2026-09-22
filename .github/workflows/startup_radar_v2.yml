@@ -1,6 +1,7 @@
 name: StartupRadar Weekly
 on:
   schedule:
+    # Tuesday 09:00 Asia/Seoul (00:00 UTC), approved 2026-09-22.
     # Legacy fallback only. Supabase Cron becomes primary only after the explicit
     # RADAR_WEEKLY_SCHEDULER=supabase cutover; queued old runs remain DB-safe.
     - cron: '0 0 * * 2'

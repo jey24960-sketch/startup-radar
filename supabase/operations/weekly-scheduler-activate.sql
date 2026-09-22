@@ -39,4 +39,3 @@ select cron.schedule('startup-radar-weekly-dispatch','*/5 * * * *','select start
 select startup_radar.configure_weekly_scheduler(true,:'active_from_week'::date,:'note');
 commit;
 -- No dispatch is performed here. No previous week is backfilled.
-
