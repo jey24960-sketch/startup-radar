@@ -122,7 +122,14 @@ def test_member_rpc_requires_verified_gfc_membership_without_team(db):
     with db.transaction(member) as c:
         assert c.execute('select public.gfc_radar_weekly_briefings() data').fetchone()['data']['total']==1
         article=c.execute('select public.gfc_radar_weekly_briefing(%s) data',(result['briefing_id'],)).fetchone()['data']
-        assert len(article['items'])==3 and 'program_id' not in article['items'][0]
+        assert len(article['items'])==3
+        assert all(set(item)=={'program_id','display_order','change_type','facts',
+            'relevance_status','restriction_summary','stage_fit'} for item in article['items'])
+    with db.transaction() as c:
+        stored=c.execute('select program_id,display_order from startup_radar.weekly_briefing_items where briefing_id=%s order by display_order,program_id',
+            (result['briefing_id'],)).fetchall()
+        assert [(item['program_id'],item['display_order']) for item in article['items']]==[
+            (str(row['program_id']),row['display_order']) for row in stored]
     with db.transaction(external) as c:assert c.execute('select count(*) n from startup_radar.weekly_briefings').fetchone()['n']==0
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         with db.transaction(external) as c:c.execute('select public.gfc_radar_weekly_briefings()')
