@@ -18,6 +18,8 @@ def main(argv=None):
     weekly.add_argument('--deliver',action='store_true',help='Announce a published briefing to existing enabled subscribers only')
     weekly.add_argument('--check-sources',action='store_true',help='Recheck bounded official sources without rewriting a published issue or sending Telegram')
     weekly.add_argument('--revision-note',help='Explicitly recollect and revise the current published issue, keeping its ID and prior-item audit; never duplicates announcements')
+    weekly.add_argument('--scheduler-request-id',type=UUID,help='Existing persisted weekly scheduler request; requires --expected-week-start')
+    weekly.add_argument('--expected-week-start',help='Expected Seoul Monday in YYYY-MM-DD form; requires --scheduler-request-id; stale weeks are skipped')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
     channel=commands.add_parser('telegram-channel',help='Configure and verify the ONE official GFC Telegram channel that carries every weekly briefing; never posts the briefing itself')
     channel.add_argument('--chat-id',help='Telegram channel chat id (usually -100...) or @username')
@@ -46,7 +48,19 @@ def main(argv=None):
     recovery.add_argument('--execution-id',type=UUID,required=True)
     recovery.add_argument('--note',required=True)
     recovery.add_argument('--confirm-stopped',action='store_true',help='Affirm the recorded process/Actions run is terminal, not just disconnected')
-    args=parser.parse_args(argv);db=Database()
+    weekly_recovery=commands.add_parser('recover-weekly-announcement',help='Authorize a confirmed FAILED official send for retry, preserving audit; does not send or dispatch')
+    weekly_recovery.add_argument('--announcement-id',type=UUID,required=True)
+    weekly_recovery.add_argument('--note',required=True)
+    weekly_recovery.add_argument('--confirm-not-delivered',action='store_true',help='Affirm that this definitively failed send did not reach the official channel; uncertain/in-flight outcomes are never reset')
+    args=parser.parse_args(argv)
+    if args.command=='weekly':
+        from radar.executions import weekly_schedule_arguments
+        try:
+            weekly_schedule_arguments(args.scheduler_request_id,args.expected_week_start)
+            if args.scheduler_request_id and (args.draft or args.revision_note is not None or args.check_sources):
+                raise ValueError('Scheduled weekly requests cannot draft, revise, or run a source check')
+        except ValueError as error:parser.error(str(error))
+    db=Database()
     if args.command=='weekly':
         from radar.weekly import run_weekly
         transport=None
@@ -54,7 +68,8 @@ def main(argv=None):
             token=os.environ.get('TELEGRAM_BOT_TOKEN')
             if not token:raise ValueError('TELEGRAM_BOT_TOKEN is required for --deliver')
             transport=TelegramTransport(token)
-        result=run_weekly(db,transport,publish=not args.draft,revision_note=args.revision_note,check_sources=args.check_sources)
+        result=run_weekly(db,transport,publish=not args.draft,revision_note=args.revision_note,check_sources=args.check_sources,
+                          scheduler_request_id=args.scheduler_request_id,expected_week_start=args.expected_week_start)
     elif args.command=='telegram-channel':
         from radar import channel_admin
         if args.enable and args.disable:raise ValueError('Choose --enable or --disable, not both')
@@ -87,6 +102,9 @@ def main(argv=None):
     elif args.command=='recover-execution':
         from radar.executions import recover_execution
         result=recover_execution(db,args.execution_id,args.note,args.confirm_stopped)
+    elif args.command=='recover-weekly-announcement':
+        from radar.weekly import recover_weekly_announcement
+        result=recover_weekly_announcement(db,args.announcement_id,args.note,args.confirm_not_delivered)
     elif args.command=='seed-sources':
         rows=json.loads(Path(args.file).read_text(encoding='utf-8'))
         for row in rows:

@@ -6,9 +6,14 @@ Personalization, OCR, archives of original binaries and scale benchmarks are def
 
 ## Schedule and Operations
 
-The sole production calendar is `.github/workflows/startup_radar_v2.yml`:
-Tuesday 15:00 Asia/Seoul (06:00 UTC), preserving the existing weekly digest preference.
+The production calendar observed on 2026-09-22 is `.github/workflows/startup_radar_v2.yml`:
+Tuesday 09:00 Asia/Seoul (00:00 UTC), an execution target rather than a documented publication deadline.
 GitHub may start late; this is not an exact-minute guarantee. `RADAR_V2_ENABLED` gates scheduled execution.
+The independent Supabase Cron coordinator defaults to disabled; code deployment does not activate it.
+Its reviewed cutover uses `RADAR_WEEKLY_SCHEDULER=supabase`; this disables the legacy schedule job
+and admits correlated external workflow dispatches, still subject to `RADAR_V2_ENABLED`.
+Manual calls retain their existing behaviour. See [scheduler reliability and cutover](WEEKLY-SCHEDULER-RELIABILITY.md)
+for dependencies, Vault provisioning, bounded retries, observation limits and rollback.
 Daily ingestion, high-fit, D-7/D-3 delivery and hourly team recalculation are not on this path.
 The prior `scheduling` database value is preserved in the cutover audit, then disabled.
 
@@ -25,6 +30,11 @@ python -m radar.cli execution-status
 
 `--draft` rebuilds only an unpublished current-week draft. The normal command publishes.
 A published week is stable: ordinary reruns return its existing ID and do not recollect or rewrite it.
+The public issue title uses its first Seoul publication day, for example
+`9월 22일자 주간 지원사업 공지`; it is not a source collection period. Historical
+windows and the operational week remain stored but do not label the article.
+See [publication-date labels](PUBLICATION-DATE-TITLES.md) for baseline wording,
+compatibility and the title-only correction audit.
 An explicit `--check-sources` (manual workflow input `check_sources`) rechecks and persists official
 source observations without modifying an already published issue, its first publication time or audit.
 It reports the current check's status separately from `published_collection_status`.

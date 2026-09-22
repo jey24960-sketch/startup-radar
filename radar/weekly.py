@@ -1,5 +1,6 @@
 """One official-source briefing per Seoul week, independent of team calculations."""
-from datetime import timedelta
+from datetime import datetime,timedelta
+from uuid import UUID
 from psycopg.types.json import Jsonb
 from core.clock import now, SEOUL
 from radar.actionability import actionability
@@ -74,6 +75,15 @@ def week_window(at):
     return start,start+timedelta(days=6)
 
 
+def publication_title(published_at, publication_kind='WEEKLY'):
+    """Label the first publication day, never the collection or operational week."""
+    label = '최초 지원사업 목록' if publication_kind=='INITIAL_BASELINE' else '주간 지원사업 공지'
+    if published_at is None:return f'발행 전 {label}'
+    if published_at.tzinfo is None:raise ValueError('Timezone-aware publication timestamp required')
+    day=published_at.astimezone(SEOUL).date()
+    return f'{day.month}월 {day.day}일자 {label}'
+
+
 def published_result(c, briefing):
     status=briefing['collection_status']
     result={'status':status,'collection_status':status,'briefing_id':str(briefing['id']),
@@ -142,9 +152,12 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
         ordered = sorted(items.values(),key=lambda row:(SECTION_RANK[row['relevance_status']],
             row['snapshot'].get('application_end_at') or '9999',row['snapshot']['title'],str(row['program_id'])))
         new_count = sum(row['change_type']=='NEW' for row in ordered)
-        display_start = (old or {}).get('display_start') or start
-        display_end = (old or {}).get('display_end') or end
-        title = f'{display_start:%m.%d} ~ {display_end:%m.%d} \uc8fc\uac04 \uc9c0\uc6d0\uc0ac\uc5c5 \uacf5\uc9c0'
+        # The database clock is authoritative for first publication. Explicit
+        # revisions retain that first timestamp; drafts never invent a date.
+        published_at = (old or {}).get('published_at')
+        if publish and published_at is None:
+            published_at = c.execute('select now() as published_at').fetchone()['published_at']
+        title = publication_title(published_at)
         # "\uc0c8\ub85c \ud655\uc778" states what is actually known: StartupRadar saw it for the
         # first time. It does not claim the institution posted it this week.
         summary = f'\uc0c8\ub85c \ud655\uc778 {new_count}\uac74 \u00b7 \ubcc0\uacbd {len(ordered)-new_count}\uac74\uc785\ub2c8\ub2e4.' if ordered else '\uc774\ubc88 \uc8fc \uc0c8\ub85c \ud655\uc778\u00b7\ubcc0\uacbd\ub41c \uc9c0\uc6d0\uc0ac\uc5c5 \uc5c6\uc74c'
@@ -159,7 +172,7 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
             c.execute('insert into startup_radar.weekly_briefing_items(briefing_id,program_id,program_version_id,change_type,display_order,snapshot,material_hash,relevance_status,restriction_summary,relevance_version,stage_codes,stage_version) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 (bid,item['program_id'],item['version_id'],item['change_type'],index,Jsonb(item['snapshot']),item['material_hash'],
                  item['relevance_status'],item['restriction_summary'],RELEVANCE_VERSION,item['stage_codes'],STAGE_VERSION))
-        if publish:c.execute("update startup_radar.weekly_briefings set status='PUBLISHED',published_at=coalesce(published_at,now()),updated_at=now() where id=%s",(bid,))
+        if publish:c.execute("update startup_radar.weekly_briefings set status='PUBLISHED',published_at=coalesce(published_at,%s),updated_at=now() where id=%s",(published_at,bid))
     return {'status':'SUCCESS' if complete else 'PARTIAL_SUCCESS','collection_status':collection_status,
             'briefing_id':str(bid),'published':publish,'item_count':len(ordered),'new_count':new_count,'updated_count':len(ordered)-new_count,
             'withheld':{reason:count for reason,count in withheld.items() if count}}
@@ -208,6 +221,9 @@ def announce(db, briefing_id, transport=None):
             c.execute("update startup_radar.weekly_announcements set state='SENDING',attempted_at=now() where id=%s",(row['id'],))
         try:result=transport.send(row['chat_id'],row['payload'])
         except Exception:result={'state':'UNCERTAIN'}
+        if not isinstance(result,dict):result={'state':'UNCERTAIN'}
+        if result.get('state')=='DELIVERED' and not (isinstance(result.get('receipt'),dict) and result['receipt'].get('message_id')):
+            result={'state':'UNCERTAIN','error':'Invalid transport receipt'}
         state=result.get('state') if result.get('state') in ('DELIVERED','FAILED','UNCERTAIN') else 'UNCERTAIN'
         with db.transaction() as c:
             c.execute("update startup_radar.weekly_announcements set state=%s,receipt=%s,failure_reason=%s,delivered_at=case when %s='DELIVERED' then now() end where id=%s and state='SENDING'",
@@ -219,14 +235,64 @@ def announce(db, briefing_id, transport=None):
     return {'state':'RECORDED','planned':len(ids),'delivered':delivered,'channel':channel['name'],'states':{row['state']:row['count'] for row in states}}
 
 
-def run_weekly(db, transport=None, at=None, publish=True, collector=None, revision_note=None, check_sources=False):
+def recover_weekly_announcement(db,announcement_id,note,confirmed_not_delivered=False):
+    """Authorize a retry only for a definitively failed send; never send here.
+
+    Ambiguous/in-flight/delivered outcomes remain blocked. The original payload,
+    publication and ledger identity stay intact; prior delivery evidence goes to
+    the private audit before an explicitly confirmed FAILED row becomes PENDING.
+    """
+    from radar.executions import LOCK_KEY,owner_identity
+    if not confirmed_not_delivered:raise ValueError('Confirm that the failed announcement was not delivered before recovery')
+    if not isinstance(note,str) or not 5<=len(note.strip())<=500:raise ValueError('A recovery note of 5..500 characters is required')
+    announcement_id=UUID(str(announcement_id))
+    with db.transaction() as c:
+        if not c.execute('select pg_try_advisory_xact_lock(%s) acquired',(LOCK_KEY,)).fetchone()['acquired']:
+            raise ValueError('Another ownership operation is in progress')
+        if c.execute('select 1 from startup_radar.worker_executions where finished_at is null').fetchone():
+            raise ValueError('Verify and recover the active execution owner before authorizing a delivery retry')
+        row=c.execute('select * from startup_radar.weekly_announcements where id=%s for update',(announcement_id,)).fetchone()
+        if not row:raise LookupError('Weekly announcement not found')
+        if row['state']!='FAILED' or row['receipt'] is not None or row['delivered_at'] is not None:
+            raise ValueError('Only FAILED without delivery evidence can be recovered; uncertain or in-flight sends remain blocked')
+        briefing=c.execute('select * from startup_radar.weekly_briefings where id=%s',(row['briefing_id'],)).fetchone()
+        channel=official_channel(c)
+        if row['target_kind']!='OFFICIAL_CHANNEL' or not briefing or briefing['status']!='PUBLISHED' or briefing['publication_kind']!='WEEKLY' or briefing.get('withdrawn_at') is not None:
+            raise ValueError('Only a visible published weekly announcement can be recovered')
+        if channel is None or channel['chat_id']!=row['chat_id'] or visibility_mode(c)=='PRIVATE':
+            raise ValueError('The same official channel and an allowed visibility setting are required')
+        previous={key:row[key] for key in ('state','attempted_at','delivered_at','receipt','failure_reason')}
+        previous={key:value.isoformat() if isinstance(value,datetime) else value for key,value in previous.items()}
+        c.execute("insert into startup_radar.admin_audit(action,entity_id,detail) values('WEEKLY_ANNOUNCEMENT_RETRY_AUTHORIZED',%s,%s)",
+                  (str(announcement_id),Jsonb({'reason':note.strip(),'briefing_id':str(row['briefing_id']),
+                    'previous':previous,'operator':owner_identity(),'confirmed_not_delivered':True})))
+        c.execute("update startup_radar.weekly_announcements set state='PENDING',attempted_at=null,delivered_at=null,receipt=null,failure_reason=null where id=%s",(announcement_id,))
+    return {'status':'SUCCESS','state':'PENDING','announcement_id':str(announcement_id),
+            'briefing_id':str(row['briefing_id']),'retry_dispatched':False,'delivered':False}
+
+
+def run_weekly(db, transport=None, at=None, publish=True, collector=None, revision_note=None, check_sources=False,
+               scheduler_request_id=None,expected_week_start=None):
     from radar.ingestion import ingest
-    from radar.executions import claim_execution,finish_execution
+    from radar.executions import claim_execution,finish_execution,weekly_schedule_arguments
+    request_id,expected_week=weekly_schedule_arguments(scheduler_request_id,expected_week_start)
+    if request_id and (not publish or revision_note is not None or check_sources):
+        raise ValueError('Scheduled weekly requests cannot draft, revise, or run a source check')
     at=at or now(); start,_=week_window(at)
     # claim_execution() returns {'status':'PAUSED'} while the operator pause is
     # on: no claim, collection, publication or send happens.
-    claim=claim_execution(db,'WEEKLY')
+    try:
+        claim=claim_execution(db,'WEEKLY',scheduler_request_id=request_id,expected_week_start=expected_week)
+    except Exception as error:
+        # A lost commit acknowledgement can leave a confirmed owner in the DB.
+        # Do not recollect or dispatch another owner based only on this response.
+        return {'status':'UNCERTAIN','reason':type(error).__name__,'executed':False,
+                **({'scheduler_request_id':str(request_id)} if request_id else {}),
+                'message':'Execution claim uncertain; inspect durable request and owner before retry'}
     if 'execution_id' not in claim:return claim
+    schedule_metadata={key:claim[key] for key in ('scheduler_request_id','expected_week_start') if key in claim}
+    if request_id:
+        at=datetime.fromisoformat(claim['reference_at']);start,_=week_window(at)
     try:
         with db.transaction() as c:
             existing=c.execute("select id,collection_status,ingestion_run_id from startup_radar.weekly_briefings where week_start=%s and publication_kind='WEEKLY' and status='PUBLISHED'",(start,)).fetchone()
@@ -254,5 +320,9 @@ def run_weekly(db, transport=None, at=None, publish=True, collector=None, revisi
             if states.get('SENDING') or states.get('UNCERTAIN'):result['status']='UNCERTAIN'
             elif states.get('FAILED') or states.get('PENDING'):result['status']='PARTIAL_SUCCESS'
     except Exception as error:result={'status':'FAILED','reason':type(error).__name__}
-    finish_execution(db,claim['execution_id'],result)
+    result={**result,**schedule_metadata}
+    try:finish_execution(db,claim['execution_id'],result)
+    except Exception as error:
+        return {'status':'UNCERTAIN','execution_id':claim['execution_id'],**schedule_metadata,'reason':type(error).__name__,
+                'message':'Execution finalization uncertain; inspect durable owner and partial effects before retry'}
     return {**result,'execution_id':claim['execution_id']}

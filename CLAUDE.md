@@ -39,7 +39,7 @@ Current source of truth, in this order:
 `GFC-OPERATING-GOAL.md`, `GFC-NOTICE-INTEGRATION*.md`.
 **Known stale:** `docs/ARCHITECTURE.md` ("V2 schedules remain disabled" — false, production has
 published) and `docs/PRODUCTION-OPERATIONS.md` (describes the retired hourly `17 * * * *` TICK
-and "화요일 15:17"; the real schedule is `0 6 * * 2`). Trust `WEEKLY-BRIEFING.md` over both.
+and "화요일 15:17"; the real schedule is `0 0 * * 2`). Trust `WEEKLY-BRIEFING.md` over both.
 
 There is **no `AGENTS.md` in either repository** as of 2026-09-16. If one appears later, read it
 first and treat its repository instructions as binding.
@@ -49,7 +49,7 @@ first and treat its repository instructions as binding.
 - **One** publication per operational Seoul week (Mon–Sun), **one** Telegram announcement — posted to
   the ONE official GFC channel (`runtime_settings.weekly_telegram_channel`), never to per-team
   subscriptions. Members join the channel once; no ID/chat-ID submission, no operator binding.
-  Schedule: `cron: '0 6 * * 2'` = Tuesday 15:00 Asia/Seoul, gated by `vars.RADAR_V2_ENABLED`.
+  Schedule: `cron: '0 0 * * 2'` = Tuesday 09:00 Asia/Seoul, gated by `vars.RADAR_V2_ENABLED`.
 - **Operator controls (2026-09-17).** `runtime_settings.radar_operation` (pause: worker returns
   `PAUSED` from `claim_execution()` with no ingestion_run/collection/publication/Telegram; resume
   never replays) and `radar_visibility` (`PRIVATE`/`MEMBERS_ONLY`/`PUBLIC`, default MEMBERS_ONLY;

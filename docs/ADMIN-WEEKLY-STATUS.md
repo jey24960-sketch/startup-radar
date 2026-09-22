@@ -5,7 +5,13 @@ The GFC web repository consumes it through `src/lib/radarWeeklyStatus.js` and ke
 of the migration under `tests/fixtures/radar-migrations/` for isolated integration tests.
 
 Migration: `20260922104947_admin_weekly_operation_snapshot.sql`, created with the Supabase CLI.
-It has not been applied to a remote database as part of this change.
+Deployment is explicitly tracked in the shared database ledger; the presence of
+this file alone does not mean it has been applied remotely.
+On 2026-09-22 production applied this snapshot as ledger `20260922133441`, then
+the disabled coordinator (`20260922114649` source) as `20260922133449`. Runtime
+was verified disabled/unregistered with no new requests or attempts; stored
+briefing/item/announcement fingerprints were unchanged. Do not reapply either
+source to reconcile its CLI filename with the remote ledger timestamp.
 
 ## Observed facts, not inferred operation
 
@@ -20,7 +26,9 @@ result for that ingestion ID. The web does not reimplement the collection-comple
 No 24-hour full-scan threshold, OCR result or personalized recommendation is used as a weekly health
 requirement. Those existing diagnostics remain available in the advanced section.
 
-The Tuesday 15:00 timetable is the repository contract, not evidence that GitHub Actions ran.
+The Tuesday 09:00 timetable is the current repository contract, not evidence that GitHub Actions ran.
+The original snapshot migration retains its historical 15:00 definition; the coordinator
+migration overrides scheduled_at/next_scheduled_at to 09:00 without editing migration history.
 Both external execution and delivery gates remain `UNKNOWN`. An elapsed expected time without a
 record is displayed as a need to check delay, not a claimed failed run. Publication does not imply
 Telegram delivery. Only `DELIVERED` together with a delivery timestamp is displayed as delivered.
@@ -32,21 +40,24 @@ and no direct table grants. It performs no writes, logging, collection, revision
 The projection excludes chat IDs, payloads, delivery receipts, raw errors and worker owner details.
 It reuses `admin_control_snapshot()` without changing the existing CAS/audit/visibility contracts.
 
-## Future deployment preflight and sequence
+## Deployment preflight and sequence
 
-No command in this document has been executed against production for this implementation.
-Before a separately authorized deployment:
+For the user-authorized disabled-coordinator release, follow the exact two-migration
+sequence in [the scheduler runbook](WEEKLY-SCHEDULER-RELIABILITY.md#safe-release-before-an-independent-scheduling-credential-exists).
+Do not deploy the historical snapshot alone and show its former 15:00 timetable.
 
 1. Inspect the target migration history and compare the live definitions/columns against the repository.
    Required: the operator-control migration through `20260917100000`, `require_admin()`,
    `admin_control_snapshot()`, worker_executions.result, weekly publication kind/withdrawal columns,
    and official-channel announcement target_kind. Confirm `public.my_role()` still uses GFC roles.
    Do not repair unrelated historical migration version differences by replaying old migrations.
-2. Confirm the timetable remains Tuesday 06:00 UTC in the production workflow. If it changed,
+2. Confirm the timetable remains Tuesday 00:00 UTC in the production workflow. If it changed,
    update the documented timetable before showing a derived next expected time. No gate value may
    be inferred from the stored runtime flags.
-3. Apply **only** the new Radar-owned additive migration after its prerequisites. Do not apply the
-   GFC fixture copy as a second migration. No backfill or data transfer is needed.
+3. Apply **only** the missing Radar-owned snapshot migration, immediately followed by
+   `20260922114649_weekly_dispatch_coordinator.sql`, after their prerequisites. Keep the
+   coordinator disabled. Do not apply the GFC fixture copies as second migrations.
+   No content backfill or data transfer is needed.
 4. Verify the function in a read-only transaction with synthetic/staging identities: admin succeeds;
    member, external and anonymous callers fail; no new table privilege is present; no secret fields
    are returned. Verify no audit rows or worker/delivery records are created by the read.
@@ -60,10 +71,12 @@ rollback instructions still apply; do not assume applying this migration applies
 
 ## Rollback and preservation
 
-The migration creates one function only. Restore the previous web build first if reverting the feature.
-The safest DB rollback is to leave the unused read-only function in place. If removal is required after
-verifying no clients use it, remove only this new function by its zero-argument signature. Do not drop
-tables, restore old control functions, delete runtime settings, reset revisions, or remove audit rows.
+The snapshot migration creates one function; the coordinator subsequently wraps
+it with an additive runtime projection. Restore the previous web build first if
+reverting the feature. Leave the unused read-only functions and disabled
+coordinator in place. Do not remove the base function while its wrapper depends
+on it, drop tables, restore old control functions, delete runtime settings, reset
+revisions, or remove audit rows.
 All original collection, publication, withdrawal and Telegram ledger data remain untouched.
 
 ## Validation
