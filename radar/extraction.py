@@ -84,7 +84,7 @@ class RequirementExtractor:
     version='requirements-2.0.10'
     def __init__(self,client=None,model=None):
         self.client=client
-        self.model=model or os.environ.get('RADAR_EXTRACTION_MODEL','claude-sonnet-4-5')
+        self.model=model or os.environ.get('RADAR_EXTRACTION_MODEL','').strip() or 'claude-sonnet-4-5'
     def extract(self,program:Program,detail,documents,source_id):
         # Failures must leave the caller's normalized official facts intact.
         program=program.model_copy(deep=True)

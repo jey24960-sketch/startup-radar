@@ -82,6 +82,7 @@ jobs:
         if: ${{ steps.auto_run.outputs.enabled == 'true' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RADAR_EXTRACTION_MODEL: ${{ vars.RADAR_EXTRACTION_MODEL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}

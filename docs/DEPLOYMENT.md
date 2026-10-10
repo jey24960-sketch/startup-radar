@@ -8,6 +8,22 @@ GitHub Actions Secrets: `RADAR_DATABASE_URL`, `ANTHROPIC_API_KEY`, `KSTARTUP_API
 
 작업 환경에서는 DB 주소를 `DATABASE_URL`로 전달합니다. 로컬 `.env.worker`는 보존하되 버전 관리나 브라우저에 넣지 않습니다. GFC 웹에는 기존 공개 Supabase 설정만 사용하며 서버 키를 넣지 않습니다.
 
+### AI 모델 선택과 비교
+
+GitHub Actions repository variable `RADAR_EXTRACTION_MODEL`로 AI 추출 모델을 선택합니다.
+V2의 수동 `INGEST`와 레거시 V1 분석 모두 이 값을 사용하며, 비어 있으면 코드 기본값을 사용합니다.
+정기 `WEEKLY`는 `structured_only=True`로 실행하므로 이 설정과 관계없이 AI를 호출하지 않습니다.
+모델 ID는 추출 캐시 키에 포함되어 서로 다른 모델의 결과를 재사용하지 않습니다.
+
+`StartupRadar model comparison` 워크플로는 기존 `ANTHROPIC_API_KEY` Secret만 사용합니다.
+공식 공고 발췌 10건과 합성 정상 사례 5건에 동일한 추출기를 적용해 Haiku 5.5와 Sonnet 5.5를 비교합니다.
+DB, 실제 수집, 발행, Telegram은 사용하지 않습니다. 기본 30회 추출, 재시도를 포함해 최대 60회 API 요청입니다.
+인증·서버·통신 오류는 비교 미완료로 처리하며 모델의 품질 차이로 판정하지 않습니다.
+결과 JSON에는 실제 반환 모델, 토큰, 지연, 오류와 필수 정보 누락을 기록합니다.
+짧은 발췌 사례의 통과만으로 전체 공고나 첨부문서에서의 품질 동등성을 보장하지 않습니다.
+로컬 실행은 `python tools/evaluate_models.py --repo . --output work/model-comparison.json`이며,
+`--list-cases`는 API 호출 없이 평가 기준만 출력합니다.
+
 ## 실행 및 수락
 
 수동 실행은 `workflow_dispatch`의 INGEST, REFRESH, DIGEST, REMINDER, HIGH_FIT, TICK을 사용합니다. 수동 실행은 정기 실행 gate와 별개입니다. 실제 발송 여부는 `RADAR_V2_DELIVERY_ENABLED`가 결정합니다.
