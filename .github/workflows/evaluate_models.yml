@@ -1,11 +1,6 @@
 name: StartupRadar model comparison
 on:
   workflow_dispatch:
-  push:
-    branches: [codex/compare-radar-models]
-    paths:
-      - tools/evaluate_models.py
-      - .github/workflows/evaluate_models.yml
 permissions:
   contents: read
 concurrency:

@@ -12,6 +12,7 @@ GitHub Actions Secrets: `RADAR_DATABASE_URL`, `ANTHROPIC_API_KEY`, `KSTARTUP_API
 
 GitHub Actions repository variable `RADAR_EXTRACTION_MODEL`로 AI 추출 모델을 선택합니다.
 V2의 수동 `INGEST`와 레거시 V1 분석 모두 이 값을 사용하며, 비어 있으면 코드 기본값을 사용합니다.
+기본값은 `claude-sonnet-5-5`입니다. `claude-haiku-5-5`를 비교하려면 같은 변수로 명시적으로 선택합니다.
 정기 `WEEKLY`는 `structured_only=True`로 실행하므로 이 설정과 관계없이 AI를 호출하지 않습니다.
 모델 ID는 추출 캐시 키에 포함되어 서로 다른 모델의 결과를 재사용하지 않습니다.
 
@@ -23,6 +24,13 @@ DB, 실제 수집, 발행, Telegram은 사용하지 않습니다. 기본 30회 �
 짧은 발췌 사례의 통과만으로 전체 공고나 첨부문서에서의 품질 동등성을 보장하지 않습니다.
 로컬 실행은 `python tools/evaluate_models.py --repo . --output work/model-comparison.json`이며,
 `--list-cases`는 API 호출 없이 평가 기준만 출력합니다.
+
+2026-10-10 [실제 API 비교](https://github.com/jey24960-sketch/startup-radar/actions/runs/38037324023)는
+각 모델 15회씩 실행했으며, Sonnet 5.5는 15/15, Haiku 5.5는 13/15 사례를 통과했습니다.
+두 모델 모두 스키마 오류나 이 평가에서 탐지된 잘못된 날짜·자격 확정은 없었습니다.
+Haiku는 추가 자격 제한이 없다고 명시한 합성 정상 사례 2건도 `UNVERIFIABLE`로 남겼습니다.
+이번 비교에서 필수 확인 항목을 모두 충족한 Sonnet을 기본값으로 선택했습니다.
+이는 현재 프롬프트와 검증기를 적용한 작은 사례 집합의 1회 비교 결과이며, 전체 공고 품질의 보장은 아닙니다.
 
 ## 실행 및 수락
 

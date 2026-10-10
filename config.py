@@ -52,7 +52,7 @@ CLUB_PROFILE = """
 # 수치 설정
 # ──────────────────────────────────────────────
 
-CLAUDE_MODEL = os.environ.get("RADAR_EXTRACTION_MODEL", "").strip() or "claude-sonnet-4-5"
+CLAUDE_MODEL = os.environ.get("RADAR_EXTRACTION_MODEL", "").strip() or "claude-sonnet-5-5"
 MAX_TOKENS = 8192
 CRAWL_DELAY_SECONDS = 0.5       # 소스 간 딜레이 (API 없으므로 짧게)
 CHUNK_MAX_CHARS = 10000          # AI 분석 청크 최대 문자 수
