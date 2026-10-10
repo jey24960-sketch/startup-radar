@@ -1,0 +1,32 @@
+name: StartupRadar model comparison
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: radar-model-comparison
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-v2.lock.txt
+      - run: pip install -r requirements-v2.lock.txt
+      - name: Compare frozen public evidence without database or delivery
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python tools/evaluate_models.py --repo . --output work/model-comparison.json --repeats 1
+      - name: Save measured comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radar-model-comparison
+          path: work/model-comparison.json
+          if-no-files-found: warn
+          retention-days: 7

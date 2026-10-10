@@ -11,7 +11,9 @@ StartupRadar 설정 파일
 # - TELEGRAM_ADMIN_CHAT_ID: /run, /dry, /stop 명령을 허용할 관리자 개인 from.id
 
 # ── 모델 설정 ────────────────────────────────────────────────
-CLAUDE_MODEL = "claude-sonnet-4-5"
+import os
+
+CLAUDE_MODEL = os.environ.get("RADAR_EXTRACTION_MODEL", "").strip() or "claude-sonnet-5-5"
 MAX_TOKENS = 4096
 
 # ── 실행 주기 (cron 표현식) ──────────────────────────────────

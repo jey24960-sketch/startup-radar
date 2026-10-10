@@ -67,6 +67,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RADAR_EXTRACTION_MODEL: ${{ vars.RADAR_EXTRACTION_MODEL }}
           KSTARTUP_API_KEY: ${{ secrets.KSTARTUP_API_KEY }}
           BIZINFO_API_KEY: ${{ secrets.BIZINFO_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
