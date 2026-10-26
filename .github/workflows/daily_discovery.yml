@@ -13,10 +13,6 @@ on:
         description: Retry the current completed failed source slot once; no publication or delivery
         type: boolean
         default: false
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/daily_discovery.yml'
 permissions:
   contents: read
 concurrency:
@@ -26,7 +22,7 @@ jobs:
   discover:
     if: vars.RADAR_V2_ENABLED == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -52,6 +48,7 @@ jobs:
       - name: Collect official facts, preserving weekly member delivery
         env:
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+          RADAR_DISCOVERY_SESSION_PIPELINE: 'true'
           KSTARTUP_API_KEY: ${{ secrets.KSTARTUP_API_KEY }}
           BIZINFO_API_KEY: ${{ secrets.BIZINFO_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -69,8 +66,8 @@ jobs:
             fi
             args+=(--retry-failed)
           fi
-          # Rollout push is a non-delivering baseline. Scheduled exceptions use
-          # the existing delivery gate and an independently activated DB policy.
+          # Only the schedule or an explicit manual request permits delivery.
+          # The existing delivery gate and activated DB policy remain required.
           if [ "$RETRY_FAILED" != 'true' ] && [ "$DELIVERY_ENABLED" = 'true' ] && { [ "$EVENT_NAME" = 'schedule' ] || [ "$MANUAL_DELIVERY" = 'true' ]; }; then
             args+=(--deliver)
           fi
