@@ -13,10 +13,16 @@ from radar.dates import program_status
 _CURRENT_OBSERVATION=object()
 
 class Database:
-    def __init__(self,url=None):
+    def __init__(self,url=None,*,pipeline=False):
+        if type(pipeline) is not bool:raise ValueError('Pipeline option must be a boolean')
         self.url=url or os.environ.get('DATABASE_URL')
         if not self.url: raise ValueError('DATABASE_URL is required')
+        self._pipeline_enabled=pipeline
         self._session_connection=ContextVar('radar_database_session',default=None)
+
+    @property
+    def pipeline(self):
+        return self._pipeline_enabled
 
     @contextmanager
     def session(self):
@@ -24,6 +30,8 @@ class Database:
         if self._session_connection.get() is not None:
             yield self
             return
+        if self.pipeline and not psycopg.Pipeline.is_supported():
+            raise RuntimeError('The installed PostgreSQL client does not support pipeline mode')
         with psycopg.connect(self.url,row_factory=dict_row,prepare_threshold=None) as connection:
             token=self._session_connection.set(connection)
             try:yield self
@@ -38,11 +46,16 @@ class Database:
             borrowed=None
         with (nullcontext(borrowed) if borrowed is not None else psycopg.connect(self.url,row_factory=dict_row,prepare_threshold=None)) as connection:
             with connection.transaction():
-                connection.execute("set local timezone='Asia/Seoul'")
-                if user_id:
-                    connection.execute('set local role authenticated')
-                    connection.execute("select set_config('request.jwt.claim.sub',%s,true)",(str(user_id),))
-                yield connection
+                # Flush pending results/errors BEFORE the transaction context
+                # chooses COMMIT or ROLLBACK. Do not wrap the whole session or
+                # move pipeline outside transaction(): late SQL errors would
+                # otherwise be received after its rollback boundary.
+                with (connection.pipeline() if borrowed is not None and self.pipeline else nullcontext()):
+                    connection.execute("set local timezone='Asia/Seoul'")
+                    if user_id:
+                        connection.execute('set local role authenticated')
+                        connection.execute("select set_config('request.jwt.claim.sub',%s,true)",(str(user_id),))
+                    yield connection
 
     def create_team(self,name,owner_id,profile=None):
         # Privileged invitation/bootstrap operation. Never exposed anonymously.
