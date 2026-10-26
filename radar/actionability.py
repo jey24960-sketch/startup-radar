@@ -11,6 +11,7 @@ published article passes that article's original publication/snapshot time, so
 history is judged as it stood when it was published.
 """
 from datetime import datetime, timedelta
+from radar.opportunity_facts import explicit_closure
 
 # The publication date must leave a full seven days for members to prepare.
 # The same threshold applies to weekly issues and exceptional announcements.
@@ -51,6 +52,11 @@ def actionability(facts, at):
     """
     if at is None or at.tzinfo is None:
         raise ValueError('Aware reference timestamp required for actionability')
+    # Official APIs may retain an open flag and a formal future end date after
+    # the institution has added an explicit closed badge to the title. Reuse
+    # the narrow title-only status check; do not infer closure from summaries.
+    if facts.get('recruitment_closed') is True or explicit_closure(facts.get('title') or ''):
+        return False, 'CLOSED_SOURCE_STATUS'
     start = _aware(facts.get('application_start_at'))
     end = _aware(facts.get('application_end_at'))
     if start is not None and end is not None and start > end:
