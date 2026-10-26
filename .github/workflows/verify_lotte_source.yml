@@ -73,7 +73,7 @@ jobs:
                   with db.session():
                       with db.transaction() as c:
                           c.execute("insert into startup_radar.admin_audit(action,entity_id,detail) values(%s,%s,%s)",
-                              (ACTION, BASELINE_RUN, Jsonb({'state':'STARTED','execution_id':execution,
+                              (ACTION, BASELINE_RUN, Jsonb({'state':'STARTED','execution_id':str(execution),
                                'source_slug':SLUG,'configuration':source['config'],'notification_sent':False})))
                       result = ingest(db, picked, structured_only=True, trigger='official-source-configuration-recovery')
                   outcome = result['sources'][0]
