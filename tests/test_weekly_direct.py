@@ -21,6 +21,7 @@ ROOT=Path(__file__).resolve().parents[1]
 REGISTRY=json.loads((ROOT/'weekly-direct-sources.json').read_text(encoding='utf-8'))
 SOURCES=[s for s in REGISTRY if s['enabled']]
 SAMPLES=json.loads((ROOT/'tests/fixtures/weekly_direct_samples.json').read_text(encoding='utf-8'))
+LEGACY_SOURCES=[s for s in SOURCES if s['slug'] in {row['slug'] for row in SAMPLES}]
 AT=datetime(2026,9,15,15,tzinfo=SEOUL)
 DB=pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'),reason='Explicit test database required')
 
@@ -55,10 +56,10 @@ def test_one_real_official_sample_per_channel(sample):
 
 
 def test_direct_config_is_explicit_bounded_html_and_kept_separate_from_api_scope():
-    assert len(SOURCES)==8 and all(s['enabled'] for s in SOURCES)
+    assert len(SOURCES)==12 and all(s['enabled'] for s in SOURCES)
     before=deepcopy(SOURCES)
     assert weekly_sources(SOURCES)==before and SOURCES==before
-    assert all(s['config']['max_pages']==1 and s['config']['method'] in ('PAGE','BOARD') for s in SOURCES)
+    assert all(1 <= s['config']['max_pages'] <= 5 and s['config']['method'] in ('PAGE','BOARD') for s in SOURCES)
     assert all(isinstance(build_adapter(s),OfficialChannelAdapter) for s in SOURCES)
     success={'status':'SUCCESS','failures':[],'coverage':{'pagination_complete':True}}
     assert collection_completed([capped_source(),capped_source()]+[success]*8)
@@ -118,15 +119,18 @@ def test_pagination_query_changes_do_not_change_notice_identity():
     assert ids[0]==ids[1]
 
 
-def test_declared_record_cap_is_honest_scope_not_a_fake_failure():
+def test_record_cap_reports_an_incomplete_scan_instead_of_success():
     config={**SOURCES[0]['config'],'url':'https://example.org/list','link_selector':'a',
         'required_title_pattern':'recruit','max_records':1,'max_pages':1,'method':'BOARD'}
     adapter=OfficialChannelAdapter({'slug':'fixture','name':'Fixture','config':config},Mock())
     adapter.read_page=Mock(return_value=(b'<a href="/1">recruit 1</a><a href="/2">recruit 2</a>',
         'text/html','https://example.org/list'))
-    assert len(list(adapter.discover()))==1
+    found=[]
+    with pytest.raises(SourceFailure,match='RECORD_LIMIT'):
+        for candidate in adapter.discover():found.append(candidate)
+    assert len(found)==1
     report=adapter.pagination.report()
-    assert report['pagination_complete'] and report['record_cap_reached']
+    assert not report['pagination_complete'] and report['record_cap_reached']
     assert report['scope']=='CONFIGURED_CHANNEL'
     adapter.read_page=Mock(side_effect=SourceFailure('NETWORK','Real failure'))
     with pytest.raises(SourceFailure,match='NETWORK'):list(adapter.discover())
@@ -149,7 +153,7 @@ def test_application_link_validation_never_grants_fetch_permission(monkeypatch):
 @DB
 def test_real_samples_enter_existing_storage_and_one_weekly_post(db,monkeypatch):
     monkeypatch.setattr('radar.ingestion.RequirementExtractor',Mock(side_effect=AssertionError('No AI')))
-    sources=[db.upsert_source(s['slug'],s['name'],s['adapter'],s['config']) for s in SOURCES]
+    sources=[db.upsert_source(s['slug'],s['name'],s['adapter'],s['config']) for s in LEGACY_SOURCES]
     def factory(source):
         sample=next(s for s in SAMPLES if s['slug']==source['slug'])
         adapter=OfficialChannelAdapter(source,Mock())

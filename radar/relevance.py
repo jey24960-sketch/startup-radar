@@ -1,4 +1,4 @@
-"""GFC Relevance v1.1 — is this opportunity useful to a GFC founder?
+"""GFC Relevance v1.2 — is this opportunity useful to a GFC founder?
 
 Deterministic rules only. The weekly production path intentionally does not
 depend on AI, OCR or eligibility calculation, and that reliability property is
@@ -15,7 +15,11 @@ Two axes, in order (see docs/WEEKLY-BRIEFING.md):
   HIGH + BROAD      -> GFC_RELEVANT
   HIGH + RESTRICTED -> CONDITIONAL
   LOW               -> OUT_OF_SCOPE
-  conflicting/thin  -> REVIEW_REQUIRED  (operational state, never shown to members)
+  startup-specific but conflicting/thin -> REVIEW_REQUIRED
+
+The weekly publisher may put REVIEW_REQUIRED in a separate final section. It is
+not a positive relevance or eligibility decision. Unrelated thin notices remain
+OUT_OF_SCOPE instead of filling that section with arbitrary business notices.
 
 Audience words alone are never evidence. "중소기업", "소상공인", "스타트업",
 "창업벤처", "청년", "대학생", "AI", "글로벌" describe who may apply, not what the
@@ -24,15 +28,16 @@ What counts is the action the program enables and the deliverable it produces.
 """
 import re
 
-RELEVANCE_VERSION = 'gfc-v1.1'
-CLASSIFICATION_METHOD = 'DETERMINISTIC_RULES_V1_1'
+RELEVANCE_VERSION = 'gfc-v1.2'
+CLASSIFICATION_METHOD = 'DETERMINISTIC_RULES_V1_2'
 
 GFC_RELEVANT = 'GFC_RELEVANT'
 CONDITIONAL = 'CONDITIONAL'
 OUT_OF_SCOPE = 'OUT_OF_SCOPE'
 REVIEW_REQUIRED = 'REVIEW_REQUIRED'
 
-# Only these two are ever rendered to members.
+# Confirmed relevance statuses. The weekly publisher handles REVIEW_REQUIRED
+# separately; early-notice and other confirmed-opportunity paths stay narrow.
 PUBLISHABLE_STATUSES = (GFC_RELEVANT, CONDITIONAL)
 
 _MIN_EVIDENCE_TEXT = 80
@@ -54,7 +59,9 @@ HARD_EXCLUSION = _rules([
     ('소상공인 경영비용 지원', r'소상공인[^\n]{0,20}(경영\s*(안정|개선|회복)|버팀목|보조금|지원금|융자)'),
     ('경영안정·운전자금', r'경영\s*(안정|개선)\s*자금|운전자금|긴급\s*경영'),
     ('임차료·공과금 보전', r'(임차료|임대료|전기\s*요금|공과금|관리비)\s*(지원|보전|감면)'),
-    ('신용보증·보증료 지원', r'(특례\s*)?신용\s*보증|보증료\s*(지원|감면)'),
+    # A guarantee institution's name is not the purpose of its education or
+    # incubation notice. Actual guarantees and guarantee-fee subsidies still match.
+    ('신용보증·보증료 지원', r'(특례\s*)?신용\s*보증(?!\s*(재단|기금|중앙회))|보증료\s*(지원|감면)'),
     ('물류·운송비 보전', r'(물류비|운송비|배송비|택배비)\s*(지원|보전)'),
     ('고용장려·인건비 지원', r'고용\s*(장려금|유지)|인건비\s*지원|채용\s*지원금|일자리\s*장려'),
     ('채용·인턴 모집', r'(신입|경력)?\s*(사원|직원|연구원)\s*채용|인턴(십|사원)?\s*모집|체험형\s*인턴|인턴\s*모집|서포터즈\s*모집|아르바이트'),
@@ -84,7 +91,9 @@ GENERIC_SOFT_EXCLUSION = _rules([
 # founder deliverable, which is a deliberately narrower bar than the core list.
 EVENT_SOFT_EXCLUSION = _rules([
     ('일회성 강연·행사', r'특강|강연|세미나|설명회|간담회|컨퍼런스|포럼|네트워킹|밋업|커피챗|토크\s*콘서트'),
-    ('사례·후기 공유', r'성공\s*(사례|스토리)|후기|이야기|경험\s*공유'),
+    # Bare substring matching used to read 기후기술 as a 후기. Match actual
+    # review words/phrases while allowing normal Korean compounds such as 참여후기.
+    ('사례·후기 공유', r'성공\s*(사례|스토리)|(?:참여|수강|활동|창업|운영)\s*후기|후기\s*(공유|모음|작성|발표|나눔)|(?<![가-힣A-Za-z0-9])후기(?![가-힣A-Za-z0-9])|이야기|경험\s*공유'),
 ])
 
 # AXIS A positives: what the founder actually gets to do.
@@ -92,10 +101,10 @@ CORE_STARTUP = _rules([
     ('액셀러레이팅·배치 선발', r'액셀러레이[팅터]|엑셀러레이[팅터]|배치\s*(프로그램|모집|선발)|\bbatch\b|accelerat|인큐베이[팅션]|레지던시|residency'),
     # A registered business address is the workspace a student founder actually
     # needs to incorporate, so it belongs with incubation rather than nowhere.
-    ('창업 보육·입주 공간', r'창업\s*보육|보육\s*센터|입주\s*(기업|팀|기업체|공간|모집|신청)|창업\s*공간|메이커\s*스페이스|사업장\s*주소지|비상주\s*사무실'),
+    ('창업 보육·입주 공간', r'창업\s*보육|보육\s*센터|입주\s*(기업|팀|기업체|공간|모집|신청)|(?:창업|스타트업|산학연\s*혁신\s*허브|캠퍼스\s*혁신\s*파크)[^\n]{0,35}입점\s*(자|기업|팀|모집|신청)|창업\s*공간|메이커\s*스페이스|사업장\s*주소지|비상주\s*사무실'),
     # English is common in Korean startup programme titles ("INVESTOR DAY"),
     # so the investor track must match both languages.
-    ('투자 매칭·IR·데모데이', r'\bIR\b|데모\s*데이|demo\s*day|investor\s*day|pitch(ing)?\s*day|투자\s*(매칭|연계|유치\s*지원|설명회|상담회)|피칭|피치\s*덱|투자자\s*매칭|쇼케이스'),
+    ('투자 매칭·IR·데모데이', r'(?<![A-Za-z0-9])IR(?![A-Za-z0-9])|데모\s*데이|demo\s*day|investor\s*day|pitch(ing)?\s*day|투자\s*(매칭|연계|검토|유치\s*지원|설명회|상담회)|초기에?\s*발굴하여\s*투자|피칭|피치\s*덱|투자자\s*매칭|쇼케이스'),
     ('MVP·프로토타입 제작', r'\bMVP\b|프로토타입|시제품|시작품|제품\s*개발\s*지원'),
     ('실증·PoC·테스트베드', r'\bPoC\b|실증|테스트\s*베드|리빙\s*랩'),
     ('오픈이노베이션 협업', r'오픈\s*이노베이션|open\s*innovation|대\-?중견\s*연계|수요\s*기업\s*매칭'),
@@ -114,7 +123,7 @@ CORE_STARTUP = _rules([
 DELIVERABLE = _rules([
     ('MVP·프로토타입 결과물', r'\bMVP\b|프로토타입|시제품|시작품'),
     ('실증·PoC 수행', r'\bPoC\b|실증|테스트\s*베드'),
-    ('IR·데모데이 선발', r'데모\s*데이|demo\s*day|\bIR\s*(피칭|덱|자료|발표)|투자\s*(매칭|연계)'),
+    ('IR·데모데이 선발', r'데모\s*데이|demo\s*day|(?<![A-Za-z0-9])IR\s*(피칭|덱|자료|발표)|투자\s*(매칭|연계|검토)'),
     ('액셀러레이팅 선발', r'액셀러레이[팅터]|배치\s*(프로그램|선발)|accelerat'),
     ('사업화·상용화 지원', r'사업화\s*(지원|자금)|상용화'),
     ('고객·시장 검증 수행', r'고객\s*(발굴|검증|인터뷰)|시장\s*검증|\bBM\b\s*검증|비즈니스\s*모델\s*검증'),
@@ -142,15 +151,25 @@ RESTRICTION = _rules([
 _REGION_PREFIX = re.compile(r'^\s*[\[【]\s*([가-힣]{2,8}(?:\s*[·ㆍ]\s*[가-힣]{2,8})?)\s*[\]】]')
 # Korean notices attach particles freely ("충청남도에 소재한", "서울시 소재 기업"),
 # so the administrative noun is anchored and the particle is optional.
-_REGION_TEXT = re.compile(r'([가-힣]{2,6}(?:특별자치[시도]|특별시|광역시|[가-힣]도|[가-힣]시|[가-힣]군|[가-힣]구))\s*(?:에|내|의)?\s*소재')
+_REGION_TEXT = re.compile(r'([가-힣]{2,6}(?:특별자치[시도]|특별시|광역시|도|시|군|구))\s*(?:에|내|의)?\s*소재')
 _REGION_LOCAL = re.compile(r'관내\s*(?:에\s*)?소재|관내\s*(?:기업|업체|법인)')
 
 
-# Bounded, so the decision is reproducible and cheap. The substantive purpose of
-# a Korean public notice is stated in its title and opening summary; eligibility
-# restrictions live in the applicant summary, which therefore gets more room.
-APPLICANT_EVIDENCE_CHARS = 500
-SUPPORT_EVIDENCE_CHARS = 400
+# These are already acquired source fields, not arbitrary page navigation text.
+# A short prefix discarded later benefits (for example Nexus' acceleration offer)
+# and eligibility restrictions. Read the complete supplied fields deterministically.
+APPLICANT_EVIDENCE_CHARS = None
+SUPPORT_EVIDENCE_CHARS = None
+
+STARTUP_CONTEXT = re.compile(
+    r'예비\s*창업|초기\s*창업|학생\s*창업|창업\s*(?:자|팀|기업|지원|보육|공간|학교|경진|공모)|스타트업|\bstartup\b|액셀러레이[팅터]|엑셀러레이[팅터]|accelerat|인큐베이[팅션]', re.I)
+PROGRAM_INTENT = re.compile(r'모집|신청|접수|지원|선발|프로그램|공모', re.I)
+# Recruiting staff and compliance/award applications remain outside the product,
+# even when an employer happens to mention startup products or prototypes.
+NON_OPPORTUNITY_HARD_LABELS = (
+    '채용·인턴 모집', '가족친화·근로자 복지 인증', '직무발명보상 인증',
+    '표창·포상·시상', '안전·위생·규제 준수',
+)
 
 
 def _text(facts):
@@ -167,6 +186,19 @@ def _matches(rules, text):
         if hit:
             found.append({'label': label, 'match': hit.group(0)[:80]})
     return found
+
+
+def _startup_candidate(facts, text):
+    """A startup audience plus an actual program invitation, never audience alone."""
+    invitation = '\n'.join(str(facts.get(k) or '') for k in ('title', 'support_summary'))
+    return bool(STARTUP_CONTEXT.search(text) and PROGRAM_INTENT.search(invitation))
+
+
+def _review(facts, text, reason, evidence):
+    restrictions = _restrictions(facts, text)
+    evidence = dict(evidence, restriction=restrictions)
+    return _decision(REVIEW_REQUIRED, 'UNKNOWN', 'UNKNOWN', reason,
+                     _restriction_summary(restrictions), evidence)
 
 
 def _restrictions(facts, text):
@@ -201,11 +233,17 @@ def classify(facts):
     core = _matches(CORE_STARTUP, text)
     evidence = {'hard_exclusion': hard, 'core_startup': core}
 
+    title_hard = _matches(HARD_EXCLUSION, str(facts.get('title') or ''))
+    absolute_title = next((x for x in title_hard if x['label'] in NON_OPPORTUNITY_HARD_LABELS), None)
+    if absolute_title:
+        return _decision(OUT_OF_SCOPE, 'LOW', 'UNKNOWN', absolute_title['label'], None, evidence)
     if hard and core:
         # A real conflict: a founder-facing action inside an excluded program
         # type. Do not guess either way.
-        return _decision(REVIEW_REQUIRED, 'UNKNOWN', 'UNKNOWN', '상충 신호: 운영자 확인 필요',
-                         None, dict(evidence, conflict=True))
+        if _startup_candidate(facts, text):
+            return _review(facts, text, '지원 내용에 서로 다른 신호가 있어 원문 확인 필요',
+                           dict(evidence, conflict=True))
+        return _decision(OUT_OF_SCOPE, 'LOW', 'UNKNOWN', hard[0]['label'], None, evidence)
     if hard:
         return _decision(OUT_OF_SCOPE, 'LOW', 'UNKNOWN', hard[0]['label'], None, evidence)
 
@@ -220,9 +258,9 @@ def classify(facts):
         return _decision(OUT_OF_SCOPE, 'LOW', 'UNKNOWN', generic[0]['label'], None, evidence)
 
     if not core:
-        if len(text.strip()) < _MIN_EVIDENCE_TEXT:
-            return _decision(REVIEW_REQUIRED, 'UNKNOWN', 'UNKNOWN', '근거 텍스트 부족: 운영자 확인 필요',
-                             None, dict(evidence, thin_text=True))
+        if _startup_candidate(facts, text):
+            return _review(facts, text, '창업 관련 공고이나 구체적인 지원 내용 확인 필요',
+                           dict(evidence, thin_text=len(text.strip()) < _MIN_EVIDENCE_TEXT))
         return _decision(OUT_OF_SCOPE, 'LOW', 'UNKNOWN', '창업 실행 레버리지 근거 없음', None, evidence)
 
     restrictions = _restrictions(facts, text)

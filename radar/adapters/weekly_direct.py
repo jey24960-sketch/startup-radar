@@ -1,6 +1,7 @@
 """Bounded official HTML/feed channels, selectively ported from PR #9."""
 import re
 import time
+from datetime import datetime
 from urllib.parse import urlsplit,urljoin,urlunsplit,parse_qsl,urlencode
 from bs4 import BeautifulSoup
 from radar.adapters.base import Candidate,AcquiredDetail,SourceFailure
@@ -8,7 +9,27 @@ from radar.adapters.longtail import RssAdapter
 from radar.identity import normalize_url,digest
 from radar.models import Program
 from radar.opportunity_facts import classify,labeled_period,explicit_date,EXCLUDED_TITLE
-from core.clock import now
+from core.clock import now,SEOUL
+
+
+def application_period_declarations(text,year):
+    """Read application labels independently; a support/event date is not one."""
+    labels=list(re.finditer(r'(?:모집\s*기간|신청\s*기간|접수\s*기간|서류\s*접수)\s*[:：]?\s*',text))
+    declarations=[]
+    for index,label in enumerate(labels):
+        limit=labels[index+1].start() if index+1<len(labels) else len(text)
+        section=text[label.start():min(limit,label.end()+200)]
+        _,end,_,precision,evidence=labeled_period(section,year)
+        if end is None and year:
+            # A labelled single deadline, e.g. "신청기간: 10월 23일 ...까지".
+            tail=section[label.end()-label.start():]
+            match=re.match(r'\s*[~∼～]?\s*(\d{1,2}\s*월\s*\d{1,2}\s*일)([^\n]{0,40})',tail)
+            if match and re.search(r'까지|마감',match[2]):
+                end,precision=explicit_date(f'{year}년 {match[1]}{match[2]}',True)
+                evidence=label[0]+match[0]
+        if end is not None:
+            declarations.append({'end':end.isoformat(),'precision':precision,'text':evidence})
+    return declarations
 
 
 class ChannelCoverage:
@@ -18,13 +39,51 @@ class ChannelCoverage:
                     fetched_unique_records=self.discovered,pagination_complete=self.complete,
                     record_cap=self.config.get('max_records',30),record_cap_reached=self.capped,non_recruitment_excluded=self.excluded,
                     weekly_policy='GFC_WEEKLY_DIRECT_V1',
-                    scope_note='First configured listing page or fixed recruitment section only; not institution-wide coverage')
+                    scope_note=('Verified linked listing pages within the configured page/record budget; not institution-wide coverage'
+                        if self.config.get('next_selector') or self.config.get('pagination_link_selector') else
+                        'Configured listing page or fixed recruitment section only; not institution-wide coverage'))
 
 
 class OfficialChannelAdapter:
     def __init__(self,source,http):
         self.source=source;self.http=http;self.config=source['config'];self.pagination=ChannelCoverage(self.config)
         self.started=time.monotonic();self.last_request=0;self.requests=0;self.cache={}
+    def soup(self,data):
+        parser=self.config.get('html_parser','lxml')
+        if parser not in ('lxml','html.parser'):raise SourceFailure('CONFIGURATION','Unsupported HTML parser')
+        return BeautifulSoup(data,parser,from_encoding=self.config.get('encoding','utf-8'))
+    def notice_identity(self,url):
+        keys=self.config.get('identity_query_keys')
+        if keys is None:return normalize_url(url)
+        parts=urlsplit(url)
+        return normalize_url(urlunsplit((parts.scheme,parts.netloc,parts.path,
+            urlencode(sorted((k,v) for k,v in parse_qsl(parts.query) if k in keys)),'')))
+    def next_listing(self,soup,current):
+        """Follow observed links only, never execute provider pagination scripts."""
+        selector=self.config.get('pagination_link_selector')
+        if selector:
+            key=self.config.get('pagination_query_key')
+            step=self.config.get('pagination_step',1)
+            if not key or type(step) is not int or step<1:raise SourceFailure('CONFIGURATION','Pagination key and positive step required')
+            query=dict(parse_qsl(urlsplit(current).query))
+            try:position=int(query.get(key,self.config.get('pagination_first',1)))
+            except (TypeError,ValueError):raise SourceFailure('CONFIGURATION','Invalid current page position')
+            wanted=position+step
+            for link in soup.select(selector):
+                href=link.get('href','')
+                if not href or href.startswith(('#','javascript:')):continue
+                target=urljoin(current,href);parts=urlsplit(target)
+                if (parts.scheme,parts.netloc,parts.path)!=(urlsplit(current).scheme,urlsplit(current).netloc,urlsplit(current).path):continue
+                if dict(parse_qsl(parts.query)).get(key)==str(wanted):
+                    self.http.validate_url(target)
+                    return target
+            return None
+        nxt=soup.select_one(self.config['next_selector']) if self.config.get('next_selector') else None
+        if not nxt or not nxt.get('href'):return None
+        target=urljoin(current,nxt['href'])
+        if urlsplit(target).hostname!=urlsplit(current).hostname:raise SourceFailure('UNAPPROVED_HOST','Listing pagination changed origin')
+        self.http.validate_url(target)
+        return target
     def read_page(self,url,listing=False):
         return self.get(url)
     def get(self,url):
@@ -59,7 +118,7 @@ class OfficialChannelAdapter:
                 candidates=list(adapter.discover());next_url=None
             else:
                 data,_,final=self.read_page(url,listing=True)
-                soup=BeautifulSoup(data,'lxml',from_encoding=self.config.get('encoding','utf-8'));selector=self.config.get('link_selector')
+                soup=self.soup(data);selector=self.config.get('link_selector')
                 if not selector:raise SourceFailure('CONFIGURATION','Reviewed notice selector required')
                 candidates=[]
                 for link in soup.select(selector):
@@ -70,23 +129,23 @@ class OfficialChannelAdapter:
                     self.http.validate_url(target)
                     title_node=link.select_one(self.config['list_title_selector']) if self.config.get('list_title_selector') else link
                     candidates.append(Candidate(self.source['slug'],normalize_url(target),final,target,title_node.get_text(' ',strip=True) if title_node else '',{'list_url':final},now().isoformat()))
-                nxt=soup.select_one(self.config['next_selector']) if self.config.get('next_selector') else None
-                next_url=urljoin(final,nxt.get('href','')) if nxt and nxt.get('href') else None
+                next_url=self.next_listing(soup,final)
                 if not candidates and not (self.config.get('empty_marker') and self.config['empty_marker'] in soup.get_text()):
                     raise SourceFailure('LIST_PARSE','No notice links and no verified empty-list marker')
             for candidate in candidates:
-                if candidate.official_detail_url in seen:continue
+                identity=self.notice_identity(candidate.official_detail_url)
+                if identity in seen:continue
                 if EXCLUDED_TITLE.search(candidate.title):self.pagination.excluded+=1;continue
                 if self.config.get('required_title_pattern') and not re.search(self.config['required_title_pattern'],candidate.title,re.I):
                     self.pagination.excluded+=1;continue
-                seen.add(candidate.official_detail_url)
+                seen.add(identity)
                 if self.pagination.discovered>=limit:
-                    self.pagination.capped=True;self.pagination.complete=True
-                    return
+                    self.pagination.capped=True
+                    raise SourceFailure('RECORD_LIMIT','Configured record budget reached before listing scope completed')
                 self.pagination.discovered+=1
                 yield candidate
             if not next_url:
-                self.pagination.complete=bool(self.config.get('single_page_scope')) or method=='RSS' or bool(self.config.get('next_selector'))
+                self.pagination.complete=bool(self.config.get('single_page_scope')) or method=='RSS' or bool(self.config.get('next_selector') or self.config.get('pagination_link_selector'))
                 break
             url=next_url
         else:raise SourceFailure('PAGE_LIMIT','Configured page cap reached before final listing page')
@@ -95,7 +154,7 @@ class OfficialChannelAdapter:
     def fetch_detail(self,candidate):
         if self.config.get('policy_status')!='APPROVED':raise SourceFailure('POLICY_REVIEW','Official channel approval required')
         data,_,url=self.read_page(candidate.official_detail_url)
-        soup=BeautifulSoup(data,'lxml',from_encoding=self.config.get('encoding','utf-8'))
+        soup=self.soup(data)
         title_node=soup.select_one(self.config.get('title_selector','h1'))
         if self.config.get('require_detail_title') and title_node is None:raise SourceFailure('DETAIL_PARSE','Required official program heading missing')
         title=(title_node.get(self.config['title_attribute'],'') if self.config.get('title_attribute') and title_node else title_node.get_text(' ',strip=True) if title_node else candidate.title)
@@ -123,6 +182,18 @@ class OfficialChannelAdapter:
         if len(text)<40 and not email_application:raise SourceFailure('DETAIL_PARSE','Official page has insufficient readable text; rendering or document review needed')
         if len(text)>120000:raise SourceFailure('SIZE_LIMIT','Notice text exceeds the 120k character limit')
         metadata=dict(candidate.raw_metadata)
+        if self.config.get('published_at_selector'):
+            node=soup.select_one(self.config['published_at_selector'])
+            value=node.get_text(' ',strip=True) if node else ''
+            published,precision=explicit_date(value)
+            if published is None:
+                try:published=datetime.strptime(value.strip(),'%B %d, %Y').replace(tzinfo=SEOUL);precision='DATE'
+                except ValueError:pass
+            if published is not None:
+                metadata['source_published_at']=published.isoformat()
+                metadata['source_published_precision']=precision
+                metadata['source_published_evidence']={'text':value,'url':url}
+                metadata['period_year_context']={'year':published.year,'text':value,'url':url}
         if self.config.get('period_year_selector'):
             published=soup.select_one(self.config['period_year_selector'])
             value=published.get_text(' ',strip=True) if published else ''
@@ -167,6 +238,27 @@ class OfficialChannelAdapter:
         else:facts.review_reasons.append('APPLICATION_LINK_UNKNOWN')
         year_context=detail.raw_metadata.get('period_year_context')
         start,end,sp,ep,period=labeled_period(detail.text,facts.year or (year_context['year'] if year_context else None))
+        if end is None and self.config.get('deadline_pattern') and year_context:
+            # Some official pages state only a deadline ("서류 접수(~11월 8일)").
+            # Bind its year only to the explicit publication date; never today's year.
+            match=re.search(self.config['deadline_pattern'],detail.text)
+            if match:
+                value=match.group('date')
+                day,precision=explicit_date(f"{year_context['year']}년 {value}",True)
+                published=detail.raw_metadata.get('source_published_at')
+                if day is not None and (not published or day.date()>=datetime.fromisoformat(published).date()):
+                    end,ep=day,precision;period=match[0]
+        if self.config.get('detect_period_conflicts'):
+            declarations=application_period_declarations(detail.text,facts.year or (year_context['year'] if year_context else None))
+            days={datetime.fromisoformat(row['end']).date() for row in declarations}
+            times={row['end'] for row in declarations if row['precision']=='DATETIME'}
+            if len(days)>1 or (len(days)==1 and len(times)>1):
+                facts.review_reasons.append('APPLICATION_PERIOD_CONFLICT')
+                facts.evidence['application_period_conflict']={'declarations':declarations,'url':detail.url}
+                detail.raw_metadata['application_period_conflict']=True
+                # Preserve both official declarations as evidence, not one
+                # guessed deadline that could incorrectly pass the seven-day gate.
+                start=end=None;sp=ep='UNKNOWN';period=None
         if year_context and not facts.year and (start or end):facts.evidence['application_period_year']=year_context
         if period:facts.evidence['application_period']={'text':period,'url':detail.url}
         rolling=re.search(r'(?:상시\s*(?:모집|접수)|연중\s*(?:모집|접수)|applications?[^\n]{0,50}(?:year-round|year round))',detail.text,re.I)
@@ -218,7 +310,7 @@ class OfficialChannelAdapter:
             application_url=application_url,application_start_at=start,application_end_at=end,
             application_start_precision=sp,application_end_precision=ep,
             deadline_type='ROLLING' if rolling or scoped_rolling else 'FIXED_DATE' if end else 'UNKNOWN',
-            applicant_summary=target,support_summary=detail.text[:500],evidence_complete=False,
+            applicant_summary=target,support_summary=detail.text,evidence_complete=False,
             )
         candidate.raw_metadata.update(detail.raw_metadata)
         candidate.raw_metadata['weekly_direct_facts']=facts.model_dump()

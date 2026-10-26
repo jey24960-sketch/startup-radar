@@ -1,5 +1,35 @@
 # GFC Weekly Briefing
 
+## 2026-10-27 approved omission fixes and public uncertainty appendix
+
+Keep the Tuesday 09:00 Seoul weekly calendar and the seven-full-day publication
+gate. There is no twice-weekly rollout or AI activation. The weekly item order is
+confirmed broad opportunities, confirmed conditional opportunities, then one
+`REVIEW_REQUIRED` appendix labelled 추가 확인이 필요한 공고. Every appendix item
+has a published `review_note`; the UI keeps this section last across stage filters.
+The note describes uncertainty in relevance, participation or application routing.
+It never authorizes guessing a date, treating a closed notice as open, or mixing
+an event time with an application deadline. The same cutoff applies to all items.
+Unrelated programmes remain excluded. Classification v1.2 metadata does not enter
+the material fingerprint or republish previously unchanged items.
+
+The approved source registry includes D2SF current official recruitment, UNIST,
+Korea University Anam's current programme links and the separate BizInfo events
+channel. Selected verified boards follow pagination links within explicit budgets.
+The daily K-Startup acquisition includes a fully paginated, bounded-safety-cap
+query with documented `cond[pbanc_rcpt_bgng_dt::GTE]`, alongside open/recent queries.
+Out-of-scope server responses are failures, never silently accepted completeness.
+Official HTML enrichment is cached by stable API material facts. Changed facts
+refresh immediately; unchanged evidence expires after three days. Per-source
+request/time budgets and host failure stops leave the original API acquisition
+intact. Deferred and failed enrichment are distinct from successful evidence.
+
+After deploying approved source changes, `python -m radar.cli check-discovery-sources`
+rechecks full discovery scopes and saves source evidence only. It respects pause
+and durable execution ownership, never changes scheduled slots or published
+articles, and never sends or plans member notices. The one regular weekly run
+consumes these stored observations at its normal publication clock.
+
 ## 2026-10-26 approved early-discovery update
 
 The member surface remains weekly. Internal facts are collected twice daily via

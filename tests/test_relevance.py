@@ -1,4 +1,4 @@
-"""GFC Relevance v1.1 two-axis classification. No database required."""
+"""GFC Relevance v1.2 two-axis classification. No database required."""
 import pytest
 from radar.relevance import (CONDITIONAL, GFC_RELEVANT, OUT_OF_SCOPE, PUBLISHABLE_STATUSES,
                              RELEVANCE_VERSION, REVIEW_REQUIRED, classify)
@@ -13,7 +13,7 @@ def status(title, applicant='', support=''):
 
 
 def test_version_is_pinned():
-    assert RELEVANCE_VERSION == 'gfc-v1.1'
+    assert RELEVANCE_VERSION == 'gfc-v1.2'
     assert PUBLISHABLE_STATUSES == (GFC_RELEVANT, CONDITIONAL)
 
 
@@ -148,13 +148,18 @@ def test_conflicting_signals_are_held_for_operator_review():
     assert decision['evidence']['conflict'] is True
 
 
-def test_evidence_thin_notice_is_held_rather_than_judged():
-    decision = classify(facts('모집'))
+def test_evidence_thin_startup_program_is_marked_for_additional_confirmation():
+    decision = classify(facts('스타트업 지원 프로그램 참여팀 모집'))
     assert decision['relevance_status'] == REVIEW_REQUIRED
     assert decision['evidence']['thin_text'] is True
 
 
-def test_review_required_is_never_member_facing():
+def test_unrelated_thin_notices_do_not_fill_the_weekly_confirmation_section():
+    assert status('모집') == OUT_OF_SCOPE
+    assert status('청년 지원 프로그램 신청 안내') == OUT_OF_SCOPE
+
+
+def test_review_required_is_not_misrepresented_as_confirmed_relevance():
     assert REVIEW_REQUIRED not in PUBLISHABLE_STATUSES
     assert OUT_OF_SCOPE not in PUBLISHABLE_STATUSES
 

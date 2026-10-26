@@ -80,8 +80,8 @@ def announcement_text(briefing, items):
     """Short discovery message; the article is the detail view.
 
     `items` must be the published weekly_briefing_items in display order, so
-    GFC_RELEVANT examples naturally come before CONDITIONAL ones and nothing
-    that the website withheld can appear here.
+    Confirmed examples precede the review appendix. Review-only issues remain
+    clearly marked; an uncertain opportunity is never presented as confirmed.
     """
     link = html.escape(briefing_url(briefing['id']), quote=True)
     count = int(briefing.get('item_count') or 0)
@@ -90,12 +90,16 @@ def announcement_text(briefing, items):
         lines.append('이번 주 새로 확인된 지원사업이 없습니다.')
     else:
         lines.append(f'이번 주 새로 확인·변경 지원사업: {count}건')
+        review_count = sum(item.get('relevance_status') == 'REVIEW_REQUIRED' for item in items)
+        if review_count:
+            lines.append(f'추가 확인이 필요한 공고 {review_count}건 포함 · 원문 확인 필요')
         lines.append('')
         for item in items[:MAX_EXAMPLES]:
             facts = item['snapshot']
             # Stage comes from the published item, the same stored decision the website shows.
             tag = telegram_tag(item.get('stage_codes'))
-            lines.append(html.escape(f"• {tag + ' ' if tag else ''}{str(facts.get('title') or FALLBACK)[:100]} / 마감: {_deadline(facts)}"))
+            review_tag = '[추가 확인 필요] ' if item.get('relevance_status') == 'REVIEW_REQUIRED' else ''
+            lines.append(html.escape(f"• {review_tag}{tag + ' ' if tag else ''}{str(facts.get('title') or FALLBACK)[:100]} / 마감: {_deadline(facts)}"))
     lines += ['', '주간 지원사업 전체 보기', f'<a href="{link}">{link}</a>']
     return '\n'.join(lines)
 

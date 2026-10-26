@@ -29,7 +29,7 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
     for source in sources:
         started=time.monotonic();discovered=fetched=parsed=0;failures=[];adapter=None
         direct=structured_only and source['config'].get('weekly_direct') is True
-        decisions=[];accepted=0
+        decisions=[];accepted=0;enrichment_counts={}
         with db.transaction() as c:c.execute('update startup_radar.sources set last_attempted_at=now() where id=%s',(source['id'],))
         try:
             adapter=adapter_factory(source)
@@ -52,14 +52,33 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                             failure=doc.get('failure') or SourceFailure(doc.get('error_kind','DOCUMENT_PARSE'),doc.get('error_message') or 'Document requires review').record(url=doc['original_url'])
                             failures.append({**failure,'stage':'DOCUMENT'})
                     program=adapter.normalize(candidate,detail,documents)
+                    enrichment = None
+                    if (structured_only and not direct and
+                            source['config'].get('weekly_detail_enrichment') is True):
+                        from radar.official_facts import should_enrich, enrich_official
+                        if should_enrich(program):
+                            program, official_text, enrichment = enrich_official(
+                                db, source, adapter, candidate, program)
+                            enrichment_key='CACHE_HIT' if enrichment['cache_hit'] else enrichment['status']
+                            enrichment_counts[enrichment_key]=enrichment_counts.get(enrichment_key,0)+1
+                            if official_text:
+                                # Keep the body with the source observation. The
+                                # short API introduction is still in raw_metadata.
+                                detail.text = official_text
+                            if enrichment.get('failure'):
+                                failures.append(enrichment['failure'])
                     extraction_metadata={'provider':'structured_api_weekly' if structured_only else 'anthropic' if isinstance(extractor,RequirementExtractor) else 'injected',
                         'model':getattr(extractor,'model',None),'schema_version':getattr(extractor,'version',None),'status':'SUCCESS'}
+                    if enrichment is not None:
+                        extraction_metadata['official_detail'] = {
+                            'status': enrichment['status'], 'cache_hit': enrichment['cache_hit']}
                     decision='ACCEPTED'
                     if direct:
                         from radar.opportunity_facts import weekly_decision
                         decision,reason=weekly_decision(program,candidate.raw_metadata['weekly_direct_facts'])
                         extraction_metadata.update(provider='official_html_weekly',weekly_decision=decision,weekly_reason=reason)
                         candidate.raw_metadata['weekly_decision']=decision
+                        candidate.raw_metadata['weekly_reason']=reason
                     try:
                         if detail.evidence_warning:
                             extraction_metadata.update(provider='structured_api',model=None)
@@ -86,11 +105,15 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                             decisions.append({'program_id':str(saved['program_id']),'title':program.title,
                                 'url':program.official_url,'decision':decision,'reason':reason})
                             if reason in ('CLOSED','CLOSED_SOURCE_STATUS','NOT_RECRUITMENT'):excluded_program_ids.add(str(saved['program_id']))
-                        if decision!='ACCEPTED':continue
+                        from radar.opportunity_facts import publication_review_note
+                        review_note = publication_review_note(decision, reason) if direct else None
+                        if decision!='ACCEPTED' and not review_note:continue
                         from radar.weekly import snapshot
                         from radar.dates import program_status
-                        accepted+=1
-                        weekly_programs.append({**saved,'snapshot':snapshot(program,candidate.raw_metadata),'status':program_status(program)})
+                        accepted+=decision=='ACCEPTED'
+                        facts=snapshot(program,candidate.raw_metadata)
+                        if review_note:facts['review_note']=review_note
+                        weekly_programs.append({**saved,'snapshot':facts,'status':program_status(program)})
                 except SourceFailure as error:failures.append(error.record(url=candidate.official_detail_url))
                 except Exception as error:failures.append(SourceFailure('NORMALIZE_OR_PERSIST',type(error).__name__).record(url=candidate.official_detail_url))
         except SourceFailure as error:failures.append(error.record())
@@ -98,6 +121,7 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
         state=('PARTIAL' if parsed else 'FAILED') if failures else 'SUCCESS'
         coverage=adapter.pagination.report() if getattr(adapter,'pagination',None) else {'scope':'CONFIGURED_LIST','pagination_complete':not any(f.get('stage') not in ('DOCUMENT','EXTRACTION') for f in failures)}
         coverage.update(persisted_records=parsed,failed_records=discovered-parsed)
+        if enrichment_counts:coverage['official_detail_enrichment']=enrichment_counts
         if direct:
             coverage.update(accepted_records=accepted,review_records=sum(r['decision']=='REVIEW' for r in decisions),
                 excluded_records=sum(r['decision']=='EXCLUDED' for r in decisions),decisions=decisions)

@@ -11,13 +11,13 @@ from pathlib import Path
 
 from tools.export_relevance_sql import generate
 
-MIRROR = Path(__file__).resolve().parents[1] / 'supabase' / 'migrations' / '20260916121000_gfc_relevance_backfill_function.sql'
+MIRROR = Path(__file__).resolve().parents[1] / 'supabase' / 'migrations' / '20261026185312_radar_relevance_v12.sql'
 
 
 def test_sql_mirror_is_exactly_what_the_generator_produces():
     committed = io.open(MIRROR, encoding='utf-8').read()
     assert committed == generate(), (
-        'supabase/migrations/20260916121000_gfc_relevance_backfill_function.sql is stale. '
+        'supabase/migrations/20261026185312_radar_relevance_v12.sql is stale. '
         'Regenerate with: python -m tools.export_relevance_sql > <that file>')
 
 

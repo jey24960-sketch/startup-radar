@@ -38,6 +38,7 @@ def discovery_sources(sources, settings=None):
                           page_size=100, max_pages=maximum)
             if source['adapter']=='KSTARTUP':
                 config['recent_announcement_pages']=2
+                config['include_upcoming_announcements']=True
             config.pop('weekly_policy', None)
         elif not (config.get('weekly_direct') is True and config.get('policy_status')=='APPROVED'):
             continue

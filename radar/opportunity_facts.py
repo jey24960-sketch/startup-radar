@@ -189,6 +189,8 @@ def weekly_decision(program, facts, at=None):
         return 'EXCLUDED', 'CLOSED_SOURCE_STATUS'
     if state == 'CLOSED':
         return 'EXCLUDED', state
+    if 'APPLICATION_PERIOD_CONFLICT' in facts.get('review_reasons', []):
+        return 'REVIEW', 'APPLICATION_PERIOD_CONFLICT'
     if not facts.get('recruitment_confirmed'):
         return 'REVIEW', 'RECRUITMENT_UNCONFIRMED'
     if state not in ('OPEN', 'UPCOMING'):
@@ -204,3 +206,13 @@ def weekly_decision(program, facts, at=None):
         return 'REVIEW', 'MULTIPLE_APPLICATION_LINKS'
     return 'ACCEPTED', ('EXPLICIT_UPCOMING_RECRUITMENT' if state == 'UPCOMING'
                         else 'EXPLICIT_CURRENT_RECRUITMENT')
+
+
+def publication_review_note(decision, reason):
+    """Only non-date ambiguity may enter the member-facing weekly appendix."""
+    if decision != 'REVIEW':
+        return None
+    return {
+        'PARTICIPATION_UNKNOWN': '모집은 확인됐으나 지원 방식이나 참여 형태는 원문에서 확인해 주세요.',
+        'MULTIPLE_APPLICATION_LINKS': '신청 링크가 여러 개여서 해당 모집의 신청 경로를 원문에서 확인해 주세요.',
+    }.get(reason)

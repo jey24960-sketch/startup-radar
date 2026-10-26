@@ -1,5 +1,32 @@
 # CLAUDE.md — StartupRadar (worker/backend)
 
+## Approved recall and weekly appendix update — 2026-10-27
+
+The user approved the omission-audit improvements. Keep Tuesday 09:00 Seoul,
+one weekly publication and no AI/OCR. Publish startup-related `REVIEW_REQUIRED`
+items in one labelled appendix after all confirmed opportunities, with a stored
+`snapshot.review_note`. This is a member-facing section, not an operator queue.
+Known deadlines must still leave seven full days; missing/conflicting dates,
+unconfirmed recruitment, closed notices and unrelated programmes stay withheld.
+The v1.2 classifier handles Korean-adjacent IR, false 후기 matches in 기후기술,
+institution-name false exclusions and complete acquired support text.
+
+Approved direct additions: NAVER D2SF current recruitment, UNIST Venture Foundry,
+Korea University Anam current programme links and BizInfo events. Verified
+pagination follows public links within configured scopes; caps remain visible.
+Daily K-Startup also queries the documented application-start GTE scope, without
+the 모집중 flag, to find pre-opening notices beyond the recent-page window.
+Selected API candidates can acquire cached official HTML text, never attachments
+or models. Per-source 50-request/120-second budgets and per-host failure stops
+preserve the primary API scan. Body dates never borrow event times or the clock.
+
+`check-discovery-sources` persists facts under the existing operation/owner gates,
+without publishing, sending, planning early notices or consuming scheduled slots.
+The source-coverage workflow uses this command after relevant main-branch updates.
+It receives only database/public-source credentials, never AI or Telegram keys.
+These approvals supersede older one-page, two-publication-class and operator-only
+REVIEW_REQUIRED descriptions below; existing published history remains stable.
+
 ## Current publication contract — approved 2026-10-26
 
 Members continue to read one curated weekly briefing. Internal discovery runs

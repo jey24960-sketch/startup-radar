@@ -158,3 +158,19 @@ def test_preview_shows_stage_tag_from_the_stored_item_and_two_stages_use_slash()
 def test_items_without_stage_metadata_still_render():
     text = announcement_text(BRIEFING, [item('구형 항목')])
     assert '• 구형 항목 / 마감: 2026-10-30' in text
+
+
+def test_review_only_issue_is_explicitly_labelled_in_summary_and_each_example():
+    pending = [{**item('창업 지원 범위 확인 필요'), 'relevance_status':'REVIEW_REQUIRED'}]
+    text = announcement_text({**BRIEFING, 'item_count':1}, pending)
+    assert '추가 확인이 필요한 공고 1건 포함 · 원문 확인 필요' in text
+    assert '• [추가 확인 필요] 창업 지원 범위 확인 필요 / 마감:' in text
+
+
+def test_review_examples_follow_confirmed_items_and_are_not_reported_as_confirmed():
+    pending = [{**item('확정된 기회'), 'relevance_status':'GFC_RELEVANT'},
+               {**item('조건부 기회'), 'relevance_status':'CONDITIONAL'},
+               {**item('불확실한 기회'), 'relevance_status':'REVIEW_REQUIRED'}]
+    text = announcement_text({**BRIEFING, 'item_count':3}, pending)
+    assert text.index('• 확정된 기회') < text.index('• 조건부 기회') < text.index('• [추가 확인 필요] 불확실한 기회')
+    assert text.count('[추가 확인 필요]') == 1

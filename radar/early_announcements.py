@@ -50,6 +50,8 @@ def next_weekly_at(at):
 def candidate_decision(facts, at):
     """Return an auditable narrow exception decision without touching the DB."""
     if at is None or at.tzinfo is None: raise ValueError('Aware reference timestamp required')
+    if facts.get('review_note'):
+        return False, 'SOURCE_CONFIRMATION_REQUIRED'
     if facts.get('recruitment_closed') is True or explicit_closure(facts.get('title') or ''):
         return False, 'CLOSED_SOURCE_STATUS'
     end, start = aware(facts.get('application_end_at')), aware(facts.get('application_start_at'))
