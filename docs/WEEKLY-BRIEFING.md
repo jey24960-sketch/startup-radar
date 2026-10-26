@@ -6,6 +6,9 @@ The member surface remains weekly. Internal facts are collected twice daily via
 `python -m radar.cli discover`, at 06:17/18:17 Seoul; this is not a daily digest.
 The separate daily source configuration traverses up to 10 K-Startup API pages
 and 20 BizInfo pages (100 records/page), retaining incomplete-scan warnings.
+K-Startup additionally reads two recent announcement pages without the 모집중
+filter, so verified future periods can be found before they open. This is a
+declared bounded window, not a claim to exhaust the entire announcement archive.
 Approved direct official channels continue to be checked. Deferred sources stay
 deferred. Unknown source dates are never inferred from today's clock.
 
