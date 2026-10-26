@@ -1,0 +1,19 @@
+name: Clear stalled StartupRadar workflow queue
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/clear_discovery_queue.yml']
+permissions:
+  contents: read
+# One-time operator cleanup of the queued, non-started manual recovery run.
+# The active baseline uses a different group and is not interrupted.
+concurrency:
+  group: startup-radar-v2-state
+  cancel-in-progress: true
+jobs:
+  clear:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Release the stalled regular queue without database access or delivery
+        run: ':'
