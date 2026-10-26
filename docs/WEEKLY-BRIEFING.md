@@ -12,9 +12,20 @@ declared bounded window, not a claim to exhaust the entire announcement archive.
 Approved direct official channels continue to be checked. Deferred sources stay
 deferred. Unknown source dates are never inferred from today's clock.
 
+Discovery explicitly opts into the verified session/direct connection through
+`RADAR_DISCOVERY_SESSION_PIPELINE=true`, preserving every persistence, provenance
+and quality statement while reducing serial SQL round trips. The official shared
+pooler's transaction port 6543 is switched only to the same host/account's session
+port 5432; unsupported routes fail closed. Transaction-mode pipelining is not used.
+`python -m tools.probe_discovery_pipeline` checks read-only query ordering, delayed
+error rollback and connection reuse before opt-in. Discovery allows 180 minutes;
+the weekly/web path keeps its existing connection behaviour.
+
 All new weekly and exceptional early notices must leave **seven full days**
 before a known deadline. Verified upcoming application periods are publishable
 in advance. A date-free rolling period does not establish a seven-day window.
+An explicit official closed badge or completed closure statement overrides a
+formal future end date; deadline warnings and conditional exhaustion do not.
 Weekly publication merges current acquisition with current versions from recent,
 approved stored observations. The DB publication clock anchors both eligibility
 and first published_at. Existing weekly snapshots remain stable after publication.

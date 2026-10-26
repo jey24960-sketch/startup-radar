@@ -7,6 +7,15 @@ twice daily (06:17 and 18:17 Asia/Seoul) through `radar.cli discover`, using onl
 structured official facts, no AI/OCR/personalization. It must not create daily
 member digests. The daily API page caps are separate from the weekly fallback.
 
+Daily discovery uses an explicitly verified session-pool/direct connection with
+`RADAR_DISCOVERY_SESSION_PIPELINE=true`; the shared Supabase transaction pool
+does not support pipelining. `discovery_database_options` changes only an official
+shared pooler's 6543 port to the same host/account's session port 5432. The normal
+weekly/web connection stays unchanged. Every original persistence/evidence SQL
+still runs. The inner pipeline exits before transaction commit/rollback, and
+nested actor operations keep a separate connection. Initial broad discovery may
+take longer than the weekly fallback, so its worker allows 180 minutes.
+
 Every newly published item requires **at least seven full days until a known
 deadline**, measured at the actual database publication clock. Verified future
 application periods are shown in advance. Undated rolling periods cannot prove

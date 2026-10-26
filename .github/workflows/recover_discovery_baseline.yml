@@ -5,16 +5,16 @@ on:
     paths: ['.github/workflows/recover_discovery_baseline.yml']
 permissions:
   contents: read
-# An operator recovery can proceed if GitHub's regular workflow queue is stuck.
-# The database's durable global execution claim and one retry audit remain authoritative.
+# Replace the known slow baseline only after its verified GitHub termination.
+# The continuation tool preserves preimages and uses the durable global owner.
 concurrency:
   group: startup-radar-baseline-recovery
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   recover:
     if: vars.RADAR_V2_ENABLED == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,9 +23,10 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-v2.lock.txt
       - run: pip install -r requirements-v2.lock.txt
-      - name: Recover completed failed baseline once without publication or delivery
+      - name: Continue the verified stopped baseline without publication or delivery
         env:
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+          RADAR_DISCOVERY_SESSION_PIPELINE: 'true'
           KSTARTUP_API_KEY: ${{ secrets.KSTARTUP_API_KEY }}
           BIZINFO_API_KEY: ${{ secrets.BIZINFO_API_KEY }}
-        run: python -m radar.cli discover --retry-failed
+        run: python -m tools.continue_discovery_baseline
