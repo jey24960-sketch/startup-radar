@@ -1,0 +1,98 @@
+name: Verify recovered Lotte official source
+on:
+  workflow_run:
+    workflows: ['Recover StartupRadar discovery baseline']
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: startup-radar-v2-state
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: >-
+      vars.RADAR_V2_ENABLED == 'true' &&
+      github.event.workflow_run.id == 40356323104 &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-v2.lock.txt
+      - run: pip install -r requirements-v2.lock.txt
+      - name: Verify approved source without publication or delivery
+        env:
+          DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+          RADAR_DISCOVERY_SESSION_PIPELINE: 'true'
+        run: |
+          python - <<'PY'
+          import json
+          from psycopg.types.json import Jsonb
+          from radar.database import Database
+          from radar.discovery_connection import discovery_database_options
+          from radar.discovery import discovery_sources
+          from radar.executions import claim_execution, finish_execution
+          from radar.ingestion import ingest
+
+          SLUG = 'weekly-lotte-recruitment'
+          BASELINE_RUN = '40356323104'
+          ACTION = 'LOTTE_SOURCE_RECOVERY_CHECK'
+
+          def main():
+              execution = None
+              try:
+                  db = Database(**discovery_database_options())
+                  with db.transaction() as c:
+                      previous = c.execute("select detail from startup_radar.admin_audit where action=%s and entity_id=%s",
+                                           (ACTION, BASELINE_RUN)).fetchone()
+                      if previous:
+                          completed = previous['detail'].get('state') == 'COMPLETED' and previous['detail'].get('status') == 'SUCCESS'
+                          return {'status':'SUCCESS' if completed else 'FAILED','state':'ALREADY_ATTEMPTED'}
+                      verified = c.execute("select 1 from startup_radar.worker_executions where owner->>'github_run_id'=%s "
+                          "and finished_at is not null and result->>'core_baseline_verified'='true'",
+                          (BASELINE_RUN,)).fetchone()
+                      source = c.execute("select * from startup_radar.sources where slug=%s and enabled", (SLUG,)).fetchone()
+                  if not verified or not source or source['config'].get('url') != 'https://lotteventures.com/news':
+                      return {'status':'FAILED','reason':'RECOVERY_PRECONDITIONS_NOT_CONFIRMED'}
+                  picked = discovery_sources([source])
+                  if len(picked) != 1 or picked[0]['adapter'] != 'HTML':
+                      return {'status':'FAILED','reason':'APPROVED_DIRECT_SOURCE_REQUIRED'}
+                  claim = claim_execution(db, 'DISCOVER', source_slug=SLUG)
+                  if 'execution_id' not in claim:
+                      return {'status':'FAILED','reason':'ANOTHER_OWNER_OR_PAUSE'}
+                  execution = claim['execution_id']
+                  with db.session():
+                      with db.transaction() as c:
+                          c.execute("insert into startup_radar.admin_audit(action,entity_id,detail) values(%s,%s,%s)",
+                              (ACTION, BASELINE_RUN, Jsonb({'state':'STARTED','execution_id':str(execution),
+                               'source_slug':SLUG,'configuration':source['config'],'notification_sent':False})))
+                      result = ingest(db, picked, structured_only=True, trigger='official-source-configuration-recovery')
+                  outcome = result['sources'][0]
+                  terminal = {'status':result['status'],'ingestion_run_id':result['id'],
+                              'sources':result['sources'],'notification_sent':False}
+                  finish_execution(db, execution, terminal)
+                  with db.transaction() as c:
+                      c.execute("update startup_radar.admin_audit set detail=detail||%s where action=%s and entity_id=%s",
+                          (Jsonb({'state':'COMPLETED','status':result['status'],'ingestion_run_id':result['id']}),
+                           ACTION, BASELINE_RUN))
+                  return {'status':result['status'],'ingestion_run_id':result['id'],
+                          'parsed':outcome['parsed'],'accepted':outcome['coverage'].get('accepted_records'),
+                          'excluded':outcome['coverage'].get('excluded_records'),'notification_sent':False}
+              except Exception as error:
+                  # Never print driver exception strings or a transformed connection secret.
+                  # An owned uncertain execution remains reserved for explicit inspection.
+                  return {'status':'UNCERTAIN' if execution else 'FAILED','error_type':type(error).__name__}
+
+          result = main()
+          print(json.dumps(result, ensure_ascii=False))
+          raise SystemExit(0 if result['status']=='SUCCESS' else 1)
+          PY

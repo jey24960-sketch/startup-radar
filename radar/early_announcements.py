@@ -16,6 +16,7 @@ from radar.identity import cross_source_key, deduplicate_publication
 from radar.operation import operation_state, visibility_mode
 from radar.relevance import classify
 from radar.stage import classify_stage, telegram_tag
+from radar.opportunity_facts import explicit_closure
 
 SETTING = 'early_announcements'
 MINIMUM_LEAD = timedelta(days=7)
@@ -49,6 +50,8 @@ def next_weekly_at(at):
 def candidate_decision(facts, at):
     """Return an auditable narrow exception decision without touching the DB."""
     if at is None or at.tzinfo is None: raise ValueError('Aware reference timestamp required')
+    if facts.get('recruitment_closed') is True or explicit_closure(facts.get('title') or ''):
+        return False, 'CLOSED_SOURCE_STATUS'
     end, start = aware(facts.get('application_end_at')), aware(facts.get('application_start_at'))
     if (facts.get('deadline_type') != 'FIXED_DATE' or end is None
             or facts.get('application_end_precision') not in ('DATE', 'DATETIME')):

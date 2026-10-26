@@ -148,27 +148,25 @@
       "max_records": 30,
       "single_page_scope": true,
       "method": "BOARD",
-      "url": "https://www.lotteventures.com/main",
-      "link_selector": "a[href*=\"/news/news?\"][href*=\"code=\"]",
-      "detail_selector": ".board-conts--fc",
-      "title_selector": "article.board-view--fc h1",
+      "url": "https://lotteventures.com/news",
+      "link_selector": "main a[href^=\"/news/\"]",
+      "detail_selector": "main article",
+      "title_selector": "main article h1",
+      "require_detail_title": true,
       "required_title_pattern": "모집|참가.*신청",
       "application_link_selector": "a[href*=\"forms.gle/\"], a[href*=\"docs.google.com/forms/\"]",
-      "submission_path_prefix": "/news/news",
-      "list_title_selector": ".gallery-title--fc",
+      "submission_path_prefix": "/news/",
+      "list_title_selector": "h2",
       "organization": "롯데벤처스",
       "organization_type": "CVC",
       "allowed_hosts": [
-        "www.lotteventures.com"
+        "www.lotteventures.com",
+        "lotteventures.com"
       ],
       "policy_status": "APPROVED",
       "weekly_direct": true,
-      "identity_query_keys": [
-        "tpf",
-        "board_code",
-        "code"
-      ],
-      "validated_at": "2026-09-15"
+      "identity_query_keys": [],
+      "validated_at": "2026-10-27"
     }
   },
   {

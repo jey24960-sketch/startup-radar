@@ -95,7 +95,12 @@ def explicit_date(value, end=False):
 
 def labeled_period(text,context_year=None):
     """Never interpret a general event date or a posting date as a deadline."""
-    match = re.search(r'(?:모집\s*기간|신청\s*기간|접수\s*기간|지원\s*기간|서류\s*접수|모집은)\s*[)）:：]?\s*', text) or re.search(r'모집\s*일정\s*[)）:：]?\s*',text)
+    # A closure banner may say "이 모집은 ... 마감됐습니다" before the
+    # original application range. Prefer its explicit period label, retaining
+    # the existing bare "모집은" form only when no period label is present.
+    match = (re.search(r'(?:모집\s*기간|신청\s*기간|접수\s*기간|지원\s*기간|서류\s*접수)\s*[)）:：]?\s*', text)
+             or re.search(r'모집\s*일정\s*[)）:：]?\s*',text)
+             or re.search(r'모집은\s*[)）:：]?\s*',text))
     if not match: return None,None,'UNKNOWN','UNKNOWN',None
     line=re.split(r'[○□■]|(?:행사|사업|운영)\s*기간',text[match.end():match.end()+200],maxsplit=1)[0]
     line=re.sub(r'\s+',' ',line).strip()
