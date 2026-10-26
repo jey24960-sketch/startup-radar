@@ -64,7 +64,11 @@ def main(argv=None):
             if args.scheduler_request_id and (args.draft or args.revision_note is not None or args.check_sources):
                 raise ValueError('Scheduled weekly requests cannot draft, revise, or run a source check')
         except ValueError as error:parser.error(str(error))
-    db=Database()
+    if args.command=='discover':
+        from radar.discovery_connection import discovery_database_options
+        db=Database(**discovery_database_options())
+    else:
+        db=Database()
     if args.command=='discover':
         from radar.discovery import run_discovery
         transport=None
