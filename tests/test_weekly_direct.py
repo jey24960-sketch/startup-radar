@@ -166,7 +166,10 @@ def test_real_samples_enter_existing_storage_and_one_weekly_post(db,monkeypatch)
     assert sum(s['coverage']['review_records']+s['coverage']['excluded_records'] for s in acquired['sources'])==5
     first=build_briefing(db,acquired,AT)
     second=build_briefing(db,acquired,AT)
-    assert first['item_count']==3 and second['briefing_id']==first['briefing_id']
+    # Two captured samples are undated rolling programmes: retain their facts,
+    # but do not claim a seven-day preparation window for a weekly notice.
+    assert first['item_count']==1 and first['withheld']['DEADLINE_UNKNOWN']==2
+    assert second['briefing_id']==first['briefing_id']
     with db.transaction() as c:
         assert c.execute('select count(*) n from startup_radar.programs').fetchone()['n']==8
         assert c.execute('select count(*) n from startup_radar.program_sources').fetchone()['n']==8
