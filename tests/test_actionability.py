@@ -13,8 +13,8 @@ def facts(end=None, start=None, kind='FIXED_DATE', **extra):
             'application_end_at': end.isoformat() if end else None, 'deadline_type': kind, **extra}
 
 
-def test_minimum_lead_time_is_48_hours():
-    assert MINIMUM_APPLICATION_LEAD_TIME == timedelta(hours=48)
+def test_minimum_lead_time_is_seven_days():
+    assert MINIMUM_APPLICATION_LEAD_TIME == timedelta(days=7)
 
 
 def test_already_expired_is_never_published():
@@ -25,16 +25,16 @@ def test_already_expired_is_never_published():
 
 
 @pytest.mark.parametrize('remaining', [timedelta(hours=1), timedelta(hours=24),
-                                       timedelta(hours=47, minutes=59)])
+                                       timedelta(hours=48), timedelta(days=6, hours=23, minutes=59)])
 def test_near_deadline_is_withheld(remaining):
     assert actionability(facts(AT + remaining), AT) == (False, 'NEAR_DEADLINE')
 
 
-def test_exactly_forty_eight_hours_passes():
-    assert actionability(facts(AT + timedelta(hours=48)), AT) == (True, 'ACTIONABLE')
-    assert actionability(facts(AT + timedelta(hours=48, seconds=1)), AT) == (True, 'ACTIONABLE')
+def test_exactly_seven_days_passes():
+    assert actionability(facts(AT + timedelta(days=7)), AT) == (True, 'ACTIONABLE')
+    assert actionability(facts(AT + timedelta(days=7, seconds=1)), AT) == (True, 'ACTIONABLE')
     # Comfortably beyond the threshold stays publishable.
-    assert actionability(facts(AT + timedelta(hours=72)), AT) == (True, 'ACTIONABLE')
+    assert actionability(facts(AT + timedelta(days=8)), AT) == (True, 'ACTIONABLE')
 
 
 def test_unknown_deadline_without_trusted_ongoing_type_is_withheld():
@@ -43,19 +43,24 @@ def test_unknown_deadline_without_trusted_ongoing_type_is_withheld():
 
 
 @pytest.mark.parametrize('kind', ['ROLLING', 'UNTIL_BUDGET_EXHAUSTED'])
-def test_trusted_ongoing_acceptance_may_publish_without_an_end_date(kind):
-    assert actionability(facts(None, kind=kind), AT) == (True, 'ONGOING')
+def test_rolling_without_end_date_cannot_prove_seven_days(kind):
+    assert actionability(facts(None, kind=kind), AT) == (False, 'DEADLINE_UNKNOWN')
 
 
-def test_announced_but_not_yet_open_is_withheld():
+def test_verified_upcoming_is_published_as_preannouncement():
     upcoming = facts(AT + timedelta(days=90), start=AT + timedelta(days=10))
-    assert actionability(upcoming, AT) == (False, 'UPCOMING')
+    assert actionability(upcoming, AT) == (True, 'PREANNOUNCEMENT')
     # Already open with the same generous deadline is actionable.
     assert actionability(facts(AT + timedelta(days=90), start=AT - timedelta(days=1)), AT)[0]
 
 
-def test_rolling_program_that_has_not_opened_yet_is_still_withheld():
-    assert actionability(facts(None, start=AT + timedelta(days=3), kind='ROLLING'), AT) == (False, 'UPCOMING')
+def test_upcoming_without_deadline_is_withheld():
+    assert actionability(facts(None, start=AT + timedelta(days=3), kind='ROLLING'), AT) == (False, 'DEADLINE_UNKNOWN')
+
+
+def test_upcoming_still_needs_seven_days_and_coherent_period():
+    assert actionability(facts(AT + timedelta(days=6), start=AT + timedelta(days=2)), AT) == (False, 'NEAR_DEADLINE')
+    assert actionability(facts(AT + timedelta(days=8), start=AT + timedelta(days=9)), AT) == (False, 'INVALID_APPLICATION_PERIOD')
 
 
 def test_date_only_deadline_keeps_its_precision_and_is_not_mutated():

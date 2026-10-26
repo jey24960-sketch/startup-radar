@@ -1,5 +1,41 @@
 # GFC Weekly Briefing
 
+## 2026-10-26 approved early-discovery update
+
+The member surface remains weekly. Internal facts are collected twice daily via
+`python -m radar.cli discover`, at 06:17/18:17 Seoul; this is not a daily digest.
+The separate daily source configuration traverses up to 10 K-Startup API pages
+and 20 BizInfo pages (100 records/page), retaining incomplete-scan warnings.
+K-Startup additionally reads two recent announcement pages without the 모집중
+filter, so verified future periods can be found before they open. This is a
+declared bounded window, not a claim to exhaust the entire announcement archive.
+Approved direct official channels continue to be checked. Deferred sources stay
+deferred. Unknown source dates are never inferred from today's clock.
+
+All new weekly and exceptional early notices must leave **seven full days**
+before a known deadline. Verified upcoming application periods are publishable
+in advance. A date-free rolling period does not establish a seven-day window.
+Weekly publication merges current acquisition with current versions from recent,
+approved stored observations. The DB publication clock anchors both eligibility
+and first published_at. Existing weekly snapshots remain stable after publication.
+
+Early notices are rare exceptions: at most one bundle per Seoul week, up to three
+verified important opportunities for early founders, only when waiting for the
+next Tuesday would lose the seven-day preparation window. Existing official
+channel delivery, source/version revalidation, pause and visibility are enforced.
+Ambiguous delivery is not retried automatically. Members need not check daily.
+
+Rollout order: apply the two 20261026 additive migrations while their runtime
+gates are disabled; verify schema and tests; enable `notice_policy` and
+`daily_discovery`; deploy the worker and web; complete a non-delivering baseline;
+only then set `early_announcements.active_from` to the activation clock and enable.
+The approved historical correction removed 58 short-lead items across seven
+published articles (48 weekly + 10 initial baseline), preserving original metadata
+and full before-images in admin_audit. No Telegram was sent by that correction.
+
+The older 48-hour, UPCOMING-withheld, weekly-only discovery descriptions below
+document the previous behaviour and are superseded by this section.
+
 This supersedes the production-hardening completion priorities on 2026-09-14.
 Normal production is official APIs + approved direct official channels -> one weekly publication -> one Telegram announcement.
 Personalization, OCR, archives of original binaries and scale benchmarks are deferred, not deleted.

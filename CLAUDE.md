@@ -1,5 +1,31 @@
 # CLAUDE.md — StartupRadar (worker/backend)
 
+## Current publication contract — approved 2026-10-26
+
+Members continue to read one curated weekly briefing. Internal discovery runs
+twice daily (06:17 and 18:17 Asia/Seoul) through `radar.cli discover`, using only
+structured official facts, no AI/OCR/personalization. It must not create daily
+member digests. The daily API page caps are separate from the weekly fallback.
+
+Every newly published item requires **at least seven full days until a known
+deadline**, measured at the actual database publication clock. Verified future
+application periods are shown in advance. Undated rolling periods cannot prove
+seven days and are withheld. Historical short-lead items were withdrawn from
+published articles through the existing audited correction operation; source
+programs, old snapshots in admin_audit, issue IDs and first publication times stay.
+
+`load_stored_candidates` includes recent approved observations in the weekly
+selection, so a saved future opportunity does not depend on returning in the
+next API page. The weekly issue is still stable after publication.
+
+Only important broadly relevant early-founder opportunities that would lose
+the seven-day window by the next weekly issue may use a separate early notice:
+at most one bundle of three items per Seoul week, still seven days at publication
+AND delivery, no rollout backfill, no automatic retry of ambiguous sends. It
+uses the one existing official channel. Enable its `active_from` only after a
+non-delivering baseline discovery. This approved contract supersedes the older
+48-hour/upcoming exclusions and the former prohibition on internal daily discovery.
+
 ## What this is
 
 **GFC (Global Founders Club)** is a university-student-led, global, non-profit startup

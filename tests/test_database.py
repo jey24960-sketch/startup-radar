@@ -16,6 +16,7 @@ def db():
     with database.transaction() as c:
         marker=c.execute('select value from public.radar_test_marker').fetchone()
         assert marker and marker['value']=='ephemeral-test-only', 'Refusing to reset a non-test database'
+        c.execute('truncate startup_radar.early_notices cascade')
         c.execute('truncate auth.users,startup_radar.teams,startup_radar.sources,startup_radar.programs,startup_radar.ingestion_runs,startup_radar.notification_runs cascade')
         c.execute('truncate startup_radar.telegram_updates,startup_radar.schedule_claims cascade')
         c.execute('truncate startup_radar.worker_executions cascade')
@@ -26,6 +27,7 @@ def db():
         c.execute("update startup_radar.runtime_settings set value='{\"enabled\":true,\"reason\":null,\"updated_by\":null,\"updated_at\":null,\"version\":1}'::jsonb where key='radar_operation'")
         c.execute("update startup_radar.runtime_settings set value='{\"mode\":\"MEMBERS_ONLY\",\"reason\":null,\"updated_by\":null,\"updated_at\":null,\"version\":1}'::jsonb where key='radar_visibility'")
         c.execute('truncate startup_radar.admin_audit')
+        c.execute("update startup_radar.runtime_settings set value=jsonb_set(value,'{enabled}','false') where key in ('daily_discovery','early_announcements','notice_policy')")
     return database
 
 

@@ -79,7 +79,7 @@ def test_out_of_scope_and_review_required_are_classified_but_never_published(db)
     ('expired', AT - timedelta(days=1), None, 'FIXED_DATE'),
     ('near', AT + timedelta(hours=47), None, 'FIXED_DATE'),
     ('unknown', None, None, 'UNKNOWN'),
-    ('upcoming', AT + timedelta(days=60), AT + timedelta(days=5), 'FIXED_DATE'),
+    ('six-days', AT + timedelta(days=6), None, 'FIXED_DATE'),
 ])
 def test_unactionable_opportunities_are_withheld_from_the_weekly_article(db, case, end, start, kind):
     result = build_briefing(db, acquire(db, program(RELEVANT, end=end, start=start, kind=kind)), AT)
@@ -88,14 +88,25 @@ def test_unactionable_opportunities_are_withheld_from_the_weekly_article(db, cas
 
 
 @pytest.mark.parametrize('kind', ['ROLLING', 'UNTIL_BUDGET_EXHAUSTED'])
-def test_trusted_ongoing_acceptance_still_publishes(db, kind):
+def test_ongoing_without_end_cannot_prove_seven_days(db, kind):
     result = build_briefing(db, acquire(db, program(RELEVANT, end=None, kind=kind)), AT)
+    assert result['item_count'] == 0
+    assert result['withheld']['DEADLINE_UNKNOWN'] == 1
+
+
+def test_exactly_seven_days_is_published(db):
+    result = build_briefing(db, acquire(db, program(RELEVANT, end=AT + timedelta(days=7))), AT)
     assert result['item_count'] == 1
 
 
-def test_exactly_forty_eight_hours_is_published(db):
-    result = build_briefing(db, acquire(db, program(RELEVANT, end=AT + timedelta(hours=48))), AT)
+def test_verified_upcoming_notice_is_preannounced_in_weekly_issue(db):
+    result = build_briefing(db, acquire(db, program(RELEVANT,
+        start=AT + timedelta(days=5), end=AT + timedelta(days=30))), AT)
     assert result['item_count'] == 1
+    with db.transaction() as c:
+        saved = c.execute('select snapshot from startup_radar.weekly_briefing_items where briefing_id=%s',
+                          (result['briefing_id'],)).fetchone()['snapshot']
+    assert saved['application_start_at'] == (AT + timedelta(days=5)).isoformat()
 
 
 def test_cross_portal_duplicate_becomes_one_member_item_with_both_provenances(db):

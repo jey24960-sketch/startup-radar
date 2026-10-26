@@ -1,5 +1,6 @@
 """One official-source briefing per Seoul week, independent of team calculations."""
 from datetime import datetime,timedelta
+from contextlib import nullcontext
 from uuid import UUID
 from psycopg.types.json import Jsonb
 from core.clock import now, SEOUL
@@ -13,6 +14,7 @@ from radar.operation import visibility_mode
 from radar.relevance import classify,PUBLISHABLE_STATUSES,RELEVANCE_VERSION
 from radar.stage import classify_stage,STAGE_VERSION
 from radar.weekly_scope import weekly_sources,collection_completed
+from radar.models import Program
 
 FALLBACK = '\uacf5\uc2dd \uacf5\uace0 \ud655\uc778 \ud544\uc694'
 # Relevance is deliberately NOT part of MATERIAL. MATERIAL drives the NEW/UPDATE
@@ -68,6 +70,90 @@ def snapshot(program, raw):
     return result
 
 
+def stored_candidates(rows, at):
+    """Build candidates from current versions with approved, recent provenance.
+
+    The input has one latest observation per program/source. An excluded direct
+    observation or identity conflict blocks the program rather than reviving an
+    older accepted observation from another source.
+    """
+    candidates = {}
+    blocked = set()
+    for row in rows:
+        pid = str(row['program_id'])
+        if (row.get('extraction_metadata') or {}).get('provider') not in (
+            'structured_api_weekly', 'official_html_weekly'
+        ):
+            continue
+        raw = row['raw_metadata'] or {}
+        if raw.get('weekly_duplicate_conflict'):
+            blocked.add(pid)
+            continue
+        direct = row['source_config'].get('weekly_direct') is True
+        if direct and raw.get('weekly_decision') != 'ACCEPTED':
+            blocked.add(pid)
+            continue
+        if str(row['observation_version_id']) != str(row['version_id']):
+            continue
+        try:
+            program = Program.model_validate(row['normalized'])
+        except (ValueError, TypeError):
+            continue
+        if direct:
+            from radar.opportunity_facts import weekly_decision
+            decision, _ = weekly_decision(program, raw.get('weekly_direct_facts') or {}, at)
+            if decision != 'ACCEPTED':
+                blocked.add(pid)
+                continue
+        # Query order prefers the freshest source-specific observation. Its
+        # attachment URLs belong to the same current version as the facts.
+        candidates.setdefault(pid, {
+            'program_id': row['program_id'], 'version_id': row['version_id'],
+            'snapshot': snapshot(program, raw),
+        })
+    return [row for pid, row in candidates.items() if pid not in blocked]
+
+
+def load_stored_candidates(db, at=None, connection=None, max_age_days=14):
+    """Re-evaluate stored daily discoveries without depending on today's page.
+
+    This privileged worker query never exposes unpublished rows to members.
+    It deliberately loads current versions only, and uses the latest immutable
+    observation for each source rather than any historical accepted snapshot.
+    """
+    at = at or now()
+    if at.tzinfo is None:
+        raise ValueError('Aware reference timestamp required for stored candidates')
+    if type(max_age_days) is not int or not 1 <= max_age_days <= 30:
+        raise ValueError('Stored candidate freshness must be 1..30 days')
+    with (db.transaction() if connection is None else nullcontext(connection)) as c:
+        rows = c.execute(
+            'select p.id program_id,p.current_version_id version_id,v.normalized,'
+            's.adapter source_adapter,s.config source_config,ps.last_seen_at,'
+            'ob.program_version_id observation_version_id,ob.raw_metadata,ob.extraction_metadata '
+            'from startup_radar.programs p '
+            'join startup_radar.program_versions v on v.id=p.current_version_id '
+            'join startup_radar.program_sources ps on ps.program_id=p.id '
+            'join startup_radar.sources s on s.id=ps.source_id '
+            'join lateral (select ss.program_version_id,ss.raw_metadata,ss.extraction_metadata '
+            ' from startup_radar.program_source_snapshots ss '
+            ' where ss.program_id=p.id and ss.source_id=s.id '
+            ' order by ss.observed_at desc,ss.id desc limit 1) ob on true '
+            'where s.enabled and ps.last_seen_at >= %s '
+            "and (s.adapter in ('KSTARTUP','BIZINFO') or "
+            " (s.config->'weekly_direct'='true'::jsonb and s.config->>'policy_status'='APPROVED')) "
+            'order by ps.last_seen_at desc,p.id,s.id',
+            (at-timedelta(days=max_age_days),)).fetchall()
+    return stored_candidates(rows, at)
+
+
+def merge_candidates(stored, collected):
+    """Current collection wins while retaining earlier daily discoveries."""
+    merged = {str(row['program_id']): row for row in stored}
+    merged.update({str(row['program_id']): row for row in collected})
+    return list(merged.values())
+
+
 def week_window(at):
     if at.tzinfo is None:raise ValueError('Timezone-aware weekly clock required')
     day = at.astimezone(SEOUL).date()
@@ -97,7 +183,7 @@ def published_result(c, briefing):
     return result
 
 
-def build_briefing(db, collection, at=None, publish=True, revision_note=None):
+def build_briefing(db, collection, at=None, publish=True, revision_note=None, *, database_clock=False):
     at = at or now()
     if revision_note is not None and (not publish or not 5<=len(revision_note.strip())<=500):
         raise ValueError('Published revision requires publication and a 5..500 character operator note')
@@ -111,13 +197,19 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
         c.execute('select pg_advisory_xact_lock(782394203)')
         old = c.execute("select * from startup_radar.weekly_briefings where week_start=%s and publication_kind='WEEKLY' for update",(start,)).fetchone()
         if old and old['status']=='PUBLISHED' and not revision_note:return published_result(c,old)
+        # Production uses one transaction clock for both the seven-day gate and
+        # first published_at. Collection can take minutes after a worker starts;
+        # that elapsed time must never erode the promised preparation window.
+        gate_at = c.execute('select now() reference_at').fetchone()['reference_at'] if database_clock else at
         previous = c.execute("select distinct on(i.program_id) i.program_id,i.material_hash from startup_radar.weekly_briefing_items i "
             "join startup_radar.weekly_briefings b on b.id=i.briefing_id where b.status='PUBLISHED' "
             "and (b.week_start<%s or b.publication_kind='INITIAL_BASELINE') "
             "order by i.program_id,b.week_start desc,b.publication_kind desc",(start,)).fetchall()
         known = {str(row['program_id']):row['material_hash'] for row in previous}
         # Order is deliberate: dedup -> material change -> actionability -> relevance.
-        collected,duplicates = deduplicate_publication(collection.get('weekly_programs',[]))
+        candidates = merge_candidates(load_stored_candidates(db,gate_at,connection=c),
+                                      collection.get('weekly_programs',[]))
+        collected,duplicates = deduplicate_publication(candidates)
         items = {}
         withheld = {'DUPLICATE':len(duplicates)}
         for row in collected:
@@ -131,7 +223,7 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
             record_relevance(c,row['version_id'],decision)
             stage = classify_stage(facts)
             record_stage(c,row['version_id'],stage)
-            publishable,reason = actionability(facts,at)
+            publishable,reason = actionability(facts,gate_at)
             if not publishable:
                 withheld[reason] = withheld.get(reason,0)+1;continue
             if decision['relevance_status'] not in PUBLISHABLE_STATUSES:
@@ -156,7 +248,7 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None):
         # revisions retain that first timestamp; drafts never invent a date.
         published_at = (old or {}).get('published_at')
         if publish and published_at is None:
-            published_at = c.execute('select now() as published_at').fetchone()['published_at']
+            published_at = gate_at if database_clock else c.execute('select now() as published_at').fetchone()['published_at']
         title = publication_title(published_at)
         # "\uc0c8\ub85c \ud655\uc778" states what is actually known: StartupRadar saw it for the
         # first time. It does not claim the institution posted it this week.
@@ -278,6 +370,7 @@ def run_weekly(db, transport=None, at=None, publish=True, collector=None, revisi
     request_id,expected_week=weekly_schedule_arguments(scheduler_request_id,expected_week_start)
     if request_id and (not publish or revision_note is not None or check_sources):
         raise ValueError('Scheduled weekly requests cannot draft, revise, or run a source check')
+    explicit_clock = at is not None
     at=at or now(); start,_=week_window(at)
     # claim_execution() returns {'status':'PAUSED'} while the operator pause is
     # on: no claim, collection, publication or send happens.
@@ -303,7 +396,8 @@ def run_weekly(db, transport=None, at=None, publish=True, collector=None, revisi
         if result is None or check_sources:
             if not {'KSTARTUP','BIZINFO'}<={s['adapter'] for s in sources}:raise ValueError('Both official sources must be configured')
             collection=(collector or ingest)(db,weekly_sources(sources),trigger='weekly',structured_only=True)
-            if result is None:result=build_briefing(db,collection,at,publish,revision_note)
+            if result is None:result=build_briefing(db,collection,at,publish,revision_note,
+                                                 database_clock=not explicit_clock)
             else:
                 # An operator health check never revises an already published issue.
                 result.pop('coverage_warning',None)

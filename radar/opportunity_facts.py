@@ -147,19 +147,25 @@ def classify(title,text,config):
 
 
 def weekly_decision(program, facts, at=None):
-    """Only explicit current recruitment enters the automatic weekly article."""
+    """Explicit current or dated upcoming recruitment may enter weekly review."""
     from radar.dates import program_status
     state = program_status(program, at)
     if facts.get('cancelled') or 'NOT_RECRUITMENT' in facts.get('review_reasons', []):
         return 'EXCLUDED', 'NOT_RECRUITMENT'
-    if state in ('CLOSED', 'UPCOMING'):
+    if state == 'CLOSED':
         return 'EXCLUDED', state
     if not facts.get('recruitment_confirmed'):
         return 'REVIEW', 'RECRUITMENT_UNCONFIRMED'
-    if state != 'OPEN':
+    if state not in ('OPEN', 'UPCOMING'):
         return 'REVIEW', 'CURRENT_PERIOD_UNKNOWN'
+    if state == 'UPCOMING' and (
+        program.application_start_at is None or program.application_end_at is None
+        or program.application_start_at > program.application_end_at
+    ):
+        return 'REVIEW', 'UPCOMING_PERIOD_UNKNOWN'
     if facts.get('participation') == 'UNKNOWN':
         return 'REVIEW', 'PARTICIPATION_UNKNOWN'
     if 'MULTIPLE_APPLICATION_LINKS' in facts.get('review_reasons', []):
         return 'REVIEW', 'MULTIPLE_APPLICATION_LINKS'
-    return 'ACCEPTED', 'EXPLICIT_CURRENT_RECRUITMENT'
+    return 'ACCEPTED', ('EXPLICIT_UPCOMING_RECRUITMENT' if state == 'UPCOMING'
+                        else 'EXPLICIT_CURRENT_RECRUITMENT')
