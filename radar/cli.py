@@ -20,6 +20,8 @@ def main(argv=None):
     weekly.add_argument('--revision-note',help='Explicitly recollect and revise the current published issue, keeping its ID and prior-item audit; never duplicates announcements')
     weekly.add_argument('--scheduler-request-id',type=UUID,help='Existing persisted weekly scheduler request; requires --expected-week-start')
     weekly.add_argument('--expected-week-start',help='Expected Seoul Monday in YYYY-MM-DD form; requires --scheduler-request-id; stale weeks are skipped')
+    discovery=commands.add_parser('discover',help='Internal twice-daily official facts collection; no AI, OCR, recommendations or daily member digest')
+    discovery.add_argument('--deliver',action='store_true',help='Permit one eligible exceptional early notice; never sends a normal daily digest')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
     channel=commands.add_parser('telegram-channel',help='Configure and verify the ONE official GFC Telegram channel that carries every weekly briefing; never posts the briefing itself')
     channel.add_argument('--chat-id',help='Telegram channel chat id (usually -100...) or @username')
@@ -61,7 +63,15 @@ def main(argv=None):
                 raise ValueError('Scheduled weekly requests cannot draft, revise, or run a source check')
         except ValueError as error:parser.error(str(error))
     db=Database()
-    if args.command=='weekly':
+    if args.command=='discover':
+        from radar.discovery import run_discovery
+        transport=None
+        if args.deliver:
+            token=os.environ.get('TELEGRAM_BOT_TOKEN')
+            if not token:raise ValueError('TELEGRAM_BOT_TOKEN is required for --deliver')
+            transport=TelegramTransport(token)
+        result=run_discovery(db,transport=transport)
+    elif args.command=='weekly':
         from radar.weekly import run_weekly
         transport=None
         if args.deliver:

@@ -1,0 +1,51 @@
+name: StartupRadar Internal Discovery
+on:
+  schedule:
+    # 06:17 and 18:17 Asia/Seoul. Members still receive a weekly briefing.
+    - cron: '17 21,9 * * *'
+  workflow_dispatch:
+    inputs:
+      deliver:
+        description: Permit an eligible exceptional notice (never a daily digest)
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/daily_discovery.yml'
+permissions:
+  contents: read
+concurrency:
+  group: startup-radar-v2-state
+  cancel-in-progress: false
+jobs:
+  discover:
+    if: vars.RADAR_V2_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-v2.lock.txt
+      - run: pip install -r requirements-v2.lock.txt
+      - name: Collect official facts, preserving weekly member delivery
+        env:
+          DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+          KSTARTUP_API_KEY: ${{ secrets.KSTARTUP_API_KEY }}
+          BIZINFO_API_KEY: ${{ secrets.BIZINFO_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          DELIVERY_ENABLED: ${{ vars.RADAR_V2_DELIVERY_ENABLED }}
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_DELIVERY: ${{ inputs.deliver }}
+        shell: bash
+        run: |
+          args=()
+          # Rollout push is a non-delivering baseline. Scheduled exceptions use
+          # the existing delivery gate and an independently activated DB policy.
+          if [ "$DELIVERY_ENABLED" = 'true' ] && { [ "$EVENT_NAME" = 'schedule' ] || [ "$MANUAL_DELIVERY" = 'true' ]; }; then
+            args+=(--deliver)
+          fi
+          python -m radar.cli discover "${args[@]}"

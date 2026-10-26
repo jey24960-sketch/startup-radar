@@ -23,10 +23,12 @@ class Pagination:
         self.weekly_policy=config.get('weekly_policy')
         if self.scope not in ('API_DEFAULT','OPEN'):raise SourceFailure('CONFIGURATION','Unknown official scope')
 
-    def start(self,label):
+    def start(self,label,bounded_pages=None):
         self.local=set()
         self.current={'query':label,'pages_requested':0,'records_returned':0,'advertised_records':None,
                       'unique_records':0,'pagination_complete':False}
+        if bounded_pages is not None:
+            self.current.update(bounded_window=True,window_page_cap=bounded_pages,bounded_window_complete=False)
         self.queries.append(self.current)
 
     def requested(self):self.current['pages_requested']+=1
@@ -62,12 +64,13 @@ class Pagination:
 
     def finish(self):
         if self.rejected:raise SourceFailure('API_SCHEMA',f'{self.rejected} source records rejected because identity fields were invalid')
-        if not all(q['pagination_complete'] for q in self.queries):
+        if not all(q['pagination_complete'] or q.get('bounded_window_complete') for q in self.queries):
             raise SourceFailure('PAGE_LIMIT','Configured safety cap reached before source scope completed')
 
     def report(self):
         return {'scope':self.scope,'weekly_policy':self.weekly_policy,
-                'advertised_scope':'BOUNDED_WEEKLY_QUERY' if self.weekly_policy==POLICY else 'PRIMARY_QUERY',
+                'advertised_scope':'BOUNDED_WEEKLY_QUERY' if self.weekly_policy==POLICY else
+                    'PRIMARY_PLUS_BOUNDED_RECENT_ANNOUNCEMENTS' if any(q.get('bounded_window') for q in self.queries) else 'PRIMARY_QUERY',
                 'page_cap':self.maximum,'page_size':self.size,
                 'pages_requested':sum(q['pages_requested'] for q in self.queries),
                 'records_returned':sum(q['records_returned'] for q in self.queries),
@@ -75,6 +78,7 @@ class Pagination:
                 'fetched_unique_records':len(self.seen),'unique_source_ids':len(self.seen),
                 'duplicates':self.duplicates,'rejected_records':self.rejected,
                 'pagination_complete':bool(self.queries) and all(q['pagination_complete'] for q in self.queries),
+                'scope_completed':bool(self.queries) and all(q['pagination_complete'] or q.get('bounded_window_complete') for q in self.queries),
                 'queries':self.queries}
 
 
@@ -149,15 +153,24 @@ class KStartupApiAdapter(HtmlAdapter):
         queries=self.config.get('current_title_queries',[])
         if not isinstance(queries,list) or len(queries)>5 or any(not isinstance(q,str) or not q.strip() or len(q)>100 for q in queries):
             raise SourceFailure('CONFIGURATION','At most five nonempty current-title queries are allowed')
+        recent_pages=self.config.get('recent_announcement_pages',0)
+        if type(recent_pages) is not int or not 0<=recent_pages<=3:
+            raise SourceFailure('CONFIGURATION','Recent announcement window must be an integer in 0..3 pages')
         # Current featured notices can predate the latest page. Query the same
         # official API, bound every query, and preserve publisher identity.
-        for query in [None,*dict.fromkeys(queries)]:
-            self.pagination.start(query or 'PRIMARY')
-            for page in range(1,maximum+1):
+        plans=[('PRIMARY',None,maximum,False),*((q,q,maximum,False) for q in dict.fromkeys(queries))]
+        # The open-only flag cannot discover all pre-opening announcements.
+        # Inspect a bounded leading-page window of the documented unfiltered
+        # endpoint as a separate scope; never claim the historical API archive
+        # was exhausted merely because this intentional window was acquired.
+        if recent_pages:plans.append(('RECENT_ANNOUNCEMENTS',None,recent_pages,True))
+        for label,query,page_cap,recent in plans:
+            self.pagination.start(label,bounded_pages=page_cap if recent else None)
+            for page in range(1,page_cap+1):
                 self.pagination.requested()
                 params={'serviceKey':key,'page':page,'perPage':size,'returnType':'json'}
                 if query:params['cond[biz_pbanc_nm::LIKE]']=query
-                if query or self.pagination.scope=='OPEN':params['cond[rcrt_prgs_yn::EQ]']='Y'
+                if not recent and (query or self.pagination.scope=='OPEN'):params['cond[rcrt_prgs_yn::EQ]']='Y'
                 data,_,_=self.http.get(self.endpoint,params=params)
                 payload=parse_json(data)
                 if not isinstance(payload,dict) or 'data' not in payload:raise SourceFailure('API_SCHEMA','K-Startup data field missing (possible API error)')
@@ -176,6 +189,13 @@ class KStartupApiAdapter(HtmlAdapter):
                     if not self.pagination.accept(sid):continue
                     yield Candidate(self.source['slug'],str(row['pbanc_sn']),url,url,row['biz_pbanc_nm'],row,now().isoformat())
                 if self.pagination.exhausted(rows):break
+            if recent:
+                # Reaching a declared acquisition-window boundary is not an
+                # API failure. pagination_complete remains its honest full-
+                # archive value; source scope completion is reported separately.
+                self.pagination.current['bounded_window_complete']=bool(
+                    self.pagination.current['pagination_complete'] or
+                    self.pagination.current['pages_requested']==page_cap)
         self.pagination.finish()
     def normalize(self,candidate,detail,documents):
         row=candidate.raw_metadata

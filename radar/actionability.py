@@ -12,15 +12,15 @@ history is judged as it stood when it was published.
 """
 from datetime import datetime, timedelta
 
-# A member needs enough runway to read the notice, decide, prepare documents and
-# apply. Anything under two days is not a usable weekly recommendation.
-MINIMUM_APPLICATION_LEAD_TIME = timedelta(hours=48)
+# The publication date must leave a full seven days for members to prepare.
+# The same threshold applies to weekly issues and exceptional announcements.
+MINIMUM_APPLICATION_LEAD_TIME = timedelta(days=7)
 
 # Only these normalized deadline types are trusted to mean "still accepting"
 # without an end date. UNKNOWN is never promoted to ongoing.
 ONGOING_DEADLINE_TYPES = ('ROLLING', 'UNTIL_BUDGET_EXHAUSTED')
 
-PUBLISHABLE_REASONS = ('ACTIONABLE', 'ONGOING')
+PUBLISHABLE_REASONS = ('ACTIONABLE', 'PREANNOUNCEMENT')
 
 
 def _aware(value):
@@ -53,19 +53,19 @@ def actionability(facts, at):
         raise ValueError('Aware reference timestamp required for actionability')
     start = _aware(facts.get('application_start_at'))
     end = _aware(facts.get('application_end_at'))
-    kind = facts.get('deadline_type')
+    if start is not None and end is not None and start > end:
+        return False, 'INVALID_APPLICATION_PERIOD'
     if end is not None and end <= at:
         return False, 'CLOSED'
-    if start is not None and at < start:
-        # Announced but not yet open. Stored, but not presented as actionable now.
-        return False, 'UPCOMING'
     if end is None:
-        if kind in ONGOING_DEADLINE_TYPES:
-            return True, 'ONGOING'
-        # No trusted end and no trusted ongoing type. Never inferred from prose.
+        # Even a trusted rolling period cannot prove seven days of preparation.
         return False, 'DEADLINE_UNKNOWN'
     if end - at < MINIMUM_APPLICATION_LEAD_TIME:
         return False, 'NEAR_DEADLINE'
+    if start is not None and at < start:
+        # A verified future period is useful before applications open. Its
+        # explicit start date stays in the immutable publication snapshot.
+        return True, 'PREANNOUNCEMENT'
     return True, 'ACTIONABLE'
 
 
