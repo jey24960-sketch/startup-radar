@@ -27,6 +27,7 @@ class OpportunityFacts(BaseModel):
     investment_terms: str | None = None
     benefit_kind: str = 'UNKNOWN'
     cancelled: bool = False
+    recruitment_closed: bool = False
     recruitment_confirmed: bool = False
     application_link_verified: bool = False
     evidence: dict = Field(default_factory=dict)
@@ -42,7 +43,28 @@ class OpportunityFacts(BaseModel):
 
 EXCLUDED_TITLE = re.compile(r'채용|조교\s*모집|서포터즈\s*모집|합격자|최종\s*선정|선정\s*결과|결과\s*발표|선발\s*결과|(?:수상|시상)\s*결과|수상자\s*(?:발표|안내)|투자\s*유치\s*(?:성공|완료)|보도자료|행사\s*후기|인턴\s*모집|경품|도록\s*발간')
 RECRUITMENT = re.compile(r'모집|접수|참가\s*신청|참여\s*신청|입주\s*신청|지원\s*신청|applications?\s+(?:are\s+)?(?:open|accepted)|apply\s+now', re.I)
+TITLE_CLOSED_STATUS = re.compile(r'[\[【（(]\s*(?:(?:모집|접수|신청|지원)\s*)?(?:마감|종료)\s*[\]】）)]')
+COMPLETED_CLOSURE = re.compile(r'(?:(?:모집|접수|신청|지원)\s*(?:이|가|은|는)?\s*(?:이미\s*)?'
+    r'(?:마감|종료)|마감)\s*(?:되었습니다|됐습니다|되었음|됐음|하였습니다|하였음|했습니다)(?![가-힣])')
+HISTORICAL_CLOSURE = re.compile(r'지난(?:해|번|\s*모집|\s*접수|\s*회차)?|이전\s*(?:모집|접수|회차)|전년도|작년|전회차')
 DATE = r'(?P<y>20\d{2})\s*[.년/-]\s*(?P<m>\d{1,2})\s*[.월/-]\s*(?P<d>\d{1,2})\s*일?\.?'
+
+
+def explicit_closure(title, text=''):
+    """Find an actual source status, never a future deadline or exhaustion condition.
+
+    A declared year-end application period is not proof a budget-limited
+    programme is still accepting applications. The title's closed badge or a
+    completed closure statement wins, while '마감 전/예정/임박/될 수 있음' and
+    '예산 소진 시 종료' do not match these deliberately narrow expressions.
+    """
+    marker = TITLE_CLOSED_STATUS.search(title or '')
+    if marker: return marker[0]
+    for line in (text or '').splitlines():
+        if HISTORICAL_CLOSURE.search(line): continue
+        completed = COMPLETED_CLOSURE.search(line)
+        if completed: return completed[0].strip()
+    return None
 
 
 def explicit_date(value, end=False):
@@ -106,6 +128,10 @@ def classify(title,text,config):
     facts=OpportunityFacts(organization_type=config.get('organization_type','UNKNOWN'))
     def evidence(key,value):
         if value:facts.evidence[key]={'text':value[:500],'url':config.get('official_url')}
+    closure = explicit_closure(title,text)
+    if closure:
+        facts.recruitment_closed=True
+        evidence('closure',closure)
     if EXCLUDED_TITLE.search(title):
         facts.review_reasons.append('NOT_RECRUITMENT');return facts
     focus=title+'\n'+text[:2000]
@@ -152,6 +178,10 @@ def weekly_decision(program, facts, at=None):
     state = program_status(program, at)
     if facts.get('cancelled') or 'NOT_RECRUITMENT' in facts.get('review_reasons', []):
         return 'EXCLUDED', 'NOT_RECRUITMENT'
+    # Also recognize the title badge on stored legacy observations that predate
+    # the explicit field, so their formal future end date cannot revive them.
+    if facts.get('recruitment_closed') or explicit_closure(program.title):
+        return 'EXCLUDED', 'CLOSED_SOURCE_STATUS'
     if state == 'CLOSED':
         return 'EXCLUDED', state
     if not facts.get('recruitment_confirmed'):

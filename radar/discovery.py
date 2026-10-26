@@ -45,12 +45,58 @@ def discovery_sources(sources, settings=None):
     return result
 
 
-def run_discovery(db, transport=None, at=None, collector=None):
+def _claim_retry_slot(c, slot, execution_id):
+    """Consume one explicit, audited retry of a completed failed source slot."""
+    previous = c.execute(
+        'select s.finished_at,s.result,w.state previous_state,w.finished_at previous_finished_at,'
+        'to_jsonb(s) previous_slot,to_jsonb(w) previous_execution '
+        'from startup_radar.discovery_slots s '
+        'join startup_radar.worker_executions w on w.id=s.execution_id '
+        'where s.slot_start=%s for update of s', (slot,)).fetchone()
+    if previous is None:
+        return 'RETRY_SLOT_NOT_FOUND'
+    if previous['finished_at'] is None or previous['previous_finished_at'] is None:
+        return 'RETRY_PREVIOUS_EXECUTION_UNFINISHED'
+    if previous['previous_state'] not in ('FAILED', 'PARTIAL_SUCCESS'):
+        return 'RETRY_PREVIOUS_EXECUTION_NOT_FAILED'
+    prior_result = previous['result'] or {}
+    if prior_result.get('status') not in ('FAILED', 'PARTIAL_SUCCESS'):
+        return 'RETRY_SLOT_NOT_FAILED'
+    failed_sources = [source for source in prior_result.get('sources', [])
+                      if source.get('status') in ('FAILED', 'PARTIAL') and source.get('failures')]
+    if not failed_sources:
+        return 'RETRY_REQUIRES_FAILED_SOURCE'
+    entity = slot.isoformat()
+    if c.execute("select 1 from startup_radar.admin_audit where action='DISCOVERY_SLOT_RETRY' "
+                 'and entity_id=%s limit 1', (entity,)).fetchone():
+        return 'RETRY_LIMIT_REACHED'
+    # The durable global execution claim excludes concurrent collectors. The row
+    # lock and audit write consume the retry atomically before any HTTP request.
+    c.execute("insert into startup_radar.admin_audit(action,entity_id,detail) "
+              "values('DISCOVERY_SLOT_RETRY',%s,%s)", (entity, Jsonb({
+                  'reason': 'Explicit non-delivering source recovery',
+                  'previous_slot': previous['previous_slot'],
+                  'previous_execution': previous['previous_execution'],
+                  'replacement_execution_id': str(execution_id),
+                  'failed_source_slugs': [source.get('source_slug') for source in failed_sources],
+                  'maximum_retries_per_slot': 1,
+              })))
+    c.execute('update startup_radar.discovery_slots set execution_id=%s,created_at=now(),'
+              'finished_at=null,result=null where slot_start=%s', (execution_id, slot))
+    return None
+
+
+def run_discovery(db, transport=None, at=None, collector=None, *, retry_failed=False):
     """Collect facts without AI/OCR/personalization; at most one owner per slot.
 
     The first rollout run should omit transport. Enable exceptional notices only
     after that baseline finishes, so imported history never becomes a broadcast.
+    A failed-slot recovery never plans, publishes, or delivers an early notice.
     """
+    if retry_failed and transport is not None:
+        raise ValueError('A failed-slot discovery retry cannot deliver notifications')
+    if retry_failed and at is not None:
+        raise ValueError('A failed-slot discovery retry must use the database clock')
     collector = collector or ingest
     with db.transaction() as c:
         config_row = c.execute('select value from startup_radar.runtime_settings where key=%s',(SETTING,)).fetchone()
@@ -69,20 +115,29 @@ def run_discovery(db, transport=None, at=None, collector=None):
     try:
         with db.session():
             with db.transaction() as c:
-                saved = c.execute('insert into startup_radar.discovery_slots(slot_start,execution_id) values(%s,%s) '
-                                  'on conflict(slot_start) do nothing returning slot_start', (slot,execution_id)).fetchone()
-                if not saved:
-                    result = {'status':'SUCCESS','state':'DUPLICATE_DISCOVERY_SLOT','executed':False,'slot':slot.isoformat()}
+                if retry_failed:
+                    rejected = _claim_retry_slot(c,slot,execution_id)
+                    if rejected:
+                        result = {'status':'FAILED','state':rejected,'executed':False,'slot':slot.isoformat()}
                 else:
+                    saved = c.execute('insert into startup_radar.discovery_slots(slot_start,execution_id) values(%s,%s) '
+                                      'on conflict(slot_start) do nothing returning slot_start', (slot,execution_id)).fetchone()
+                    if not saved:
+                        result = {'status':'SUCCESS','state':'DUPLICATE_DISCOVERY_SLOT','executed':False,'slot':slot.isoformat()}
+                if result is None:
                     sources = c.execute('select * from startup_radar.sources where enabled order by slug').fetchall()
             if result is None:
                 sources = discovery_sources(sources,config)
                 if not {'KSTARTUP','BIZINFO'} <= {s['adapter'] for s in sources}:
                     raise ValueError('Both official APIs must be configured for discovery')
-                collection = collector(db,sources,trigger='daily-discovery',structured_only=True)
+                collection = collector(db,sources,
+                                       trigger='daily-discovery-retry' if retry_failed else 'daily-discovery',
+                                       structured_only=True)
                 result = {'status':collection['status'],'state':'DISCOVERY_COMPLETED','executed':True,
                           'slot':slot.isoformat(),'ingestion_run_id':collection['id'], 'sources':collection['sources']}
-                if collection['status'] != 'FAILED':
+                if retry_failed:
+                    result['retry_failed'] = True
+                if collection['status'] != 'FAILED' and not retry_failed:
                     from radar.early_announcements import plan_early_notices, announce_early
                     planned = plan_early_notices(db)
                     result['early_notice'] = planned
@@ -92,11 +147,16 @@ def run_discovery(db, transport=None, at=None, collector=None):
                             result['status']='UNCERTAIN'
                         elif result['early_delivery'].get('state')=='FAILED':
                             result['status']='PARTIAL_SUCCESS'
-            with db.transaction() as c:
-                c.execute('update startup_radar.discovery_slots set finished_at=now(),result=%s where execution_id=%s',
-                          (Jsonb(result),execution_id))
     except Exception as error:
         result = {'status':'FAILED','reason':type(error).__name__,'slot':slot.isoformat()}
+    try:
+        with db.transaction() as c:
+            c.execute('update startup_radar.discovery_slots set finished_at=now(),result=%s where execution_id=%s',
+                      (Jsonb(result),execution_id))
+    except Exception as error:
+        # Lost finalization acknowledgements remain inspectable; never release
+        # an uncertain global owner merely because a local exception was raised.
+        result = {'status':'UNCERTAIN','reason':type(error).__name__,'slot':slot.isoformat()}
     try: finish_execution(db,execution_id,result)
     except Exception as error:
         return {'status':'UNCERTAIN','execution_id':str(execution_id),'reason':type(error).__name__}
