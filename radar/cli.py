@@ -21,7 +21,9 @@ def main(argv=None):
     weekly.add_argument('--scheduler-request-id',type=UUID,help='Existing persisted weekly scheduler request; requires --expected-week-start')
     weekly.add_argument('--expected-week-start',help='Expected Seoul Monday in YYYY-MM-DD form; requires --scheduler-request-id; stale weeks are skipped')
     discovery=commands.add_parser('discover',help='Internal twice-daily official facts collection; no AI, OCR, recommendations or daily member digest')
-    discovery.add_argument('--deliver',action='store_true',help='Permit one eligible exceptional early notice; never sends a normal daily digest')
+    discovery_mode=discovery.add_mutually_exclusive_group()
+    discovery_mode.add_argument('--deliver',action='store_true',help='Permit one eligible exceptional early notice; never sends a normal daily digest')
+    discovery_mode.add_argument('--retry-failed',action='store_true',help='Retry failed sources in the current completed slot once, preserving audit; never plans or sends notices')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
     channel=commands.add_parser('telegram-channel',help='Configure and verify the ONE official GFC Telegram channel that carries every weekly briefing; never posts the briefing itself')
     channel.add_argument('--chat-id',help='Telegram channel chat id (usually -100...) or @username')
@@ -70,7 +72,7 @@ def main(argv=None):
             token=os.environ.get('TELEGRAM_BOT_TOKEN')
             if not token:raise ValueError('TELEGRAM_BOT_TOKEN is required for --deliver')
             transport=TelegramTransport(token)
-        result=run_discovery(db,transport=transport)
+        result=run_discovery(db,transport=transport,retry_failed=args.retry_failed)
     elif args.command=='weekly':
         from radar.weekly import run_weekly
         transport=None

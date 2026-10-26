@@ -9,6 +9,10 @@ on:
         description: Permit an eligible exceptional notice (never a daily digest)
         type: boolean
         default: false
+      retry_failed:
+        description: Retry the current completed failed source slot once; no publication or delivery
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
@@ -31,6 +35,20 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-v2.lock.txt
       - run: pip install -r requirements-v2.lock.txt
+      - name: Diagnose public official endpoints without credentials
+        shell: bash
+        run: |
+          # No keys, response bodies, TLS bypasses, or alternate access paths.
+          # Diagnostic failure remains visible but never prevents the collector.
+          for url in \
+            'https://apis.data.go.kr/robots.txt' \
+            'https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01' \
+            'https://www.bizinfo.go.kr/robots.txt' \
+            'https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do'; do
+            curl --silent --output /dev/null --connect-timeout 20 --max-time 20 \
+              --write-out "${url} http_status=%{http_code} connect_seconds=%{time_connect} total_seconds=%{time_total}\\n" \
+              "$url" || true
+          done
       - name: Collect official facts, preserving weekly member delivery
         env:
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
@@ -40,12 +58,20 @@ jobs:
           DELIVERY_ENABLED: ${{ vars.RADAR_V2_DELIVERY_ENABLED }}
           EVENT_NAME: ${{ github.event_name }}
           MANUAL_DELIVERY: ${{ inputs.deliver }}
+          RETRY_FAILED: ${{ inputs.retry_failed }}
         shell: bash
         run: |
           args=()
+          if [ "$RETRY_FAILED" = 'true' ]; then
+            if [ "$MANUAL_DELIVERY" = 'true' ]; then
+              echo 'A failed-slot retry cannot be combined with delivery.'
+              exit 2
+            fi
+            args+=(--retry-failed)
+          fi
           # Rollout push is a non-delivering baseline. Scheduled exceptions use
           # the existing delivery gate and an independently activated DB policy.
-          if [ "$DELIVERY_ENABLED" = 'true' ] && { [ "$EVENT_NAME" = 'schedule' ] || [ "$MANUAL_DELIVERY" = 'true' ]; }; then
+          if [ "$RETRY_FAILED" != 'true' ] && [ "$DELIVERY_ENABLED" = 'true' ] && { [ "$EVENT_NAME" = 'schedule' ] || [ "$MANUAL_DELIVERY" = 'true' ]; }; then
             args+=(--deliver)
           fi
           python -m radar.cli discover "${args[@]}"

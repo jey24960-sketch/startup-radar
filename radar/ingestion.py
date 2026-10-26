@@ -85,7 +85,7 @@ def ingest(db,sources=None,trigger='manual',adapter_factory=build_adapter,extrac
                         if direct:
                             decisions.append({'program_id':str(saved['program_id']),'title':program.title,
                                 'url':program.official_url,'decision':decision,'reason':reason})
-                            if reason in ('CLOSED','NOT_RECRUITMENT'):excluded_program_ids.add(str(saved['program_id']))
+                            if reason in ('CLOSED','CLOSED_SOURCE_STATUS','NOT_RECRUITMENT'):excluded_program_ids.add(str(saved['program_id']))
                         if decision!='ACCEPTED':continue
                         from radar.weekly import snapshot
                         from radar.dates import program_status

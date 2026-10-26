@@ -188,6 +188,12 @@ class OfficialChannelAdapter:
             facts.recruitment_confirmed=False;rolling=None;scoped_rolling=False
             facts.review_reasons.append('RECRUITMENT_NOT_OPEN')
             facts.evidence['availability']={'text':unavailable[0],'url':detail.url}
+        if facts.recruitment_closed:
+            # Keep the published application dates as source facts; do not
+            # fabricate an earlier deadline. Explicit source closure instead
+            # suppresses any open/rolling inference and the publication gate.
+            facts.recruitment_confirmed=False;rolling=None;scoped_rolling=False
+            facts.review_reasons.append('CLOSED_SOURCE_STATUS')
         fixed=self.config.get('method')=='PAGE' or self.config.get('discovery_mode')=='PAGE'
         if fixed and not end and not start and not rolling and not scoped_rolling and not email_application and not (self.config.get('official_application_page') and application_url):
             facts.recruitment_confirmed=False
