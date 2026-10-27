@@ -16,6 +16,7 @@ from radar.adapters.base import SourceFailure
 from radar.documents import html_text
 from radar.identity import digest
 from radar.relevance import classify, OUT_OF_SCOPE
+from radar.opportunity_facts import labeled_period, explicit_closure
 
 CACHE_KEY = '_official_detail'
 MAX_TEXT = 24000
@@ -112,6 +113,18 @@ def apply_evidence(program, item):
     original = program.support_summary or ''
     updates = {'support_summary': original if text in original else
                '\n'.join(part for part in (original, '공식 공고 상세', text) if part)}
+    _, detail_end, _, detail_end_precision, _ = labeled_period(text)
+    if (detail_end and program.application_end_at and
+            (detail_end.astimezone(SEOUL).date() != program.application_end_at.astimezone(SEOUL).date()
+             or (program.application_end_precision == 'DATETIME' and detail_end_precision == 'DATETIME'
+                 and detail_end != program.application_end_at))):
+        # The structured API and publisher disagree on the closing day. Keep
+        # both original declarations as evidence, not a guessed public deadline.
+        updates.update(application_start_at=None, application_end_at=None,
+                       application_start_precision='UNKNOWN', application_end_precision='UNKNOWN',
+                       deadline_type='UNKNOWN')
+        item['application_period_conflict'] = True
+        return program.model_copy(update=updates)
     for field in ('application_start', 'application_end'):
         day = getattr(program, field + '_at')
         # A conflicting time does not overwrite a previously precise official
@@ -157,6 +170,8 @@ def enrich_official(db, source, adapter, candidate, program, reference=None):
                         'failure': error.record(stage='DETAIL_ENRICHMENT', url=candidate.official_detail_url),
                         'fetched_at': reference.isoformat(),
                         'expires_at': (reference + FAILURE_AGE).isoformat()}
+    if item.get('status') == 'SUCCESS':
+        item['recruitment_closed'] = bool(explicit_closure(program.title, item.get('text') or ''))
     candidate.raw_metadata[CACHE_KEY] = item
     return apply_evidence(program, item), item.get('text'), {
         'status': item['status'], 'cache_hit': cache_hit, 'failure': item.get('failure')}

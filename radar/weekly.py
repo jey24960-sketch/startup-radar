@@ -65,6 +65,9 @@ def snapshot(program, raw):
     # An official support category is classification evidence, not a material
     # change: classifier/metadata updates must not republish an unchanged notice.
     result['program_types'] = list(facts.get('program_types') or [])
+    official_detail = raw.get('_official_detail') or {}
+    if official_detail.get('status') == 'SUCCESS' and official_detail.get('recruitment_closed') is True:
+        result['recruitment_closed'] = True
     for key in ('title','organization','support_summary','applicant_summary'):
         result[key] = html_text(str(result.get(key) or '')).strip() or FALLBACK
     for key in ('official_url','application_url'):

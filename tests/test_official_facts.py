@@ -136,3 +136,31 @@ def test_optional_evidence_budget_never_requests_more_bodies_or_discards_api_fac
         assert result.title == p.title and result.application_end_at == p.application_end_at
         assert diagnostic['status'] == ('SUCCESS' if i == 0 else 'DEFERRED')
     assert len(calls) == 1
+
+
+def test_conflicting_publisher_deadline_is_withheld_without_deleting_api_evidence():
+    from radar.actionability import actionability
+    p = program()
+    item = {'status': 'SUCCESS', 'text': '신청기간: 2026.10.26 ~ 2026.11.10'}
+    result = apply_evidence(p, item)
+    assert result.application_end_at is None and item['application_period_conflict']
+    assert actionability(result.model_dump(mode='json'), AT) == (False, 'DEADLINE_UNKNOWN')
+    assert p.application_end_at is not None
+    assert '2026.11.10' in result.support_summary
+    precise = p.model_copy(update={'application_end_precision': 'DATETIME'})
+    conflicting_time = apply_evidence(precise, {'status': 'SUCCESS', 'text':
+        '신청기간: 2026.10.26 10:00 ~ 2026.11.16 13:00'})
+    assert conflicting_time.application_end_at is None
+
+
+def test_publisher_closed_statement_blocks_a_formally_future_api_deadline():
+    from radar.weekly import snapshot
+    from radar.actionability import actionability
+    p = program()
+    page = '<div class="support_project_detail">현재 모집이 마감되었습니다.</div>'.encode()
+    adapter = SimpleNamespace(source={'adapter': 'BIZINFO'},
+        http=SimpleNamespace(get=lambda url: (page, 'text/html', url)))
+    candidate = Candidate('bizinfo', 'id', p.official_url, p.official_url, p.title, {})
+    result, _, _ = enrich_official(Database(), {'id': 'source'}, adapter, candidate, p, AT)
+    assert result.application_end_at == p.application_end_at
+    assert actionability(snapshot(result, candidate.raw_metadata), AT) == (False, 'CLOSED_SOURCE_STATUS')
