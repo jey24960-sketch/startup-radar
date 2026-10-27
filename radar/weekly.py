@@ -11,7 +11,7 @@ from radar.identity import digest,deduplicate_publication
 from radar.notifications import safe_link
 from radar.broadcast import SETTING_KEY,announcement_text,briefing_url,official_channel as official_channel_config
 from radar.operation import visibility_mode
-from radar.relevance import classify,PUBLISHABLE_STATUSES,RELEVANCE_VERSION
+from radar.relevance import classify,PUBLISHABLE_STATUSES,RELEVANCE_VERSION,REVIEW_REQUIRED
 from radar.stage import classify_stage,STAGE_VERSION
 from radar.weekly_scope import weekly_sources,collection_completed
 from radar.models import Program
@@ -23,9 +23,11 @@ FALLBACK = '\uacf5\uc2dd \uacf5\uace0 \ud655\uc778 \ud544\uc694'
 MATERIAL = ('title','organization','support_summary','applicant_summary','application_start_at',
             'application_end_at','application_start_precision','application_end_precision',
             'deadline_type','official_url','application_url','attachments')
-# GFC_RELEVANT is presented before CONDITIONAL; the member view renders the two
-# as separate sections and relies on this ordering.
-SECTION_RANK = {'GFC_RELEVANT':0,'CONDITIONAL':1}
+# Confirmed opportunities precede the clearly labelled uncertainty appendix.
+# The broader weekly contract does not change advanced recommendations or the
+# rare early-notice contract, which still use confirmed relevance statuses only.
+WEEKLY_PUBLISHABLE_STATUSES = (*PUBLISHABLE_STATUSES, REVIEW_REQUIRED)
+SECTION_RANK = {'GFC_RELEVANT':0,'CONDITIONAL':1,REVIEW_REQUIRED:2}
 
 
 def record_relevance(c, version_id, decision):
@@ -60,6 +62,12 @@ def weekly_detail(candidate):
 def snapshot(program, raw):
     facts = program.model_dump(mode='json')
     result = {key:facts.get(key) for key in MATERIAL if key!='attachments'}
+    # An official support category is classification evidence, not a material
+    # change: classifier/metadata updates must not republish an unchanged notice.
+    result['program_types'] = list(facts.get('program_types') or [])
+    official_detail = raw.get('_official_detail') or {}
+    if official_detail.get('status') == 'SUCCESS' and official_detail.get('recruitment_closed') is True:
+        result['recruitment_closed'] = True
     for key in ('title','organization','support_summary','applicant_summary'):
         result[key] = html_text(str(result.get(key) or '')).strip() or FALLBACK
     for key in ('official_url','application_url'):
@@ -90,7 +98,11 @@ def stored_candidates(rows, at):
             blocked.add(pid)
             continue
         direct = row['source_config'].get('weekly_direct') is True
-        if direct and raw.get('weekly_decision') != 'ACCEPTED':
+        from radar.opportunity_facts import publication_review_note
+        metadata = row.get('extraction_metadata') or {}
+        source_note = publication_review_note(raw.get('weekly_decision'),
+                                              raw.get('weekly_reason') or metadata.get('weekly_reason')) if direct else None
+        if direct and raw.get('weekly_decision') != 'ACCEPTED' and not source_note:
             blocked.add(pid)
             continue
         if str(row['observation_version_id']) != str(row['version_id']):
@@ -101,8 +113,9 @@ def stored_candidates(rows, at):
             continue
         if direct:
             from radar.opportunity_facts import weekly_decision
-            decision, _ = weekly_decision(program, raw.get('weekly_direct_facts') or {}, at)
-            if decision != 'ACCEPTED':
+            decision, reason = weekly_decision(program, raw.get('weekly_direct_facts') or {}, at)
+            source_note = publication_review_note(decision, reason)
+            if decision != 'ACCEPTED' and not source_note:
                 blocked.add(pid)
                 continue
         # Query order prefers the freshest source-specific observation. Its
@@ -111,6 +124,8 @@ def stored_candidates(rows, at):
             'program_id': row['program_id'], 'version_id': row['version_id'],
             'snapshot': snapshot(program, raw),
         })
+        if source_note:
+            candidates[pid]['snapshot']['review_note'] = source_note
     return [row for pid, row in candidates.items() if pid not in blocked]
 
 
@@ -220,15 +235,25 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None, *,
             # Classified and retained even when withheld, so an operator can audit
             # why a stored opportunity never reached members.
             decision = classify(facts)
+            if facts.get('review_note') and decision['relevance_status'] in WEEKLY_PUBLISHABLE_STATUSES:
+                decision = {**decision, 'relevance_status':REVIEW_REQUIRED,
+                            'startup_leverage':'UNKNOWN', 'applicability':'UNKNOWN',
+                            'startup_leverage_reason':facts['review_note']}
             record_relevance(c,row['version_id'],decision)
             stage = classify_stage(facts)
             record_stage(c,row['version_id'],stage)
             publishable,reason = actionability(facts,gate_at)
             if not publishable:
                 withheld[reason] = withheld.get(reason,0)+1;continue
-            if decision['relevance_status'] not in PUBLISHABLE_STATUSES:
+            if decision['relevance_status'] not in WEEKLY_PUBLISHABLE_STATUSES:
                 withheld[decision['relevance_status']] = withheld.get(decision['relevance_status'],0)+1;continue
-            items.setdefault(pid,{**row,'material_hash':fingerprint,
+            published_facts = dict(facts)
+            if decision['relevance_status'] == REVIEW_REQUIRED:
+                published_facts['review_note'] = (decision.get('startup_leverage_reason') or
+                    '창업 관련 공고이나 지원 내용이나 신청 대상은 공식 공고 확인 필요')
+            else:
+                published_facts.pop('review_note', None)
+            items.setdefault(pid,{**row,'snapshot':published_facts,'material_hash':fingerprint,
                 'change_type':'UPDATE' if pid in known else 'NEW',
                 'relevance_status':decision['relevance_status'],
                 'restriction_summary':decision['restriction_summary'],
@@ -253,6 +278,9 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None, *,
         # "\uc0c8\ub85c \ud655\uc778" states what is actually known: StartupRadar saw it for the
         # first time. It does not claim the institution posted it this week.
         summary = f'\uc0c8\ub85c \ud655\uc778 {new_count}\uac74 \u00b7 \ubcc0\uacbd {len(ordered)-new_count}\uac74\uc785\ub2c8\ub2e4.' if ordered else '\uc774\ubc88 \uc8fc \uc0c8\ub85c \ud655\uc778\u00b7\ubcc0\uacbd\ub41c \uc9c0\uc6d0\uc0ac\uc5c5 \uc5c6\uc74c'
+        review_count = sum(item['relevance_status'] == REVIEW_REQUIRED for item in ordered)
+        if review_count:
+            summary += f' 추가 확인이 필요한 공고 {review_count}건이 포함되어 있습니다.'
         row = c.execute("insert into startup_radar.weekly_briefings(week_start,week_end,title,status,item_count,new_count,updated_count,summary,collection_status,ingestion_run_id) "
             "values(%s,%s,%s,'DRAFT',%s,%s,%s,%s,%s,%s) on conflict(week_start,publication_kind) do update set "
             "title=excluded.title,item_count=excluded.item_count,new_count=excluded.new_count,updated_count=excluded.updated_count,summary=excluded.summary,"
@@ -267,6 +295,7 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None, *,
         if publish:c.execute("update startup_radar.weekly_briefings set status='PUBLISHED',published_at=coalesce(published_at,%s),updated_at=now() where id=%s",(published_at,bid))
     return {'status':'SUCCESS' if complete else 'PARTIAL_SUCCESS','collection_status':collection_status,
             'briefing_id':str(bid),'published':publish,'item_count':len(ordered),'new_count':new_count,'updated_count':len(ordered)-new_count,
+            'review_count':review_count,
             'withheld':{reason:count for reason,count in withheld.items() if count}}
 
 

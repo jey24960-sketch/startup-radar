@@ -11,6 +11,7 @@ import pytest
 from core.clock import SEOUL
 from radar.models import Program
 from radar.weekly import build_briefing, snapshot, announce
+from radar.relevance import RELEVANCE_VERSION
 from test_database import db  # noqa: F401
 from test_weekly import collection
 
@@ -55,24 +56,66 @@ def test_relevant_items_precede_conditional_and_carry_their_restriction(db):
     assert [row['relevance_status'] for row in rows] == ['GFC_RELEVANT', 'CONDITIONAL']
     assert rows[0]['restriction_summary'] is None
     assert rows[1]['restriction_summary']
-    assert all(row['relevance_version'] == 'gfc-v1.1' for row in rows)
+    assert all(row['relevance_version'] == RELEVANCE_VERSION for row in rows)
     assert result['item_count'] == 2
 
 
-def test_out_of_scope_and_review_required_are_classified_but_never_published(db):
-    conflicted = '소상공인 카드수수료 지원 및 액셀러레이팅 배치 프로그램 모집'
+def test_out_of_scope_stays_hidden_and_startup_review_is_a_labelled_final_appendix(db):
+    conflicted = '예비창업자 카드수수료 지원 및 액셀러레이팅 배치 프로그램 모집'
     result = build_briefing(db, acquire(db, program(NOISE, url='https://example.org/noise'),
                                         program(conflicted, url='https://example.org/conflict'),
                                         program(RELEVANT, url='https://example.org/acc')), AT)
-    assert result['item_count'] == 1
-    assert result['withheld']['OUT_OF_SCOPE'] == 1 and result['withheld']['REVIEW_REQUIRED'] == 1
+    assert result['item_count'] == 2 and result['review_count'] == 1
+    assert result['withheld']['OUT_OF_SCOPE'] == 1 and 'REVIEW_REQUIRED' not in result['withheld']
+    visible = items(db, result['briefing_id'])
+    assert [row['relevance_status'] for row in visible] == ['GFC_RELEVANT', 'REVIEW_REQUIRED']
     with db.transaction() as c:
         # Hidden does not mean discarded: programs, versions and the classification stay.
         assert c.execute('select count(*) n from startup_radar.programs').fetchone()['n'] == 3
         stored = c.execute("select relevance_status,count(*) n from startup_radar.program_relevance "
-                           "where relevance_version='gfc-v1.1' group by 1").fetchall()
+                           "where relevance_version=%s group by 1", (RELEVANCE_VERSION,)).fetchall()
         assert {row['relevance_status']: row['n'] for row in stored} == \
                {'OUT_OF_SCOPE': 1, 'REVIEW_REQUIRED': 1, 'GFC_RELEVANT': 1}
+
+
+def test_review_appendix_keeps_confirmed_facts_and_does_not_mutate_source_or_material(db):
+    from radar.weekly import MATERIAL
+    acquired = acquire(db,
+        program('스타트업 역량 지원 프로그램 참가팀 모집', url='https://example.org/review'),
+        program(RESTRICTED, url='https://example.org/conditional', applicant='바이오 분야 기업'))
+    original = __import__('copy').deepcopy(acquired['weekly_programs'][0]['snapshot'])
+    result = build_briefing(db, acquired, AT)
+    assert result['item_count'] == 2 and result['review_count'] == 1
+    with db.transaction() as c:
+        visible = c.execute('select relevance_status,snapshot,material_hash from startup_radar.weekly_briefing_items '
+                            'where briefing_id=%s order by display_order', (result['briefing_id'],)).fetchall()
+        assert '추가 확인이 필요한 공고 1건' in c.execute(
+            'select summary from startup_radar.weekly_briefings where id=%s', (result['briefing_id'],)).fetchone()['summary']
+    assert [row['relevance_status'] for row in visible] == ['CONDITIONAL','REVIEW_REQUIRED']
+    facts = visible[-1]['snapshot']
+    assert facts['review_note'] and '확인' in facts['review_note']
+    assert {key: facts[key] for key in original} == original
+    assert acquired['weekly_programs'][0]['snapshot'] == original
+    assert 'review_note' not in MATERIAL and 'program_types' not in MATERIAL
+    acquired['weekly_programs'][0]['snapshot']['review_note'] = 'A different editorial note is not a source change'
+    assert build_briefing(db, acquired, AT + timedelta(days=7))['item_count'] == 0
+
+
+@pytest.mark.parametrize('days,expected', [(6,0),(7,1)])
+def test_uncertain_startup_opportunity_uses_the_same_seven_day_gate(db, days, expected):
+    result = build_briefing(db, acquire(db,
+        program('스타트업 역량 지원 프로그램 참가팀 모집', end=AT+timedelta(days=days))), AT)
+    assert result['item_count'] == expected
+    if expected:
+        assert items(db, result['briefing_id'])[0]['relevance_status'] == 'REVIEW_REQUIRED'
+    else:
+        assert result['withheld']['NEAR_DEADLINE'] == 1
+
+
+def test_review_with_unknown_deadline_stays_withheld(db):
+    result = build_briefing(db, acquire(db,
+        program('스타트업 역량 지원 프로그램 참가팀 모집', end=None, kind='UNKNOWN')), AT)
+    assert result['item_count'] == 0 and result['withheld']['DEADLINE_UNKNOWN'] == 1
 
 
 @pytest.mark.parametrize('case,end,start,kind', [
@@ -156,7 +199,7 @@ def test_correction_preserves_publication_identity_and_never_announces(db):
                             '새로 확인 1건 · 변경 0건입니다.',
                             __import__('json').dumps([{'program_id': str(keep['program_id']), 'display_order': 0,
                                                        'relevance_status': 'GFC_RELEVANT', 'restriction_summary': None,
-                                                       'relevance_version': 'gfc-v1.1'}]))).fetchone()['r']
+                                                       'relevance_version': RELEVANCE_VERSION}]))).fetchone()['r']
         after = c.execute('select id,published_at,revision,item_count from startup_radar.weekly_briefings').fetchone()
         audit = c.execute("select detail from startup_radar.admin_audit where action='WEEKLY_PUBLICATION_CORRECTION'").fetchone()['detail']
     assert answer['retained'] == 1 and answer['withdrawn'] == 1

@@ -8,7 +8,7 @@ from radar.adapters.base import Candidate,AcquiredDetail,SourceFailure
 from radar.dates import korean_date
 from radar.models import Program
 from radar.documents import html_text
-from core.clock import now
+from core.clock import now, SEOUL
 from radar.weekly_scope import POLICY
 
 
@@ -156,6 +156,10 @@ class KStartupApiAdapter(HtmlAdapter):
         recent_pages=self.config.get('recent_announcement_pages',0)
         if type(recent_pages) is not int or not 0<=recent_pages<=3:
             raise SourceFailure('CONFIGURATION','Recent announcement window must be an integer in 0..3 pages')
+        upcoming = self.config.get('include_upcoming_announcements', False)
+        if type(upcoming) is not bool:
+            raise SourceFailure('CONFIGURATION','Upcoming announcement switch must be a boolean')
+        future_from = now().astimezone(SEOUL).strftime('%Y%m%d')
         # Current featured notices can predate the latest page. Query the same
         # official API, bound every query, and preserve publisher identity.
         plans=[('PRIMARY',None,maximum,False),*((q,q,maximum,False) for q in dict.fromkeys(queries))]
@@ -164,19 +168,31 @@ class KStartupApiAdapter(HtmlAdapter):
         # endpoint as a separate scope; never claim the historical API archive
         # was exhausted merely because this intentional window was acquired.
         if recent_pages:plans.append(('RECENT_ANNOUNCEMENTS',None,recent_pages,True))
+        # The documented start-date GTE filter traverses the actual pre-opening
+        # scope, including records outside the bounded recent window. Do not add
+        # the 모집중 flag, which would hide the very notices this query seeks.
+        if upcoming:plans.append(('UPCOMING_ANNOUNCEMENTS',None,maximum,False))
         for label,query,page_cap,recent in plans:
             self.pagination.start(label,bounded_pages=page_cap if recent else None)
             for page in range(1,page_cap+1):
                 self.pagination.requested()
                 params={'serviceKey':key,'page':page,'perPage':size,'returnType':'json'}
                 if query:params['cond[biz_pbanc_nm::LIKE]']=query
-                if not recent and (query or self.pagination.scope=='OPEN'):params['cond[rcrt_prgs_yn::EQ]']='Y'
+                if label == 'UPCOMING_ANNOUNCEMENTS':
+                    params['cond[pbanc_rcpt_bgng_dt::GTE]'] = future_from
+                elif not recent and (query or self.pagination.scope=='OPEN'):
+                    params['cond[rcrt_prgs_yn::EQ]']='Y'
                 data,_,_=self.http.get(self.endpoint,params=params)
                 payload=parse_json(data)
                 if not isinstance(payload,dict) or 'data' not in payload:raise SourceFailure('API_SCHEMA','K-Startup data field missing (possible API error)')
                 rows=payload['data']
                 if isinstance(rows,dict):rows=rows.get('data')
                 if not isinstance(rows,list):raise SourceFailure('API_SCHEMA','K-Startup data must contain an array')
+                if label == 'UPCOMING_ANNOUNCEMENTS':
+                    for row in rows:
+                        start = str(row.get('pbanc_rcpt_bgng_dt') or '') if isinstance(row, dict) else ''
+                        if not re.fullmatch(r'\d{8}', start) or start < future_from:
+                            raise SourceFailure('API_SCOPE', 'Upcoming date filter returned an out-of-scope record')
                 self.pagination.returned(rows,payload.get('matchCount',payload.get('totalCount')))
                 for row in rows:
                     if not isinstance(row,dict) or not row.get('biz_pbanc_nm') or not row.get('pbanc_sn'):

@@ -24,6 +24,7 @@ def main(argv=None):
     discovery_mode=discovery.add_mutually_exclusive_group()
     discovery_mode.add_argument('--deliver',action='store_true',help='Permit one eligible exceptional early notice; never sends a normal daily digest')
     discovery_mode.add_argument('--retry-failed',action='store_true',help='Retry failed sources in the current completed slot once, preserving audit; never plans or sends notices')
+    commands.add_parser('check-discovery-sources',help='Recheck approved discovery sources after changes; store facts only, never publish or send a notice')
     seed=commands.add_parser('seed-sources');seed.add_argument('--file',default='sources.json')
     channel=commands.add_parser('telegram-channel',help='Configure and verify the ONE official GFC Telegram channel that carries every weekly briefing; never posts the briefing itself')
     channel.add_argument('--chat-id',help='Telegram channel chat id (usually -100...) or @username')
@@ -64,12 +65,15 @@ def main(argv=None):
             if args.scheduler_request_id and (args.draft or args.revision_note is not None or args.check_sources):
                 raise ValueError('Scheduled weekly requests cannot draft, revise, or run a source check')
         except ValueError as error:parser.error(str(error))
-    if args.command=='discover':
+    if args.command in ('discover', 'check-discovery-sources'):
         from radar.discovery_connection import discovery_database_options
         db=Database(**discovery_database_options())
     else:
         db=Database()
-    if args.command=='discover':
+    if args.command=='check-discovery-sources':
+        from radar.source_check import check_discovery_sources
+        result=check_discovery_sources(db)
+    elif args.command=='discover':
         from radar.discovery import run_discovery
         transport=None
         if args.deliver:
