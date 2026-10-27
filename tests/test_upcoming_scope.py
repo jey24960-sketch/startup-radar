@@ -8,7 +8,7 @@ from radar.adapters.base import SourceFailure
 from radar.adapters.official import KStartupApiAdapter
 
 
-def adapter(monkeypatch, future):
+def adapter(monkeypatch, future, nested=False):
     monkeypatch.setenv('KSTARTUP_API_KEY', 'fixture-key')
     monkeypatch.setattr('radar.adapters.official.now', lambda: datetime(2026, 10, 27, tzinfo=SEOUL))
     calls = []
@@ -20,7 +20,8 @@ def adapter(monkeypatch, future):
             rows = [{'pbanc_sn': 1, 'biz_pbanc_nm': '현재 창업 모집',
                      'detl_pg_url': 'https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=1',
                      'pbanc_rcpt_bgng_dt': '20261001'}]
-        return json.dumps({'data': rows, 'matchCount': len(rows)}).encode(), 'application/json', url
+        return json.dumps({'data': {'data': rows} if nested else rows,
+                           'matchCount': len(rows)}).encode(), 'application/json', url
     source = {'slug': 'kstartup', 'name': 'KStartup', 'config': {
         'scope': 'OPEN', 'page_size': 100, 'max_pages': 10,
         'include_upcoming_announcements': True}}
@@ -37,9 +38,10 @@ def test_documented_date_scope_finds_future_notice_outside_recent_pages(monkeypa
     assert a.pagination.report()['scope_completed']
 
 
-def test_ignored_server_filter_is_visible_incomplete_scope(monkeypatch):
+@pytest.mark.parametrize('nested', [False, True])
+def test_ignored_server_filter_is_visible_incomplete_scope(monkeypatch, nested):
     a, _ = adapter(monkeypatch, [{'pbanc_sn': 5, 'biz_pbanc_nm': '지난 공고',
-        'pbanc_rcpt_bgng_dt': '20261001'}])
+        'pbanc_rcpt_bgng_dt': '20261001'}], nested=nested)
     with pytest.raises(SourceFailure, match='API_SCOPE'):
         list(a.discover())
     assert not a.pagination.report()['scope_completed']

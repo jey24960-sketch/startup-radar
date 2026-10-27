@@ -65,6 +65,7 @@ before(async () => {
 after(async () => { await db?.close(); });
 
 test('migration defaults remain inert, require explicit future activation and a registered local cron job', () => scenario(async () => {
+  const auditBefore = await count('startup_radar.admin_audit');
   assert.equal((await plan(at(0))).state, 'DISABLED');
   assert.equal((await tick(at(0))).state, 'DISABLED');
   assert.equal(await count('startup_radar.weekly_schedule_requests'), 0);
@@ -74,7 +75,7 @@ test('migration defaults remain inert, require explicit future activation and a 
   await rejected("select startup_radar.configure_weekly_scheduler(true,date_trunc('week',now())::date-7,'synthetic activation')", [], /future due/);
   const configured = await value("select startup_radar.configure_weekly_scheduler(true,date_trunc('week',now())::date+7,'synthetic activation') v");
   assert.equal(configured.enabled, true);
-  assert.equal(await count('startup_radar.admin_audit'), 1);
+  assert.equal(await count('startup_radar.admin_audit'), auditBefore + 1);
   assert.equal(await count('net.test_calls'), 0, 'configuration itself never dispatches');
 }));
 
@@ -238,12 +239,13 @@ test('public admin RPC preserves observed facts, changes only the timetable to 0
 
 test('the augmented admin observation executes inside a read-only transaction', () => scenario(async () => {
   await db.exec('set transaction read only');
+  const auditBefore = await count('startup_radar.admin_audit');
   await rows("select set_config('request.jwt.claim.sub',$1,false)", [id(99)]);
   await db.exec('set role authenticated');
   const current = await value('select public.gfc_radar_admin_weekly_status() v');
   assert.equal(current.schedule.runtime.state, 'DISABLED');
   await db.exec('reset role');
-  assert.equal(await count('startup_radar.admin_audit'), 0);
+  assert.equal(await count('startup_radar.admin_audit'), auditBefore);
   assert.equal(await count('startup_radar.weekly_schedule_requests'), 0);
 }));
 
