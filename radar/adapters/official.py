@@ -123,6 +123,17 @@ def kstartup_period_time(day,text):
     return day,'DATE'
 
 
+def kstartup_future_start(row, lower_bound):
+    """An API flag or absent date never establishes a pre-opening period."""
+    start = str(row.get('pbanc_rcpt_bgng_dt') or '') if isinstance(row, dict) else ''
+    if not re.fullmatch(r'\d{8}', start) or start < lower_bound:
+        return False
+    try:
+        return korean_date(start) is not None
+    except ValueError:
+        return False
+
+
 class KStartupApiAdapter(HtmlAdapter):
     endpoint='https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01'
     def fetch_detail(self,candidate):
@@ -172,8 +183,17 @@ class KStartupApiAdapter(HtmlAdapter):
         # scope, including records outside the bounded recent window. Do not add
         # the 모집중 flag, which would hide the very notices this query seeks.
         if upcoming:plans.append(('UPCOMING_ANNOUNCEMENTS',None,maximum,False))
+        upcoming_scope_failed = False
         for label,query,page_cap,recent in plans:
             self.pagination.start(label,bounded_pages=page_cap if recent else None)
+            future_scope = label in ('UPCOMING_ANNOUNCEMENTS', 'UPCOMING_UNFILTERED_FALLBACK')
+            future_ids = set()
+            if future_scope:
+                self.pagination.current.update(requested_start_from=future_from,
+                    matched_future_records=0, yielded_future_records=0)
+            if label == 'UPCOMING_UNFILTERED_FALLBACK':
+                self.pagination.current.update(actual_scope='BOUNDED_UNFILTERED_FALLBACK',
+                    fallback_reason='SERVER_DATE_FILTER_MISMATCH', server_filter_verified=False)
             for page in range(1,page_cap+1):
                 self.pagination.requested()
                 params={'serviceKey':key,'page':page,'perPage':size,'returnType':'json'}
@@ -188,11 +208,23 @@ class KStartupApiAdapter(HtmlAdapter):
                 rows=payload['data']
                 if isinstance(rows,dict):rows=rows.get('data')
                 if not isinstance(rows,list):raise SourceFailure('API_SCHEMA','K-Startup data must contain an array')
-                if label == 'UPCOMING_ANNOUNCEMENTS':
-                    for row in rows:
-                        start = str(row.get('pbanc_rcpt_bgng_dt') or '') if isinstance(row, dict) else ''
-                        if not re.fullmatch(r'\d{8}', start) or start < future_from:
-                            raise SourceFailure('API_SCOPE', 'Upcoming date filter returned an out-of-scope record')
+                mismatched = label == 'UPCOMING_ANNOUNCEMENTS' and any(
+                    not kstartup_future_start(row, future_from) for row in rows)
+                if mismatched:
+                    # The public endpoint has returned past/undated records for
+                    # its documented GTE parameter in production. Salvage valid
+                    # future rows from this response, then try the same official
+                    # unfiltered endpoint within the remaining request budget.
+                    # Keep the failed requested scope explicitly incomplete.
+                    upcoming_scope_failed = True
+                    self.pagination.current.update(server_filter_verified=False,
+                        actual_scope='SERVER_DATE_FILTER_MISMATCH',
+                        mismatched_records=sum(not kstartup_future_start(row, future_from) for row in rows))
+                    remaining = page_cap - page
+                    if remaining:
+                        plans.append(('UPCOMING_UNFILTERED_FALLBACK', None, remaining, True))
+                elif label == 'UPCOMING_ANNOUNCEMENTS':
+                    self.pagination.current['server_filter_verified'] = True
                 self.pagination.returned(rows,payload.get('matchCount',payload.get('totalCount')))
                 for row in rows:
                     if not isinstance(row,dict) or not row.get('biz_pbanc_nm') or not row.get('pbanc_sn'):
@@ -202,8 +234,15 @@ class KStartupApiAdapter(HtmlAdapter):
                     # even when the documented biz_aply_url field is null.
                     url=kstartup_portal_detail(row) or row.get('biz_aply_url') or row.get('biz_gdnc_url')
                     if not url:self.pagination.accept(None);continue
-                    if not self.pagination.accept(sid):continue
+                    accepted = self.pagination.accept(sid)
+                    if future_scope:
+                        if not kstartup_future_start(row, future_from):continue
+                        future_ids.add(sid)
+                        self.pagination.current['matched_future_records'] = len(future_ids)
+                    if not accepted:continue
+                    if future_scope:self.pagination.current['yielded_future_records'] += 1
                     yield Candidate(self.source['slug'],str(row['pbanc_sn']),url,url,row['biz_pbanc_nm'],row,now().isoformat())
+                if mismatched:break
                 if self.pagination.exhausted(rows):break
             if recent:
                 # Reaching a declared acquisition-window boundary is not an
@@ -212,6 +251,11 @@ class KStartupApiAdapter(HtmlAdapter):
                 self.pagination.current['bounded_window_complete']=bool(
                     self.pagination.current['pagination_complete'] or
                     self.pagination.current['pages_requested']==page_cap)
+        if upcoming_scope_failed:
+            # Completing a bounded fallback cannot prove that the complete
+            # requested future-only scope was acquired. Keep the source partial.
+            raise SourceFailure('API_SCOPE',
+                'Upcoming date filter returned out-of-scope records; bounded official fallback collected verified future dates only')
         self.pagination.finish()
     def normalize(self,candidate,detail,documents):
         row=candidate.raw_metadata

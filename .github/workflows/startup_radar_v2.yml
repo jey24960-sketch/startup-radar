@@ -66,6 +66,7 @@ jobs:
       - name: Execute persistent V2 task
         env:
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+          RADAR_ACTIONS_REPORT: 'true'
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RADAR_EXTRACTION_MODEL: ${{ vars.RADAR_EXTRACTION_MODEL }}
           KSTARTUP_API_KEY: ${{ secrets.KSTARTUP_API_KEY }}

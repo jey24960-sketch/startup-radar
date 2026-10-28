@@ -1,5 +1,18 @@
 # CLAUDE.md — StartupRadar (worker/backend)
 
+## Acquisition failure triage — 2026-10-29
+
+An Actions red result can be `PARTIAL_SUCCESS`: keep its nonzero exit and report
+collection, publication and delivery separately. The optional `RADAR_ACTIONS_REPORT`
+summary never changes outcomes or serializes raw failure messages or credentials.
+Do not infer a publication failure from a source TLS error or a bounded page cap.
+
+K-Startup has returned past records for its documented application-start GTE
+filter. Preserve valid future records from that response, then use the remaining
+same-source request budget for a bounded unfiltered fallback. Check every actual
+start date; keep `API_SCOPE`, the failed scope and fallback incompleteness visible.
+Never claim this fallback proves complete future coverage or infer absent dates.
+
 ## Approved recall and weekly appendix update — 2026-10-27
 
 The user approved the omission-audit improvements. Keep Tuesday 09:00 Seoul,
