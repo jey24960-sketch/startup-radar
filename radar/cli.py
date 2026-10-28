@@ -154,6 +154,10 @@ def main(argv=None):
             transport=TelegramTransport(token)
         result=run_job(db,args.kind,args.source or None,args.job_id or None,transport)
     print(json.dumps(result,ensure_ascii=False,default=str))
+    if (args.command in ('weekly', 'discover', 'check-discovery-sources')
+            and os.environ.get('RADAR_ACTIONS_REPORT') == 'true'):
+        from radar.actions_report import write_actions_report
+        write_actions_report(args.command, result)
     # PAUSED is an operator decision honoured by the worker, not a failure.
     return 0 if result['status'] in ('SUCCESS','PAUSED') else 1
 
