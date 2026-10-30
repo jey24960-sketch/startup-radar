@@ -302,15 +302,17 @@ class OfficialChannelAdapter:
         # Fixed pages may contain an old HTML title. Only an explicit current heading
         # is accepted; absent cohort/period remains a review item, never "open".
         if fixed and not facts.cohort and not rolling and not scoped_rolling:facts.review_reasons.append('COHORT_UNKNOWN')
-        target=facts.evidence.get('target',{}).get('text')
+        from radar.official_facts import direct_public_fields
+        public=direct_public_fields(detail.text,title,self.source['slug'])
+        target=public.get('applicant_summary')
         if self.config.get('organizer_unverified'):
             facts.organization_type='UNKNOWN'
             facts.review_reasons.append('ORGANIZER_UNKNOWN')
-        program=Program(title=title,organization=self.config['organization'],official_url=detail.url,
+        program=Program(title=title,organization=public.get('organization') or self.config['organization'],official_url=detail.url,
             application_url=application_url,application_start_at=start,application_end_at=end,
             application_start_precision=sp,application_end_precision=ep,
             deadline_type='ROLLING' if rolling or scoped_rolling else 'FIXED_DATE' if end else 'UNKNOWN',
-            applicant_summary=target,support_summary=detail.text,evidence_complete=False,
+            applicant_summary=target,support_summary=public.get('support_summary'),evidence_complete=False,
             )
         candidate.raw_metadata.update(detail.raw_metadata)
         candidate.raw_metadata['weekly_direct_facts']=facts.model_dump()

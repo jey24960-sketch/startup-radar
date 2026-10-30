@@ -1,4 +1,4 @@
-"""GFC Relevance v1.2 — is this opportunity useful to a GFC founder?
+"""GFC Relevance v1.3 — is this opportunity useful to a GFC founder?
 
 Deterministic rules only. The weekly production path intentionally does not
 depend on AI, OCR or eligibility calculation, and that reliability property is
@@ -28,8 +28,8 @@ What counts is the action the program enables and the deliverable it produces.
 """
 import re
 
-RELEVANCE_VERSION = 'gfc-v1.2'
-CLASSIFICATION_METHOD = 'DETERMINISTIC_RULES_V1_2'
+RELEVANCE_VERSION = 'gfc-v1.3'
+CLASSIFICATION_METHOD = 'DETERMINISTIC_RULES_V1_3'
 
 GFC_RELEVANT = 'GFC_RELEVANT'
 CONDITIONAL = 'CONDITIONAL'
@@ -90,7 +90,7 @@ GENERIC_SOFT_EXCLUSION = _rules([
 # Talks, briefings and networking. Hidden unless the program produces a concrete
 # founder deliverable, which is a deliberately narrower bar than the core list.
 EVENT_SOFT_EXCLUSION = _rules([
-    ('일회성 강연·행사', r'특강|강연|세미나|설명회|간담회|컨퍼런스|포럼|네트워킹|밋업|커피챗|토크\s*콘서트'),
+    ('일회성 강연·행사', r'특강|강연|세미나|설명회|간담회|컨퍼런스|포럼|네트워킹|밋업|커피챗|토크\s*콘서트|워크숍'),
     # Bare substring matching used to read 기후기술 as a 후기. Match actual
     # review words/phrases while allowing normal Korean compounds such as 참여후기.
     ('사례·후기 공유', r'성공\s*(사례|스토리)|(?:참여|수강|활동|창업|운영)\s*후기|후기\s*(공유|모음|작성|발표|나눔)|(?<![가-힣A-Za-z0-9])후기(?![가-힣A-Za-z0-9])|이야기|경험\s*공유'),
@@ -124,7 +124,7 @@ DELIVERABLE = _rules([
     ('MVP·프로토타입 결과물', r'\bMVP\b|프로토타입|시제품|시작품'),
     ('실증·PoC 수행', r'\bPoC\b|실증|테스트\s*베드'),
     ('IR·데모데이 선발', r'데모\s*데이|demo\s*day|(?<![A-Za-z0-9])IR\s*(피칭|덱|자료|발표)|투자\s*(매칭|연계|검토)'),
-    ('액셀러레이팅 선발', r'액셀러레이[팅터]|배치\s*(프로그램|선발)|accelerat'),
+    ('액셀러레이팅 선발', r'액셀러레이[팅터][^\n]{0,25}(선발|선정|성장\s*프로그램)|(?:선정|선발)[^\n]{0,25}액셀러레이팅|배치\s*(프로그램|선발)|accelerat'),
     ('사업화·상용화 지원', r'사업화\s*(지원|자금)|상용화'),
     ('고객·시장 검증 수행', r'고객\s*(발굴|검증|인터뷰)|시장\s*검증|\bBM\b\s*검증|비즈니스\s*모델\s*검증'),
     ('창업 실행 피어피드백', r'창업(?:가|팀)[^\n]{0,20}피어\s*피드백'),
@@ -137,13 +137,15 @@ DELIVERABLE = _rules([
 
 RESTRICTION = _rules([
     ('사업자등록·법인 필요', r'사업자\s*등록(증|자)?\s*(보유|필수|필요|기업)|법인\s*(설립|사업자)\s*(필수|필요|보유)|중소기업\s*확인서'),
-    ('투자 단계 한정', r'\bPre-?\s*A\b|\bSeries\s*[A-C]\b|시리즈\s*[A-C]|프리\s*에이'),
+    ('투자 단계 한정', r'\bPre-?\s*A\b|\bSeries\s*[A-C]\b|시리즈\s*[A-C]|프리\s*에이|엔젤\s*(?:이상)?[^\n]{0,15}투자\s*유치'),
     # Only a *minimum maturity* requirement restricts GFC members. An
     # "early-stage only" window (창업 3년 이내) is the audience, not a barrier,
     # and treating it as one would push most real accelerators into CONDITIONAL.
     ('업력 하한 조건', r'(?:업력|설립|창업)\s*\d+\s*년\s*이상'),
     ('수출 실적 요건', r'수출\s*실적|수출\s*\d+\s*(만|억)'),
-    ('소재지 이전 필요', r'(본사|기업)\s*이전|이전\s*조건|관내\s*이전'),
+    ('소재지 이전 필요', r'(?:본사|기업|사업장)\s*이전\s*(?:필수|필요|조건)|(?:관내\s*)?이전\s*조건'),
+    ('중장년 연령 조건', r'만\s*(?:[4-9]\d)\s*세\s*이상|중장년\s*(?:예비)?\s*창업'),
+    ('프로토타입 이상 제품 필요', r'프로토타입\s*이상[^\n]{0,15}(?:제품|개발)|(?:MVP|시제품)\s*보유\s*(?:필수|필요)'),
 ])
 
 _INDUSTRY = re.compile(r'(?:바이오|헬스\s*케어|의료\s*기기|제약|반도체|이차\s*전지|배터리|'
@@ -155,30 +157,107 @@ _INDUSTRY_ADVISORY = re.compile(r'(?:제한|관계|상관)\s*(?:은|이|가|없�
                                 r'무관|권장|권고|적합성.{0,25}검토|예시|가령')
 _INDUSTRY_SUPPORT_SCOPE = re.compile(r'대상|한정|전용|분야.{0,60}(?:기업|팀|스타트업)')
 _INDUSTRY_CLAUSE_SPLIT = re.compile(r'[\n.!?。,;；]+|(?:하며|이며|이고)\s+')
+_BROAD_INDUSTRY = re.compile(r'(?:분야|산업|업종)\s*(?:무관|제한\s*없)|모든\s*분야|전\s*분야')
 
 
 def _industry_restriction(facts):
     # An industry word in a mentor biography, institution name or curriculum
     # recommendation is not an application condition. Require an industry-scoped
     # audience declaration, and retain its actual matched evidence for review.
-    for key in ('title', 'applicant_summary', 'support_summary'):
-        for sentence in _INDUSTRY_CLAUSE_SPLIT.split(str(facts.get(key) or '')):
+    audience = eligibility_text(facts)
+    fields = [audience]
+    if not _BROAD_INDUSTRY.search(audience):
+        fields.append(str(facts.get('title') or ''))
+    for value in fields:
+        for sentence in _INDUSTRY_CLAUSE_SPLIT.split(value):
             if _INDUSTRY_ADVISORY.search(sentence):
                 continue
             for hit in _INDUSTRY.finditer(sentence):
                 after = sentence[hit.end():hit.end()+100]
-                if _INDUSTRY_AUDIENCE.search(after) and (
-                        key != 'support_summary' or _INDUSTRY_SUPPORT_SCOPE.search(sentence)):
+                if _INDUSTRY_AUDIENCE.search(after):
                     return {'label': '특정 산업 분야 한정', 'match': sentence.strip()[:80]}
     return None
 
 # A bracketed regional prefix is how the national portals mark a locally scoped
 # program; "소재" is the explicit textual form.
-_REGION_PREFIX = re.compile(r'^\s*[\[【]\s*([가-힣]{2,8}(?:\s*[·ㆍ]\s*[가-힣]{2,8})?)\s*[\]】]')
+_REGION_NAMES = (r'서울(?:특별시)?|부산(?:광역시)?|대구(?:광역시)?|인천(?:광역시)?|광주(?:광역시)?|'
+                 r'대전(?:광역시)?|울산(?:광역시)?|세종(?:특별자치시)?|경기(?:도)?|강원(?:특별자치도|도)?|'
+                 r'충북|충남|전북(?:특별자치도)?|전남|경북|경남|제주(?:특별자치도|도)?|'
+                 r'충청북도|충청남도|전라북도|전라남도|경상북도|경상남도')
+_REGION_PREFIX = re.compile(r'^\s*[\[【]\s*(' + _REGION_NAMES + r')\s*[\]】]')
 # Korean notices attach particles freely ("충청남도에 소재한", "서울시 소재 기업"),
 # so the administrative noun is anchored and the particle is optional.
-_REGION_TEXT = re.compile(r'([가-힣]{2,6}(?:특별자치[시도]|특별시|광역시|도|시|군|구))\s*(?:에|내|의)?\s*소재')
-_REGION_LOCAL = re.compile(r'관내\s*(?:에\s*)?소재|관내\s*(?:기업|업체|법인)')
+_REGION_PLACE = r'(?:' + _REGION_NAMES + r'|[가-힣]{2,6}(?:특별자치[시도]|특별시|광역시|도|시|군|구))'
+_REGION_TEXT = re.compile(r'(' + _REGION_PLACE + r')\s*(?:에|내|의)?\s*(소재|거주)')
+_REGION_FUTURE = re.compile(r'(' + _REGION_PLACE + r')\s*(?:내|에|로)?\s*(?:창업|설립|이전)\s*예정')
+_REGION_LOCAL = re.compile(r'(?:관내|도내|시내)\s*(?:에\s*)?소재|(?:관내|도내|시내)\s*(?:기업|업체|법인)')
+_REGION_SOFT = re.compile(r'가점|우대|우선|지역\s*(?:무관|제한\s*없)|소재지\s*무관')
+_REGION_ALTERNATIVE = re.compile(r'이전\s*(?:예정|가능|계획)|설립\s*예정|창업\s*예정')
+_PERSON_AUDIENCE = re.compile(r'예비\s*창업|개인|거주|청년|학생')
+_ELIGIBILITY_SOFT = re.compile(r'필수\s*(?:가\s*)?(?:아니|아님)|불필요|필요\s*없|무관|제한\s*없|우대|가점|권장|권고')
+
+# Audience facts are separate from benefits and institutional biographies.
+# The national portals put their detailed audience in a labelled field or a ☞
+# declaration; neither historical case studies nor a bracketed publisher name
+# can create a hard condition. The primary applicant field remains authoritative.
+_ELIGIBILITY_LABEL = re.compile(r'(?m)^[ \t]*(?:[☞○◦•*-]\s*)?[\[【]?(?:신청|지원|모집|참가|참여)\s*(?:대상|자격)[\]】]?\s*[:：]?\s*([^\n]+)')
+_ELIGIBILITY_ARROW = re.compile(r'(?m)^[ \t]*☞\s*([^\n]*(?:기업|법인|창업자|팀|개인|대학생|자치단체)[^\n]*)')
+_BENEFIT_ARROW = re.compile(r'^(?:기업|팀)\s*(?:별|당)\s*(?:최대|지원|제공|지급)|(?:지원|제공|지급)\s*$')
+
+
+def eligibility_text(facts):
+    parts = [str(facts.get('applicant_summary') or '')]
+    support = str(facts.get('support_summary') or '')
+    for pattern in (_ELIGIBILITY_LABEL, _ELIGIBILITY_ARROW):
+        for match in pattern.finditer(support):
+            value = match.group(1).strip()
+            if value and not _BENEFIT_ARROW.search(value) and value not in parts:
+                parts.append(value)
+    return '\n'.join(parts)
+
+
+def _curation_rules(entries):
+    return tuple((label, {key: re.compile(pattern, re.I) for key, pattern in required.items()},
+                  {key: re.compile(pattern, re.I) for key, pattern in exempt.items()})
+                 for label, required, exempt in entries)
+
+
+# The audited weekly scope is founder execution, not a general SME catalogue.
+# These are substantive purpose/recipient declarations. Unlike weak words such
+# as "startup", "IR" or "commercialisation", they must not be rescued by an
+# incidental founder phrase elsewhere in an otherwise inapplicable notice.
+CURATION_EXCLUSION = _curation_rules([
+    ('참관객 모집', {'title': r'참관\s*(?:객\s*)?(?:신청|모집)'}, {}),
+    ('투자자·지원기관 전용 모집', {'applicant': r'AC\s*[/·ㆍ]\s*VC|투자기관\s*(?:담당자|관계자)|대[·ㆍ]?중견기업\s*오픈이노베이션\s*담당'},
+     {'applicant': r'예비\s*창업|초기\s*창업|창업\s*(?:기업|팀|자|가)|스타트업|startup'}),
+    ('지방자치단체 모집', {'title': r'창업도시\s*모집|창업도시\s*조성\s*프로젝트', 'all': r'광역\s*자치\s*단체|기초\s*자치\s*단체'}, {}),
+    ('지원사업 통합 안내자료', {'title': r'(?:창업|중소기업)\s*지원\s*사업[^\n]{0,30}통합\s*공고|통합\s*공고[^\n]{0,20}(요약본|챗봇)'}, {}),
+    ('임직원 주거 복지', {'all': r'(?:임직원|근로자)[^\n]{0,50}(주거\s*안정|주거비|주택\s*임대)'}, {}),
+    ('일반형 상가 임대', {'title': r'상가\s*임대\s*공급[^\n]{0,50}일반형'}, {}),
+    ('창업지원기관 업무시설 임대', {'title': r'업무\s*지원\s*시설', 'applicant': r'보증기금|대학교|창업기획자|벤처투자회사|회계서비스업'},
+     {'applicant': r'예비\s*창업|초기\s*창업|창업\s*기업|스타트업'}),
+    ('완제품 유통·판매장 지원', {'title': r'중소기업\s*제품\s*전용\s*(판매장|면세점)|중소기업[^\n]{0,20}온라인몰\s*입점\s*지원'}, {}),
+    ('일반 산업 수출상담회', {'title': r'밤\s*산업\s*박람회[^\n]{0,40}수출\s*상담회'}, {}),
+    ('기선정 IP기업 비용 보전', {'title': r'글로벌\s*IP\s*스타기업[^\n]{0,30}해외\s*(?:OA|등록)\s*비용'}, {}),
+    ('중개계약 정산 비용 지원', {'title': r'혁신\s*중개\s*촉진\s*지원'}, {}),
+    ('일반 해외규격인증 비용 지원', {'title': r'해외\s*규격\s*인증\s*획득\s*지원\s*사업'}, {}),
+    ('산업 제조기반 R&D', {'title': r'기계\s*장비\s*산업\s*기술\s*개발\s*사업'}, {}),
+    ('소공인 운영 지원', {'title': r'소공인[^\n]{0,20}센터\s*운영\s*지원'}, {}),
+    ('빈 점포·상권 운영 지원', {'title': r'빈\s*점포[^\n]{0,25}(다시채움|임차인)|다시채움\s*프로젝트'}, {}),
+    ('소상공인 경영 응원금', {'title': r'소상공인[^\n]{0,20}창업\s*응원금'}, {}),
+    ('고용·인턴십 임금 지원', {'title': r'청년\s*일자리\s*도약\s*장려금|기업\s*인턴십[^\n]{0,20}참여\s*기업|인턴십\s*참여\s*기업'}, {}),
+])
+
+
+def curation_exclusions(facts):
+    fields = {'title': str(facts.get('title') or ''),
+              'applicant': eligibility_text(facts), 'all': _text(facts)}
+    found = []
+    for label, required, exempt in CURATION_EXCLUSION:
+        matches = [pattern.search(fields[key]) for key, pattern in required.items()]
+        if all(matches) and not any(pattern.search(fields[key]) for key, pattern in exempt.items()):
+            found.append({'label': label, 'match': matches[0].group(0)[:80]})
+    return found
 
 
 # These are already acquired source fields, not arbitrary page navigation text.
@@ -228,21 +307,35 @@ def _review(facts, text, reason, evidence):
 
 
 def _restrictions(facts, text):
-    found = _matches(RESTRICTION, text)
+    audience = eligibility_text(facts)
+    found = []
+    for sentence in _INDUSTRY_CLAUSE_SPLIT.split(audience):
+        if not _ELIGIBILITY_SOFT.search(sentence):
+            found.extend(_matches(RESTRICTION, sentence))
     industry = _industry_restriction(facts)
     if industry:
         found.insert(0, industry)
-    title = str(facts.get('title') or '')
-    region = _REGION_PREFIX.search(title)
-    if region:
-        found.append({'label': '지역 한정', 'match': region.group(1), 'summary': f'{region.group(1)} 지역 사업'})
-    else:
-        region = _REGION_TEXT.search(text)
-        if region:
-            found.append({'label': '지역 한정', 'match': region.group(0)[:40], 'summary': f'{region.group(1)} 소재 기업'})
-        elif _REGION_LOCAL.search(text):
-            found.append({'label': '지역 한정', 'match': _REGION_LOCAL.search(text).group(0)[:40],
-                          'summary': '주관기관 관내 소재 기업'})
+    prefix = _REGION_PREFIX.search(str(facts.get('title') or ''))
+    for sentence in _INDUSTRY_CLAUSE_SPLIT.split(audience):
+        if _REGION_SOFT.search(sentence):
+            continue
+        region = _REGION_TEXT.search(sentence) or _REGION_FUTURE.search(sentence)
+        local = _REGION_LOCAL.search(sentence)
+        if not region and not local:
+            continue
+        place = region.group(1) if region else (prefix.group(1) if prefix else None)
+        if place is None:
+            summary = '주관지역 소재 조건'
+        elif _REGION_ALTERNATIVE.search(audience):
+            summary = f'{place} 소재·이전·창업 예정 조건'
+        elif region and '거주' in region.group(0):
+            summary = f'{place} 거주 조건'
+        elif _PERSON_AUDIENCE.search(audience):
+            summary = f'{place} 지역 조건'
+        else:
+            summary = f'{place} 소재 기업'
+        found.append({'label': '지역 한정', 'match': (region or local).group(0)[:80], 'summary': summary})
+        break
     return found
 
 
@@ -261,6 +354,11 @@ def classify(facts):
     hard = _matches(HARD_EXCLUSION, text)
     core = _matches(CORE_STARTUP, text)
     evidence = {'hard_exclusion': hard, 'core_startup': core}
+
+    purpose = curation_exclusions(facts)
+    evidence['curation_exclusion'] = purpose
+    if purpose:
+        return _decision(OUT_OF_SCOPE, 'LOW', 'UNKNOWN', purpose[0]['label'], None, evidence)
 
     title_hard = _matches(HARD_EXCLUSION, str(facts.get('title') or ''))
     absolute_title = next((x for x in title_hard if x['label'] in NON_OPPORTUNITY_HARD_LABELS), None)

@@ -112,6 +112,8 @@ def plan_early_notices(db, at=None, candidates=None):
         existing = c.execute('select id from startup_radar.early_notices where week_start=%s', (start,)).fetchone()
         if existing: return {'state':'WEEKLY_EXCEPTION_LIMIT','planned':0,'notice_id':str(existing['id'])}
         rows = candidates if candidates is not None else load_stored_candidates(db, reference, connection=c)
+        from radar.publication_reviews import load_reviews
+        rows, _ = load_reviews(c, rows)
         rows, _ = deduplicate_publication(rows)
         known = c.execute('select i.program_id,i.snapshot from startup_radar.weekly_briefing_items i '
             "join startup_radar.weekly_briefings b on b.id=i.briefing_id where b.status='PUBLISHED' "
@@ -122,6 +124,7 @@ def plan_early_notices(db, at=None, candidates=None):
         for row in rows:
             pid, facts = str(row['program_id']), row['snapshot']
             if pid in known_ids or _cross_key(facts) in known_cross: continue
+            if (row.get('publication_review') or {}).get('relevance_status', 'GFC_RELEVANT') != 'GFC_RELEVANT': continue
             if not candidate_decision(facts, reference)[0]: continue
             first = c.execute('select min(discovered_at) as first_observed from startup_radar.program_sources '
                 'where program_id=%s', (pid,)).fetchone()['first_observed']
@@ -170,8 +173,11 @@ def announcement_text(notice, items):
 def _latest_candidates(db, connection, reference, items):
     from radar.weekly import load_stored_candidates
     wanted = {str(item['program_id']) for item in items}
-    return {str(row['program_id']):row for row in load_stored_candidates(db, reference, connection=connection)
-            if str(row['program_id']) in wanted}
+    from radar.publication_reviews import load_reviews
+    rows, _ = load_reviews(connection, load_stored_candidates(db, reference, connection=connection))
+    return {str(row['program_id']):row for row in rows
+            if str(row['program_id']) in wanted
+            and (row.get('publication_review') or {}).get('relevance_status', 'GFC_RELEVANT') == 'GFC_RELEVANT'}
 
 
 def announce_early(db, notice_id, transport=None, at=None):
