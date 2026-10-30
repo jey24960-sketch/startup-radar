@@ -110,7 +110,7 @@ CORE_STARTUP = _rules([
     ('오픈이노베이션 협업', r'오픈\s*이노베이션|open\s*innovation|대\-?중견\s*연계|수요\s*기업\s*매칭'),
     ('사업화·상용화 지원', r'사업화\s*(지원|자금|연계)|제품화|상용화'),
     ('창업 경진대회·공모전', r'창업\s*(경진대회|공모전|대회|챌린지)|스타트업\s*(경진대회|공모전|챌린지)|아이디어\s*공모'),
-    ('예비·초기 창업자 선발', r'예비\s*창업(자|팀|패키지)|초기\s*창업(자|패키지)|창업\s*도약|재도전\s*창업|청년\s*창업\s*사관'),
+    ('예비·초기 창업자 선발', r'예비\s*창업(자|가|팀|패키지)|초기\s*창업(자|패키지)|창업\s*도약|재도전\s*창업|청년\s*창업\s*사관'),
     ('기술이전·기술사업화', r'기술\s*(이전|사업화)|기술\s*실용화'),
     ('글로벌 진출 실행', r'(글로벌|해외|국제|현지)[^\n]{0,20}(진출|실증|파트너|바이어\s*매칭|투자자|액셀러|법인\s*설립)|(스타트업|창업\s*기업)[^\n]{0,15}(통합관|파빌리온|공동관)'),
     # Helping a founder incorporate is high leverage. This is the opposite of the
@@ -127,6 +127,7 @@ DELIVERABLE = _rules([
     ('액셀러레이팅 선발', r'액셀러레이[팅터]|배치\s*(프로그램|선발)|accelerat'),
     ('사업화·상용화 지원', r'사업화\s*(지원|자금)|상용화'),
     ('고객·시장 검증 수행', r'고객\s*(발굴|검증|인터뷰)|시장\s*검증|\bBM\b\s*검증|비즈니스\s*모델\s*검증'),
+    ('창업 실행 피어피드백', r'창업(?:가|팀)[^\n]{0,20}피어\s*피드백'),
 ])
 
 
@@ -135,7 +136,6 @@ DELIVERABLE = _rules([
 # ---------------------------------------------------------------------------
 
 RESTRICTION = _rules([
-    ('특정 산업 분야 한정', r'바이오|헬스\s*케어|의료\s*기기|제약|반도체|이차\s*전지|배터리|소재\s*부품\s*장비|디스플레이|조선|자동차\s*부품|방위\s*산업|우주\s*항공|농업|수산|축산|식품\s*산업|화학\s*산업|섬유|뿌리\s*산업|관광|콘텐츠\s*산업'),
     ('사업자등록·법인 필요', r'사업자\s*등록(증|자)?\s*(보유|필수|필요|기업)|법인\s*(설립|사업자)\s*(필수|필요|보유)|중소기업\s*확인서'),
     ('투자 단계 한정', r'\bPre-?\s*A\b|\bSeries\s*[A-C]\b|시리즈\s*[A-C]|프리\s*에이'),
     # Only a *minimum maturity* requirement restricts GFC members. An
@@ -145,6 +145,32 @@ RESTRICTION = _rules([
     ('수출 실적 요건', r'수출\s*실적|수출\s*\d+\s*(만|억)'),
     ('소재지 이전 필요', r'(본사|기업)\s*이전|이전\s*조건|관내\s*이전'),
 ])
+
+_INDUSTRY = re.compile(r'(?:바이오|헬스\s*케어|의료\s*기기|제약|반도체|이차\s*전지|배터리|'
+                       r'소재\s*부품\s*장비|소부장|디스플레이|조선|자동차\s*부품|방위\s*산업|'
+                       r'우주\s*항공|농업|수산|축산|식품\s*산업|화학\s*산업|섬유|뿌리\s*산업|'
+                       r'관광|콘텐츠\s*산업)(?!\s*(?:대학교|대학|공사|재단|진흥원|센터|연구원))')
+_INDUSTRY_AUDIENCE = re.compile(r'분야|산업|업종|스타트업|창업\s*(?:기업|팀|자)|기업|업체|팀')
+_INDUSTRY_ADVISORY = re.compile(r'(?:제한|관계|상관)\s*(?:은|이|가|없음|없이)*\s*없|'
+                                r'무관|권장|권고|적합성.{0,25}검토|예시|가령')
+_INDUSTRY_SUPPORT_SCOPE = re.compile(r'대상|한정|전용|분야.{0,60}(?:기업|팀|스타트업)')
+_INDUSTRY_CLAUSE_SPLIT = re.compile(r'[\n.!?。,;；]+|(?:하며|이며|이고)\s+')
+
+
+def _industry_restriction(facts):
+    # An industry word in a mentor biography, institution name or curriculum
+    # recommendation is not an application condition. Require an industry-scoped
+    # audience declaration, and retain its actual matched evidence for review.
+    for key in ('title', 'applicant_summary', 'support_summary'):
+        for sentence in _INDUSTRY_CLAUSE_SPLIT.split(str(facts.get(key) or '')):
+            if _INDUSTRY_ADVISORY.search(sentence):
+                continue
+            for hit in _INDUSTRY.finditer(sentence):
+                after = sentence[hit.end():hit.end()+100]
+                if _INDUSTRY_AUDIENCE.search(after) and (
+                        key != 'support_summary' or _INDUSTRY_SUPPORT_SCOPE.search(sentence)):
+                    return {'label': '특정 산업 분야 한정', 'match': sentence.strip()[:80]}
+    return None
 
 # A bracketed regional prefix is how the national portals mark a locally scoped
 # program; "소재" is the explicit textual form.
@@ -203,6 +229,9 @@ def _review(facts, text, reason, evidence):
 
 def _restrictions(facts, text):
     found = _matches(RESTRICTION, text)
+    industry = _industry_restriction(facts)
+    if industry:
+        found.insert(0, industry)
     title = str(facts.get('title') or '')
     region = _REGION_PREFIX.search(title)
     if region:

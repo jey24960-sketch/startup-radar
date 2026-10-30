@@ -62,6 +62,8 @@ declare
  generic text; event text; deliverable text;
  core text[]:='{{}}'; restriction text[]:='{{}}';
  core_reason text; restriction_summary text; region text;
+ industry_field integer; industry_sentence text; industry_hit text[];
+ industry_restricted boolean:=false;
 begin
  t:=concat_ws(E'\\n',coalesce(p_title,''),
    {evidence('p_applicant', relevance.APPLICANT_EVIDENCE_CHARS)},
@@ -76,6 +78,24 @@ begin
  if absolute_title is not null then
   return jsonb_build_object('relevance_status','OUT_OF_SCOPE','startup_leverage','LOW',
    'applicability','UNKNOWN','startup_leverage_reason',absolute_title,'restriction_summary',null); end if;
+ -- Industry vocabulary is not itself an eligibility condition. Mirror the
+ -- contextual audience/advisory checks in relevance._industry_restriction.
+ for industry_field in 1..3 loop
+  foreach industry_sentence in array regexp_split_to_array(
+   coalesce((array[p_title,p_applicant,p_support])[industry_field],''),'{sql_regex(relevance._INDUSTRY_CLAUSE_SPLIT.pattern)}') loop
+   if industry_sentence ~* '{sql_regex(relevance._INDUSTRY_ADVISORY.pattern)}' then continue; end if;
+   for industry_hit in select regexp_matches(industry_sentence,
+    '({sql_regex(relevance._INDUSTRY.pattern)})(.{{0,100}})','gi') loop
+    if industry_hit[2] ~* '{sql_regex(relevance._INDUSTRY_AUDIENCE.pattern)}'
+      and (industry_field<>3 or industry_sentence ~* '{sql_regex(relevance._INDUSTRY_SUPPORT_SCOPE.pattern)}') then
+     industry_restricted:=true; exit;
+    end if;
+   end loop;
+   exit when industry_restricted;
+  end loop;
+  exit when industry_restricted;
+ end loop;
+ if industry_restricted then restriction:=array['특정 산업 분야 한정'::text]; end if;
 {collected(relevance.RESTRICTION, 'restriction')}
  region:=(select (regexp_match(coalesce(p_title,''),'{sql_regex(relevance._REGION_PREFIX.pattern)}'))[1]);
  if region is not null then

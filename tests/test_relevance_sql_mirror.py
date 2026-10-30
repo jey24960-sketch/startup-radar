@@ -11,13 +11,13 @@ from pathlib import Path
 
 from tools.export_relevance_sql import generate
 
-MIRROR = Path(__file__).resolve().parents[1] / 'supabase' / 'migrations' / '20261026185312_radar_relevance_v12.sql'
+MIRROR = Path(__file__).resolve().parents[1] / 'supabase' / 'migrations' / '20261030102027_radar_public_summary_industry_context.sql'
 
 
 def test_sql_mirror_is_exactly_what_the_generator_produces():
     committed = io.open(MIRROR, encoding='utf-8').read()
     assert committed == generate(), (
-        'supabase/migrations/20261026185312_radar_relevance_v12.sql is stale. '
+        f'{MIRROR.name} is stale. '
         'Regenerate with: python -m tools.export_relevance_sql > <that file>')
 
 
@@ -37,3 +37,13 @@ def test_word_boundaries_are_translated_to_posix():
     # become a backspace class and quietly stop matching.
     assert '\\y' in committed
     assert '\\b' not in committed
+
+
+def test_mirror_carries_contextual_industry_checks():
+    from radar import relevance
+    from tools.export_relevance_sql import sql_regex
+    committed = io.open(MIRROR, encoding='utf-8').read()
+    for pattern in (relevance._INDUSTRY, relevance._INDUSTRY_AUDIENCE,
+                    relevance._INDUSTRY_ADVISORY, relevance._INDUSTRY_SUPPORT_SCOPE,
+                    relevance._INDUSTRY_CLAUSE_SPLIT):
+        assert sql_regex(pattern.pattern) in committed
