@@ -9,6 +9,40 @@ from test_database import db, source, program
 pytestmark = pytest.mark.skipif(not os.environ.get('TEST_DATABASE_URL'), reason='Explicit test database required')
 
 
+def test_weekly_selection_applies_reviews_and_does_not_republish_parser_only_edits(db):
+    from datetime import timedelta
+    from radar.models import Program
+    from radar.weekly import build_briefing, snapshot
+    from test_weekly import collection, AT
+
+    collected = collection(db, 4)
+    original = collected['weekly_programs'][0]
+    with db.transaction() as c:
+        version = c.execute('select normalized,raw_text from startup_radar.program_versions where id=%s', (original['version_id'],)).fetchone()
+        provenance = c.execute('select source_id,source_program_id,discovery_url from startup_radar.program_sources where program_id=%s', (original['program_id'],)).fetchone()
+        for index, disposition in enumerate(('RETAIN', 'DUPLICATE', 'EXCLUDE', 'HOLD')):
+            row = collected['weekly_programs'][index]
+            c.execute("insert into startup_radar.publication_reviews(program_id,reviewed_version_id,disposition,representative_program_id,snapshot_patch,relevance_status,restriction_summary,reason,evidence) values(%s,%s,%s,%s,%s,%s,%s,'공식 원문 검토에 따른 게시 결정','{}')",
+                      (row['program_id'],row['version_id'],disposition,
+                       original['program_id'] if disposition=='DUPLICATE' else None,
+                       Jsonb({'support_summary':'검토한 시제품 제작비 지원'} if index==0 else {}),
+                       'CONDITIONAL' if index==0 else None,'서울 소재' if index==0 else None))
+    first = build_briefing(db, collected, AT)
+    assert first['item_count'] == 1
+    assert first['withheld']['REVIEWED_HOLD'] == first['withheld']['REVIEWED_EXCLUDE'] == first['withheld']['REVIEWED_DUPLICATE'] == 1
+    parsed = Program.model_validate(version['normalized']).model_copy(update={'support_summary':'파서가 새로 추출한 같은 원문의 지원내용'})
+    saved = db.save_program(parsed, provenance['source_id'], provenance['source_program_id'], provenance['discovery_url'], {}, version['raw_text'])
+    assert saved['version_id'] != original['version_id']
+    collected['weekly_programs'][0] = {**saved,'snapshot':snapshot(parsed,{})}
+    second = build_briefing(db, collected, AT+timedelta(days=7))
+    assert second['item_count'] == 0
+    with db.transaction() as c:
+        assert c.execute('select normalized from startup_radar.program_versions where id=%s',(original['version_id'],)).fetchone()['normalized'] == version['normalized']
+        item = c.execute('select snapshot,relevance_status from startup_radar.weekly_briefing_items where briefing_id=%s',(first['briefing_id'],)).fetchone()
+        assert item['snapshot']['support_summary'] == '검토한 시제품 제작비 지원'
+        assert item['relevance_status'] == 'CONDITIONAL'
+
+
 def test_private_reviews_are_audited_and_bound_to_source_version(db):
     p = program()
     row = db.save_program(p, source(db), 'reviewed', p.official_url, {}, 'immutable original')
