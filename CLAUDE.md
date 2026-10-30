@@ -1,5 +1,15 @@
 # CLAUDE.md — StartupRadar (worker/backend)
 
+## Reviewed correction — 2026-10-30
+
+Read the 2026-10-30 section of `docs/WEEKLY-BRIEFING.md`. Private audited
+`publication_reviews` persist excluded/held/verified duplicate decisions and apply
+source-version-bound descriptive corrections. Consult them on weekly and early
+publication paths. Source evidence stays immutable; do not turn a hold into the
+public uncertainty appendix or release it automatically on reingestion.
+Classifier gfc-v1.3 and its generated SQL distinguish actual recipients/purpose
+and hard eligibility from institution names, preferences and prior examples.
+
 ## Acquisition failure triage — 2026-10-29
 
 An Actions red result can be `PARTIAL_SUCCESS`: keep its nonzero exit and report

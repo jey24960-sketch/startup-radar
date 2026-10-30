@@ -1,4 +1,4 @@
-"""GFC Relevance v1.2 two-axis classification. No database required."""
+"""GFC Relevance v1.3 two-axis classification. No database required."""
 import pytest
 from radar.relevance import (CONDITIONAL, GFC_RELEVANT, OUT_OF_SCOPE, PUBLISHABLE_STATUSES,
                              RELEVANCE_VERSION, REVIEW_REQUIRED, classify)
@@ -13,7 +13,7 @@ def status(title, applicant='', support=''):
 
 
 def test_version_is_pinned():
-    assert RELEVANCE_VERSION == 'gfc-v1.2'
+    assert RELEVANCE_VERSION == 'gfc-v1.3'
     assert PUBLISHABLE_STATUSES == (GFC_RELEVANT, CONDITIONAL)
 
 

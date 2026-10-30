@@ -11,7 +11,7 @@ from pathlib import Path
 
 from tools.export_relevance_sql import generate
 
-MIRROR = Path(__file__).resolve().parents[1] / 'supabase' / 'migrations' / '20261030102027_radar_public_summary_industry_context.sql'
+MIRROR = Path(__file__).resolve().parents[1] / 'supabase' / 'migrations' / '20261030135830_radar_curated_relevance_v13.sql'
 
 
 def test_sql_mirror_is_exactly_what_the_generator_produces():
@@ -29,6 +29,8 @@ def test_mirror_carries_every_rule():
     for table in tables:
         for label, _ in table:
             assert label.replace("'", "''") in committed, f'rule {label!r} missing from the SQL mirror'
+    for label, _, _ in relevance.CURATION_EXCLUSION:
+        assert label.replace("'", "''") in committed
 
 
 def test_word_boundaries_are_translated_to_posix():
@@ -44,6 +46,6 @@ def test_mirror_carries_contextual_industry_checks():
     from tools.export_relevance_sql import sql_regex
     committed = io.open(MIRROR, encoding='utf-8').read()
     for pattern in (relevance._INDUSTRY, relevance._INDUSTRY_AUDIENCE,
-                    relevance._INDUSTRY_ADVISORY, relevance._INDUSTRY_SUPPORT_SCOPE,
+                    relevance._INDUSTRY_ADVISORY, relevance._BROAD_INDUSTRY,
                     relevance._INDUSTRY_CLAUSE_SPLIT):
         assert sql_regex(pattern.pattern) in committed

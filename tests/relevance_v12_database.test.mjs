@@ -3,21 +3,27 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-const migration = new URL('../supabase/migrations/20261030102027_radar_public_summary_industry_context.sql', import.meta.url);
+const migration = new URL('../supabase/migrations/20261030135830_radar_curated_relevance_v13.sql', import.meta.url);
 const sourceCases = JSON.parse(await readFile(new URL('./fixtures/relevance_omissions_20261027.json', import.meta.url), 'utf8'));
+const auditCases = JSON.parse(await readFile(new URL('./fixtures/relevance_audit_20261027.json', import.meta.url), 'utf8'));
 
-test('relevance v1.2 SQL recognises omitted official source programs and preserves exclusions', async () => {
+test('relevance v1.3 SQL recognises omitted official source programs and preserves exclusions', async () => {
   const db = new PGlite();
   try {
     await db.exec('create schema startup_radar; create role anon; create role authenticated; create role service_role;');
     await db.exec(await readFile(migration, 'utf8'));
     const classify = async (title, applicant = '', support = '') => {
-      const result = await db.query('select startup_radar.gfc_relevance_v1_2($1,$2,$3) as decision', [title, applicant, support]);
+      const result = await db.query('select startup_radar.gfc_relevance_v1_3($1,$2,$3) as decision', [title, applicant, support]);
       return result.rows[0].decision;
     };
     for (const row of sourceCases) {
       const decision = await classify(row.title, row.applicant_summary, row.support_summary);
       assert.ok(['GFC_RELEVANT', 'CONDITIONAL'].includes(decision.relevance_status), row.title);
+    }
+    for (const row of auditCases) {
+      const decision = await classify(row.title, row.applicant_summary, row.support_summary);
+      assert.equal(decision.relevance_status, row.expected_status, `audit #${row.number}: ${row.title}`);
+      assert.equal(decision.restriction_summary, row.expected_restriction, `audit #${row.number} restriction`);
     }
     assert.equal((await classify('모집')).relevance_status, 'OUT_OF_SCOPE');
     const uncertain = await classify('혁신 스타트업 지원 프로그램 모집', '서울시 소재 창업기업');
@@ -43,6 +49,22 @@ test('relevance v1.2 SQL recognises omitted official source programs and preserv
       const restricted = await classify('예비창업자 액셀러레이팅 모집', applicant);
       assert.equal(restricted.relevance_status, 'CONDITIONAL');
       assert.equal(restricted.restriction_summary, '특정 산업 분야 한정');
+    }
+    for (const [title, applicant, support, expected] of [
+      ['[온라인·무료] 예비창업자 실행 교육 모집', '사업자 등록 필요 없음, 분야 무관 예비창업자', '시제품 제작 과제 수행', null],
+      ['[모집공고] 예비창업팀 시제품 제작 지원', '예비창업팀', '', null],
+      ['캠퍼스 액셀러레이팅 모집', '분야 무관 학생창업팀', '바이오·헬스케어 기업 투자 사례와 반도체 창업기업 사례 소개', null],
+      ['[충남] 액셀러레이팅 프로그램 모집', '도내 소재 기업', '', '충남 소재 기업'],
+      ['[충남] 액셀러레이팅 프로그램 모집', '전국 예비창업팀 누구나', '', null],
+      ['액셀러레이팅 모집', '개인, 팀, 기업 누구나\n호남지역 소재 기업 가점', '', null],
+      ['액셀러레이팅 모집', '법인 설립 필수 아님\n수출 실적 우대', '', null],
+      ['액셀러레이팅 모집', '만 40세 이상 예비창업자', '', '중장년 연령 조건'],
+      ['액셀러레이팅 모집', '전체', '신청대상: 반도체 분야 창업기업', '특정 산업 분야 한정'],
+      ['액셀러레이팅 모집', '분야 무관 창업팀', '☞ 기업당 최대 5천만원 사업화 지원', null],
+    ]) {
+      const decision = await classify(title, applicant, support);
+      assert.equal(decision.relevance_status, expected ? 'CONDITIONAL' : 'GFC_RELEVANT', title);
+      assert.equal(decision.restriction_summary, expected, title);
     }
   } finally {
     await db.close();

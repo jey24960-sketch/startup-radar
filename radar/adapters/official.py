@@ -321,10 +321,22 @@ class BizInfoApiAdapter(HtmlAdapter):
         return detail
     def normalize(self,candidate,detail,documents):
         row=candidate.raw_metadata;start,end=parse_period(row.get('reqstBeginEndDe') or row.get('reqstDt'))
-        return Program(title=candidate.title,organization=row.get('jrsdInsttNm') or row.get('author') or self.source['name'],
+        from radar.official_facts import bizinfo_summary_fields, performing_organization
+        summary=html_text(row.get('bsnsSumryCn') or row.get('description') or '')
+        fields=bizinfo_summary_fields(summary)
+        performer=row.get('excInsttNm')
+        if performer == '기초자치단체':
+            # The provider sometimes sends an organization category here. Only
+            # replace it when its own introduction names the acting municipality.
+            named=re.match(r'^\s*([가-힣]{2,12}(?:시|군|구))에서는',summary)
+            if named:performer=named[1]
+        if not performer or performer.strip() in ('자체수행','직접수행'):
+            performer=performing_organization(detail.text) or row.get('jrsdInsttNm') or row.get('author')
+        return Program(title=candidate.title,organization=performer or self.source['name'],
             official_url=detail.url,application_url=row.get('rceptEngnHmpgUrl') or None,
             application_start_at=start,application_end_at=end,deadline_type='FIXED_DATE' if end else 'UNKNOWN',
             application_start_precision='DATE' if start else 'UNKNOWN',application_end_precision='DATE' if end else 'UNKNOWN',
-            applicant_summary=row.get('trgetNm'),support_summary=html_text(row.get('bsnsSumryCn') or row.get('description') or ''),
+            applicant_summary=fields.get('applicant_summary') or row.get('trgetNm'),
+            support_summary=fields.get('support_summary') or summary,
             program_types=[row.get('pldirSportRealmLclasCodeNm') or row.get('lcategory') or 'UNKNOWN'],
             document_hashes=[d['content_hash'] for d in documents if d.get('content_hash')])

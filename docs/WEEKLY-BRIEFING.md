@@ -1,5 +1,37 @@
 # GFC Weekly Briefing
 
+## 2026-10-30 reviewed curation and source presentation
+
+The operator-approved audit of the remaining 142 items in the October 27 issue
+retains 103, excludes seven verified duplicate copies and 28 unsuitable items,
+and holds four notices with unresolved dates/age conditions. A hold is withheld
+from publication until an operator explicitly releases it; it is not the public
+REVIEW_REQUIRED appendix. Curation does not assert an individual's legal eligibility.
+
+`publication_reviews` is a private, audited projection separate from immutable
+program/source versions. EXCLUDE/HOLD/DUPLICATE survive reingestion until release.
+RETAIN patches repair only support, applicants and performing organization on the
+reviewed version, or a parser-only version with byte-identical nonempty source
+text, unchanged other normalized facts and matching source operator evidence.
+Changed publisher evidence is classified again. Duplicate aliases are evidence-
+reviewed relationships, not fuzzy title merges. Weekly and early-notice selection
+both consult these decisions before deduplication and the existing date gate.
+
+Public support descriptions contain labelled benefits, not the acquired page.
+Raw bodies stay in source evidence. Repeated benefits in different tracks remain
+intact. BizInfo's performing agency and actual audience declarations replace its
+supervisory ministry and generic company category. Unknown layouts stay unknown.
+Classifier v1.3 rejects recipient/purpose mismatches and derives badges from real
+eligibility, excluding institution names, prior examples, optional preference and
+online/free labels. The generated SQL mirror is versioned separately from v1.2.
+
+Published descriptive repairs require exact private before/after authorization
+in the same transaction, unchanged identity/version/dates/URLs, and seven days at
+first publication. Other revisions retain the current-clock gate. Corrections
+preserve the issue ID, first publication, original source versions and full prior
+item audit. They do not resend the existing Telegram announcement.
+
+
 ## 2026-10-27 approved omission fixes and public uncertainty appendix
 
 Keep the Tuesday 09:00 Seoul weekly calendar and the seven-full-day publication

@@ -68,6 +68,20 @@ test('weekly DB publication guard enforces seven days without rewriting historic
   assert.equal((await query("select (value->>'enabled')::boolean enabled from startup_radar.runtime_settings where key='notice_policy'"))[0].enabled,true);
   // Once corrected there is no reusable exception for subsequent content edits.
   await assert.rejects(()=>query('update startup_radar.weekly_briefing_items set snapshot=$1 where briefing_id=$2',[{...clean,support_summary:'새로운 일반 지원내용'},archived]),/seven days/);
+  // Reviewed facts need no legacy marker, but must match a privileged exact
+  // before/after authorization in this transaction and may not touch dates/IDs.
+  const reviewed={...clean,support_summary:'시제품 제작비 최대 500만원',applicant_summary:'청주 7년 미만 기업',organization:'실제 수행기관'};
+  const authorizeReviewed=()=>query("insert into startup_radar.admin_audit(action,entity_id,detail) values('WEEKLY_EDITORIAL_REPAIR_AUTHORIZATION',$1,jsonb_build_object('reason','공식 원문에 따른 지원·자격·기관 정정','transaction_id',txid_current(),'actor','PRIVILEGED_PUBLICATION_OPERATOR','patches',jsonb_build_array(jsonb_build_object('program_id',$2::text,'program_version_id',$3::text,'before_snapshot',$4::jsonb,'after_snapshot',$5::jsonb))))",[archived,p,v,clean,reviewed]);
+  await authorizeReviewed();
+  await assert.rejects(()=>query('update startup_radar.weekly_briefing_items set snapshot=$1 where briefing_id=$2',[reviewed,archived]),/seven days/);
+  await db.exec('begin');
+  await authorizeReviewed();
+  await query('update startup_radar.weekly_briefing_items set snapshot=$1 where briefing_id=$2',[reviewed,archived]);
+  await db.exec('commit');
+  await db.exec('begin');
+  await query("insert into startup_radar.admin_audit(action,entity_id,detail) values('WEEKLY_EDITORIAL_REPAIR_AUTHORIZATION',$1,jsonb_build_object('reason','원문 정정이라도 날짜 변경 우회는 불허','transaction_id',txid_current(),'actor','PRIVILEGED_PUBLICATION_OPERATOR','patches',jsonb_build_array(jsonb_build_object('program_id',$2::text,'program_version_id',$3::text,'before_snapshot',$4::jsonb,'after_snapshot',$5::jsonb))))",[archived,p,v,reviewed,{...reviewed,application_end_at:clock.published_at.toISOString()}]);
+  await assert.rejects(()=>query('update startup_radar.weekly_briefing_items set snapshot=$1 where briefing_id=$2',[{...reviewed,application_end_at:clock.published_at.toISOString()},archived]),/seven days/);
+  await db.exec('rollback');
   // A marker embedded in a normal sentence is not the legacy page delimiter.
   const draft=(await query("insert into startup_radar.weekly_briefings(week_start,week_end,title,summary,status,collection_status,ingestion_run_id) values('2026-10-05','2026-10-11','inline','inline','DRAFT','SUCCESS',$1) returning id",[run]))[0].id;
   const inline={...legacy,support_summary:'문장 속 공식 공고 상세 문구'};

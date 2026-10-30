@@ -61,11 +61,14 @@ def weekly_detail(candidate):
 
 def snapshot(program, raw):
     from radar.official_facts import clean_legacy_snapshot
+    from radar.identity import publication_identity_evidence
     facts = clean_legacy_snapshot(program.model_dump(mode='json'))
     result = {key:facts.get(key) for key in MATERIAL if key!='attachments'}
     # An official support category is classification evidence, not a material
     # change: classifier/metadata updates must not republish an unchanged notice.
     result['program_types'] = list(facts.get('program_types') or [])
+    identity_evidence=publication_identity_evidence(raw)
+    if identity_evidence:result['identity_evidence']=identity_evidence
     official_detail = raw.get('_official_detail') or {}
     if official_detail.get('status') == 'SUCCESS' and official_detail.get('recruitment_closed') is True:
         result['recruitment_closed'] = True
@@ -237,9 +240,11 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None, *,
         # Order is deliberate: dedup -> material change -> actionability -> relevance.
         candidates = merge_candidates(load_stored_candidates(db,gate_at,connection=c),
                                       collection.get('weekly_programs',[]))
+        from radar.publication_reviews import load_reviews, reviewed_classification
+        candidates, reviewed_withheld = load_reviews(c, candidates)
         collected,duplicates = deduplicate_publication(candidates)
         items = {}
-        withheld = {'DUPLICATE':len(duplicates)}
+        withheld = {'DUPLICATE':len(duplicates), **reviewed_withheld}
         for row in collected:
             from radar.official_facts import clean_legacy_snapshot
             facts = clean_legacy_snapshot(row['snapshot'])
@@ -250,7 +255,7 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None, *,
             if known.get(pid)==fingerprint:continue
             # Classified and retained even when withheld, so an operator can audit
             # why a stored opportunity never reached members.
-            decision = classify(facts)
+            decision = reviewed_classification(row, classify(facts))
             if facts.get('review_note') and decision['relevance_status'] in WEEKLY_PUBLISHABLE_STATUSES:
                 decision = {**decision, 'relevance_status':REVIEW_REQUIRED,
                             'startup_leverage':'UNKNOWN', 'applicability':'UNKNOWN',
