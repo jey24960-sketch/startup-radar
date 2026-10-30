@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-const migration = new URL('../supabase/migrations/20261030100857_radar_public_summary_industry_context.sql', import.meta.url);
+const migration = new URL('../supabase/migrations/20261030102027_radar_public_summary_industry_context.sql', import.meta.url);
 const sourceCases = JSON.parse(await readFile(new URL('./fixtures/relevance_omissions_20261027.json', import.meta.url), 'utf8'));
 
 test('relevance v1.2 SQL recognises omitted official source programs and preserves exclusions', async () => {

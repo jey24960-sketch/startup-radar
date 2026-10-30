@@ -11,7 +11,7 @@ from pathlib import Path
 
 from tools.export_relevance_sql import generate
 
-MIRROR = Path(__file__).resolve().parents[1] / 'supabase' / 'migrations' / '20261030100857_radar_public_summary_industry_context.sql'
+MIRROR = Path(__file__).resolve().parents[1] / 'supabase' / 'migrations' / '20261030102027_radar_public_summary_industry_context.sql'
 
 
 def test_sql_mirror_is_exactly_what_the_generator_produces():
