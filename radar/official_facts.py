@@ -25,6 +25,81 @@ FAILURE_AGE = timedelta(hours=2)
 MAX_NEW_REQUESTS = 50
 MAX_SOURCE_SECONDS = 120
 
+# The acquired page is evidence, not a member-facing support description. These
+# explicit publisher labels let us reuse cached HTML without putting navigation,
+# contact fields, duplicate titles and the full announcement into that field.
+DETAIL_MARKER = re.compile(r'(?m)^\s*공식 공고 상세\s*$')
+_SUPPORT_LABELS = frozenset(('지원내용', '주요지원내용', '지원사항', '지원혜택',
+                           '교육안내', '교육내용', '프로그램내용'))
+_APPLICANT_LABELS = frozenset(('신청대상', '지원대상', '모집대상', '참가대상',
+                             '참여대상', '신청자격', '지원자격', '제외대상',
+                             '신청제외대상', '지원제외대상'))
+_OTHER_LABELS = frozenset(('신청방법및대상', '신청기간', '접수기간', '모집기간',
+                         '신청방법', '접수방법', '제출서류', '제출방법',
+                         '선정절차및평가방법', '선정절차', '평가방법', '문의처',
+                         '문의', '연락처', '첨부파일', '기타사항', '유의사항',
+                         '담당자', '담당자명', '개인정보처리방침', '이용약관',
+                         '지원분야', '대상연령', '기관구분', '담당부서', '지역',
+                         '주관기관명', '대상', '창업업력'))
+
+
+def _join_unique(*parts):
+    lines = []
+    for part in parts:
+        for line in (part or '').splitlines():
+            line = line.strip()
+            if line and line not in lines:
+                lines.append(line)
+    return '\n'.join(lines)
+
+
+def public_detail_fields(text):
+    """Extract only explicitly labelled support/audience sections, never guess.
+
+    Full source text remains in the immutable observation and _official_detail.
+    Unknown page structures keep their structured API summaries as the fallback.
+    This deliberately also accepts the already-cached plain text representation.
+    """
+    values = {'support_summary': [], 'applicant_summary': []}
+    current = None
+    labels = _SUPPORT_LABELS | _APPLICANT_LABELS | _OTHER_LABELS
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = re.split(r'[:：]', line, maxsplit=1)
+        head, inline = parts[0], parts[1] if len(parts) == 2 else ''
+        label = re.sub(r'\s+', '', head)
+        if label in labels:
+            current = ('support_summary' if label in _SUPPORT_LABELS else
+                       'applicant_summary' if label in _APPLICANT_LABELS else None)
+            if current and '제외' in label:
+                values[current].append('제외대상')
+            if current and inline.strip():
+                values[current].append(inline.strip())
+            continue
+        if re.match(r'상기\s*일정|신청\s*시\s*요청하는\s*정보|제출하신\s*서류|'
+                    r'K-Startup에\s*공고|자세한\s*내용은\s*첨부파일', line):
+            current = None
+        if current:
+            values[current].append(line)
+    return {key: _join_unique('\n'.join(lines)) for key, lines in values.items() if lines}
+
+
+def clean_legacy_snapshot(facts):
+    """Repair only the known enrichment delimiter; preserve all other facts."""
+    result = dict(facts)
+    summary = str(result.get('support_summary') or '')
+    marker = DETAIL_MARKER.search(summary)
+    if marker is None:
+        return result
+    original, detail = summary[:marker.start()].strip(), summary[marker.end():].strip()
+    fields = public_detail_fields(detail)
+    result['support_summary'] = _join_unique(original, fields.get('support_summary'))
+    if fields.get('applicant_summary'):
+        result['applicant_summary'] = _join_unique(result.get('applicant_summary'), fields['applicant_summary'])
+    return result
+
 
 def evidence_signature(program, raw):
     """Ignore view counters, query totals and crawler timestamps."""
@@ -110,9 +185,11 @@ def apply_evidence(program, item):
     if item.get('status') != 'SUCCESS' or not item.get('text'):
         return program
     text = item['text'][:MAX_TEXT]
-    original = program.support_summary or ''
-    updates = {'support_summary': original if text in original else
-               '\n'.join(part for part in (original, '공식 공고 상세', text) if part)}
+    cleaned = clean_legacy_snapshot(program.model_dump(mode='json'))
+    fields = public_detail_fields(text)
+    updates = {'support_summary': _join_unique(cleaned.get('support_summary'), fields.get('support_summary'))}
+    if fields.get('applicant_summary'):
+        updates['applicant_summary'] = _join_unique(cleaned.get('applicant_summary'), fields['applicant_summary'])
     _, detail_end, _, detail_end_precision, _ = labeled_period(text)
     if (detail_end and program.application_end_at and
             (detail_end.astimezone(SEOUL).date() != program.application_end_at.astimezone(SEOUL).date()

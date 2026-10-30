@@ -7,7 +7,7 @@ from core.clock import now, SEOUL
 from radar.actionability import actionability
 from radar.adapters.base import AcquiredDetail
 from radar.documents import html_text
-from radar.identity import digest,deduplicate_publication
+from radar.identity import digest,deduplicate_publication,normalize_url
 from radar.notifications import safe_link
 from radar.broadcast import SETTING_KEY,announcement_text,briefing_url,official_channel as official_channel_config
 from radar.operation import visibility_mode
@@ -60,7 +60,8 @@ def weekly_detail(candidate):
 
 
 def snapshot(program, raw):
-    facts = program.model_dump(mode='json')
+    from radar.official_facts import clean_legacy_snapshot
+    facts = clean_legacy_snapshot(program.model_dump(mode='json'))
     result = {key:facts.get(key) for key in MATERIAL if key!='attachments'}
     # An official support category is classification evidence, not a material
     # change: classifier/metadata updates must not republish an unchanged notice.
@@ -72,10 +73,22 @@ def snapshot(program, raw):
         result[key] = html_text(str(result.get(key) or '')).strip() or FALLBACK
     for key in ('official_url','application_url'):
         if not safe_link(result.get(key)):result[key] = None
+    if result.get('official_url'):
+        result['official_url'] = normalize_url(result['official_url'])
     # API attachment identities detect advertised replacements without downloading/OCR.
     result['attachments'] = sorted({url.strip() for key in ('flpthNm','printFlpthNm')
         for url in str(raw.get(key) or '').split('@') if safe_link(url.strip())})
     return result
+
+
+def publication_fingerprint(facts):
+    # Removing the historical full-page append is an editorial repair, not a
+    # changed opportunity. Compare both old and new public facts the same way.
+    from radar.official_facts import clean_legacy_snapshot
+    facts = clean_legacy_snapshot(facts)
+    if facts.get('official_url'):
+        facts['official_url'] = normalize_url(facts['official_url'])
+    return digest({key: facts.get(key) for key in MATERIAL})
 
 
 def stored_candidates(rows, at):
@@ -216,11 +229,11 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None, *,
         # first published_at. Collection can take minutes after a worker starts;
         # that elapsed time must never erode the promised preparation window.
         gate_at = c.execute('select now() reference_at').fetchone()['reference_at'] if database_clock else at
-        previous = c.execute("select distinct on(i.program_id) i.program_id,i.material_hash from startup_radar.weekly_briefing_items i "
+        previous = c.execute("select distinct on(i.program_id) i.program_id,i.material_hash,i.snapshot from startup_radar.weekly_briefing_items i "
             "join startup_radar.weekly_briefings b on b.id=i.briefing_id where b.status='PUBLISHED' "
             "and (b.week_start<%s or b.publication_kind='INITIAL_BASELINE') "
             "order by i.program_id,b.week_start desc,b.publication_kind desc",(start,)).fetchall()
-        known = {str(row['program_id']):row['material_hash'] for row in previous}
+        known = {str(row['program_id']):publication_fingerprint(row['snapshot']) for row in previous}
         # Order is deliberate: dedup -> material change -> actionability -> relevance.
         candidates = merge_candidates(load_stored_candidates(db,gate_at,connection=c),
                                       collection.get('weekly_programs',[]))
@@ -228,9 +241,12 @@ def build_briefing(db, collection, at=None, publish=True, revision_note=None, *,
         items = {}
         withheld = {'DUPLICATE':len(duplicates)}
         for row in collected:
-            pid = str(row['program_id']); facts = row['snapshot']
+            from radar.official_facts import clean_legacy_snapshot
+            facts = clean_legacy_snapshot(row['snapshot'])
+            row = {**row, 'snapshot': facts}
+            pid = str(row['program_id'])
             if not facts.get('official_url'):continue
-            fingerprint = digest({key:facts.get(key) for key in MATERIAL})
+            fingerprint = publication_fingerprint(facts)
             if known.get(pid)==fingerprint:continue
             # Classified and retained even when withheld, so an operator can audit
             # why a stored opportunity never reached members.

@@ -13,8 +13,14 @@ def normalize_text(value):
 
 def normalize_url(value):
     parts=urlsplit(value)
+    # Yonsei's board appends the listing page to every pinned detail link.
+    # The numeric path is the notice identity; p is only return navigation.
+    # Keep p on the listing and on other hosts, where it may identify content.
+    yonsei_notice=(parts.hostname or '').lower()=='venture.yonsei.ac.kr' and bool(
+        re.fullmatch(r'/community/notice/\d+/?',parts.path))
     query=[(k,v) for k,v in parse_qsl(parts.query,keep_blank_values=True)
-           if not k.lower().startswith('utm_') and k.lower() not in ('fbclid','gclid')]
+           if not k.lower().startswith('utm_') and k.lower() not in ('fbclid','gclid')
+           and not (yonsei_notice and k=='p')]
     return urlunsplit((parts.scheme.lower(),parts.netloc.lower(),parts.path.rstrip('/') or '/',urlencode(sorted(query)),''))
 
 
@@ -69,16 +75,33 @@ def deduplicate_publication(rows):
     Keeps the first occurrence and returns (kept,dropped). Rows whose facts are
     too generic for a safe cross-source claim are always kept.
     """
-    kept,dropped,seen=[],[],{}
+    kept,dropped,seen,detail_seen=[],[],{},{}
     for row in rows:
         facts=row['snapshot']
+        # Old rows may already have different source IDs for a pinned notice.
+        # Suppress those copies at publication without merging stored evidence.
+        # This route has a publisher-assigned numeric ID. Exact title, organizer
+        # and declared periods still distinguish reused or changed editions.
+        url=facts.get('official_url') or ''
+        parts=urlsplit(url)
+        detail_key=None
+        if ((parts.hostname or '').lower()=='venture.yonsei.ac.kr'
+                and re.fullmatch(r'/community/notice/\d+/?',parts.path)
+                and facts.get('title') and facts.get('organization')):
+            detail_key=digest({'url':normalize_url(url),
+                'title':normalize_text(facts['title']),
+                'organization':normalize_text(facts['organization']),
+                'start':facts.get('application_start_at'),
+                'end':facts.get('application_end_at')})
         key=cross_source_key(facts.get('title'),facts.get('application_start_at'),
                              facts.get('application_end_at'))
-        if key is not None:
-            if key in seen:
-                dropped.append({**row,'duplicate_of':str(seen[key]['program_id'])})
-                continue
-            seen[key]=row
+        duplicate=detail_seen.get(detail_key) if detail_key is not None else None
+        if duplicate is None and key is not None:duplicate=seen.get(key)
+        if duplicate is not None:
+            dropped.append({**row,'duplicate_of':str(duplicate['program_id'])})
+            continue
+        if detail_key is not None:detail_seen[detail_key]=row
+        if key is not None:seen[key]=row
         kept.append(row)
     return kept,dropped
 

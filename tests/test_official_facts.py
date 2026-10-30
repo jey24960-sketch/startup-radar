@@ -37,13 +37,14 @@ class Database:
 def test_reuses_official_body_without_model_or_http_request():
     p = program()
     cached = {'signature': evidence_signature(p, {}), 'status': 'SUCCESS',
-              'text': '공식 내용: 액셀러레이팅과 멘토링',
+              'text': '지원내용\n액셀러레이팅과 멘토링\n문의처\n02-000-0000',
               'expires_at': (AT+timedelta(days=1)).isoformat()}
     db = Database({'_official_detail': cached})
     candidate = Candidate('bizinfo', 'id', p.official_url, p.official_url, p.title, {})
     result, text, meta = enrich_official(db, {'id': 'source'}, object(), candidate, p, AT)
     assert meta == {'status': 'SUCCESS', 'cache_hit': True, 'failure': None}
-    assert text in result.support_summary
+    assert '액셀러레이팅과 멘토링' in result.support_summary
+    assert '문의처' not in result.support_summary
     assert candidate.raw_metadata['_official_detail'] == cached
 
 
@@ -51,7 +52,7 @@ def test_material_change_and_expiry_force_public_html_refresh():
     p = program()
     called = []
     http = SimpleNamespace(get=lambda url: (
-        called.append(url) or b'<div class="support_project_detail">New support facts</div>',
+        called.append(url) or '<div class="support_project_detail">지원내용<br>New support facts</div>'.encode(),
         'text/html', url))
     adapter = SimpleNamespace(source={'adapter': 'BIZINFO'}, http=http)
     old = {'signature': evidence_signature(p, {}), 'status': 'SUCCESS', 'text': 'old',
@@ -146,7 +147,8 @@ def test_conflicting_publisher_deadline_is_withheld_without_deleting_api_evidenc
     assert result.application_end_at is None and item['application_period_conflict']
     assert actionability(result.model_dump(mode='json'), AT) == (False, 'DEADLINE_UNKNOWN')
     assert p.application_end_at is not None
-    assert '2026.11.10' in result.support_summary
+    assert '2026.11.10' in item['text']
+    assert result.support_summary == p.support_summary
     precise = p.model_copy(update={'application_end_precision': 'DATETIME'})
     conflicting_time = apply_evidence(precise, {'status': 'SUCCESS', 'text':
         '신청기간: 2026.10.26 10:00 ~ 2026.11.16 13:00'})
